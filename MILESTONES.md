@@ -19,3 +19,10 @@
 - Free-flight position/orientation residual; next linear/angular velocity learned directly. No physics stepping in learned rollout (tested).
 - `python -m pytest tests -q`: **13 passed in 2.27s**.
 - Offline desk push: both predict mug fall; final mean position error across objects at 3s **0.12037 m**.
+
+## M4 — OpenAI + Exa agent
+- `python -m pytest tests -q`: **16 passed in 2.43s**.
+- Exactly four callable tools. Integration test drives actual physics + learned tools through mocked OpenAI tool selections; final prose ignores unsupported LLM outcome claims.
+- Exa extraction test checks source membership, exact source evidence, numerical mass/unit agreement, and disk cache; fabricated URL and mismatched mass rejected.
+- Without keys: assistant HTTP 200 `status=unavailable`; both-engine simulation HTTP 200 and working.
+- **Live authenticated OpenAI/Exa calls unverified: no keys supplied.** SDK interfaces inspected against installed packages and official docs. No fake network results are shipped.

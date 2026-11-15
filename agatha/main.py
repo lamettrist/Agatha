@@ -57,3 +57,17 @@ def run_simulation(request: SimulationRequest):
             result['error']=compare(result['physics'],result['learned'])
     except ValueError as exc: raise HTTPException(422,str(exc))
     return result
+
+from pydantic import Field
+from .schema import StrictModel
+from .assistant import Assistant
+assistant=Assistant(store)
+
+class AssistantRequest(StrictModel):
+    scene_id: str
+    question: str = Field(min_length=1,max_length=2000)
+
+@app.post('/api/assistant/query')
+def assistant_query(request: AssistantRequest):
+    get_record(request.scene_id)
+    return assistant.query(request.scene_id,request.question)
