@@ -15,7 +15,7 @@ MODEL_IDS = {
     'clip': 'openai/clip-vit-base-patch32',
 }
 CLASSES = ['bottle','tumbler','cup','can','laptop','phone','backpack','bag','jacket','gloves',
-           'mouse','keyboard','monitor','book','box','plant','chair','paper','table','wall','floor','unknown object']
+           'mouse','keyboard','monitor','book','box','plant','chair','person','paper','table','wall','floor','unknown object']
 PROMPTS = ['black insulated bottle','plastic water bottle','white tumbler','cup','can',
            'open laptop','closed laptop','phone','gray backpack','black backpack',
            'jacket','gloves','mouse','keyboard','monitor','book','box','plant','chair','table','wall','floor','paper']
@@ -25,9 +25,22 @@ PLANE_LABELS={'table','wall','floor'}
 def canonical(label):
     label=label.lower().strip()
     for name in ['backpack','tumbler','bottle','laptop','gloves','jacket','phone','mouse','keyboard',
-                 'monitor','table','wall','floor','chair','paper','plant','book','box','bag','can','cup']:
+                 'monitor','table','wall','floor','chair','person','paper','plant','book','box','bag','can','cup']:
         if name in label: return name
     return 'unknown object'
+
+
+def gpu_devices():
+    """CUDA indices the pipeline may use: RECON_GPU_IDS, else every visible device.
+
+    Indices are relative to CUDA_VISIBLE_DEVICES. Ids that do not exist are ignored,
+    so a one-GPU server never addresses cuda:4.
+    """
+    count=torch.cuda.device_count() if torch.cuda.is_available() else 0
+    raw=os.getenv('RECON_GPU_IDS')
+    ids=[int(v) for v in raw.split(',') if v.strip()] if raw else list(range(count))
+    ids=[i for i in ids if 0<=i<count] if count else ids
+    return ids or [0]
 
 
 class Registry:
@@ -35,10 +48,32 @@ class Registry:
         torch.set_num_threads(4)
         self.models={}; self.failures={}; self.lock=RLock()
         self.locks={k:RLock() for k in MODEL_IDS}
-        self.devices=[int(v) for v in os.getenv('RECON_GPU_IDS','0,1,2,3,4,5,6').split(',')]
+        self.devices=gpu_devices()
+        limit=os.getenv('RECON_GPU_MEMORY_GB')
+        if limit and torch.cuda.is_available():
+            for index in self.devices:
+                total=torch.cuda.get_device_properties(index).total_memory
+                torch.cuda.set_per_process_memory_fraction(min(1.,float(limit)*2**30/total),index)
 
     def device(self, index):
         return f'cuda:{self.devices[index % len(self.devices)]}' if torch.cuda.is_available() else 'cpu'
+
+    def park(self, on_gpu):
+        """Move every loaded model to the CPU (on_gpu=False) or back to its GPU.
+
+        One 9 GB GPU cannot hold these and VGGT together; parking costs a fraction of a
+        second per model, where reloading or shrinking VGGT's chunks costs accuracy.
+        """
+        if not torch.cuda.is_available():return
+        with self.lock:
+            for name,(processor,model) in list(self.models.items()):
+                # Buffers cached during inference are inference tensors and only move in that mode.
+                with self.locks[name],torch.inference_mode():
+                    try:self.models[name]=(processor,model.to(self.device(list(MODEL_IDS).index(name)) if on_gpu else 'cpu'))
+                    except RuntimeError:self.models.pop(name)  # reloaded from disk on next use
+        if not on_gpu:
+            import gc
+            gc.collect();torch.cuda.empty_cache()
 
     def get(self, name):
         if os.getenv('VISION_OFFLINE')=='1': raise RuntimeError('VISION_OFFLINE=1')
@@ -79,7 +114,7 @@ class Registry:
                 mode='bicubic',align_corners=False)[0,0].cpu().numpy().astype(np.float32)
 
     @torch.inference_mode()
-    def detect(self,image):
+    def detect(self,image,include_people=False):
         with self.locks['detector']:
             processor,model=self.get('detector')
             inputs=processor(images=image,text='. '.join(PROMPTS)+'.',return_tensors='pt').to(model.device)
@@ -89,6 +124,17 @@ class Registry:
                 target_sizes=[image.size[::-1]])[0]
             detections=[dict(label=canonical(label),detector_label=label,bbox=box.tolist(),confidence=float(score))
                     for box,score,label in zip(result['boxes'].cpu(),result['scores'].cpu(),result['text_labels'])]
+            if include_people:
+                person_inputs=processor(images=image,text='person.',return_tensors='pt').to(model.device)
+                persons=processor.post_process_grounded_object_detection(model(**person_inputs),person_inputs.input_ids,
+                    threshold=.35,text_threshold=.20,target_sizes=[image.size[::-1]])[0]
+                for box,score in zip(persons['boxes'].cpu(),persons['scores'].cpu()):
+                    box=box.numpy();retained=[]
+                    for det in detections:
+                        b=np.array(det['bbox']);intersection=np.maximum(0,np.minimum(b[2:],box[2:])-np.maximum(b[:2],box[:2])).prod()
+                        if det['label']=='backpack' and intersection/max(np.prod(b[2:]-b[:2]),1)>.8:continue
+                        retained.append(det)
+                    detections=[*retained,dict(label='person',detector_label='person',bbox=box.tolist(),confidence=float(score))]
             # Re-query ambiguous screens and nested accessories using actual model evidence.
             additions=[]
             for det in list(detections):

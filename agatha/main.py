@@ -25,9 +25,12 @@ def get_record(key: str) -> dict:
     try: return store.get(key)
     except KeyError: raise HTTPException(404,'Scene not found')
 
+from typing import get_args
+DEMO_SCENARIOS=('desk','bottle','laptop','soft')
+
 @app.post('/api/scenes/demo')
 def demo(scenario: str = 'desk'):
-    if scenario not in ('desk','bottle'): raise HTTPException(422,'scenario must be desk or bottle')
+    if scenario not in DEMO_SCENARIOS: raise HTTPException(422,'scenario must be desk, bottle, laptop or soft')
     return store.demo(scenario)
 
 @app.get('/api/scenes/{scene_id}')
@@ -74,6 +77,7 @@ async def from_image(image: UploadFile | None = File(None), table_width_m: float
 from .schema import Scene, SimulationRequest
 from .physics import simulate
 from .world_model import rollout, compare, load_model
+from .router import rollout, reference  # routed entry point: box / joint / soft models (docs/router.md)
 
 @app.post('/api/simulate')
 def run_simulation(request: SimulationRequest):
@@ -83,10 +87,11 @@ def run_simulation(request: SimulationRequest):
         result['warnings'].append('Learned dynamics uses bounding-box dimensions; it was not trained on these collision shapes.')
     try:
         if request.engine in ('physics','both'):
-            result['physics']=simulate(scene,request.actions,request.duration,request.fps)
-            store.record_score(request.scene_id,result['physics']['chaos_score'])
+            result['physics'],reference_warning=reference(scene,request.actions,request.duration,request.fps)
+            if reference_warning: result['warnings'].append(reference_warning)
+            if result['physics']: store.record_score(request.scene_id,result['physics']['chaos_score'])
         if request.engine in ('learned','both'):
-            try: result['learned']=rollout(scene,request.actions,round(request.duration*request.fps),request.fps,model=load_model(request.learned_architecture))
+            try: result['learned']=rollout(scene,request.actions,round(request.duration*request.fps),request.fps,architecture=request.learned_architecture)
             except (FileNotFoundError,RuntimeError) as exc:
                 if request.engine=='learned': raise HTTPException(503,str(exc))
                 result['warnings'].append(f'Learned model unavailable: {exc}')
@@ -165,7 +170,17 @@ def edit_scene_object(scene_id: str, object_id: str, edit: ObjectEdit):
     record=get_record(scene_id);scene=Scene.model_validate(record['scene'])
     obj=next((o for o in scene.objects if o.id==object_id),None)
     if obj is None: raise HTTPException(404,'Object not found')
+    articulated=bool(scene.joints or scene.soft_bodies)
+    if articulated and (edit.shape is not None or edit.size is not None):
+        # settle() knows neither joints nor soft bodies: a resize would open joint anchors / leave soft bodies behind.
+        raise HTTPException(422,'Shape/size edits are not supported for scenes with joints or soft bodies; only mass_kg can be edited')
     if edit.mass_kg is not None: obj.mass_kg=edit.mass_kg;obj.mass_source='user'
+    if articulated:
+        # Mass-only edit: keep every pose exactly (no re-settle), so joint anchors stay closed.
+        report=dict(record.get('report') or {})
+        report['edited_from']=scene_id;report['acceptance_pass']=False
+        report['warnings']=[*report.get('warnings',[]),'Manually edited scene (mass only; poses unchanged, not re-settled because the scene has joints or soft bodies).']
+        return store.add(scene,report)
     if edit.shape is not None or edit.size is not None:
         shape=edit.shape or obj.shape
         if shape not in ('box','cylinder'): raise HTTPException(422,'Choose box or cylinder for a manual shape')
@@ -238,4 +253,11 @@ def reconstruction_health():
         'loaded_models':list(models.models),
         'model_load_failures':dict(models.failures),
         'cuda_available':torch.cuda.is_available(),
+        'demo_scenarios':list(DEMO_SCENARIOS),
+        'demo_endpoint':'/api/scenes/demo',
+        'learned_architectures':list(get_args(SimulationRequest.model_fields['learned_architecture'].annotation)),
+        'default_learned_architecture':'default',
+        'experimental_features':{'joints':True,'soft_bodies':True,'video_upload':True},
+        'physics_reference':{'box_scenes':True,'joints':False,'soft_bodies':False},
+        'docs':{'api_reference':'docs/api.md','frontend_guide':'docs/base44-integration.md','examples':'docs/api-examples.json','router':'docs/router.md'},
     }

@@ -18,7 +18,7 @@ from .segmentation import deduplicate,split_depth_clusters
 from .bodies import settle,stability
 from .assets import write_debug,export_visual
 
-VERSION='metric-photo-v15'
+VERSION='metric-photo-v17'
 RUN_LOCK=RLock()
 # kg, friction, rigid approximation, dimensions used ONLY when geometry fails.
 PRIORS={
@@ -30,6 +30,7 @@ PRIORS={
     'mouse':(.10,.65,False,[.065,.035,.11]),'keyboard':(.6,.6,False,[.35,.025,.13]),
     'book':(.5,.7,False,[.2,.03,.14]),'paper':(.005,.6,False,[.216,.002,.2794]),
     'monitor':(3.,.6,False,[.5,.35,.12]),'chair':(6.,.8,False,[.45,.8,.45]),
+    'person':(70.,.8,True,[.45,1.7,.3]),
     'plant':(1.,.8,True,[.2,.3,.2]),'box':(.5,.6,False,[.15,.15,.15]),
     'unknown object':(.5,.7,False,[.12,.12,.12]),
 }
@@ -56,25 +57,213 @@ def safe_report_instances(instances):
     return [{k:v for k,v in item.items() if k!='mask'} for item in instances]
 
 
+FLOOR_CLASSES=('chair','person')
+UNSUPPORTED='unsupported'
+# Video bodies outside these measured ranges are rejected, not clamped to a template:
+# label -> (min height, max height, max horizontal extent), metres, robust extents.
+VIDEO_LIMITS={
+    'bottle':(.08,.36,.16),'tumbler':(.06,.30,.16),'cup':(.04,.20,.16),'can':(.06,.20,.12),
+    'laptop':(.0,.40,.50),'keyboard':(.0,.10,.55),'phone':(.0,.20,.20),'mouse':(.0,.10,.15),
+    'chair':(.55,1.35,.90),'person':(.8,2.1,1.0),'backpack':(.05,.70,.70),'bag':(.05,.70,.70),
+    'jacket':(.0,.9,.9),'monitor':(.15,.70,.90),
+}
+VIDEO_DEFAULT_LIMIT=(.0,.8,.8)
+# Clamp ranges of upright cylinders (diameter, height) once the measurement is accepted.
+CYLINDER_RANGES={'bottle':((.05,.11),(.12,.34)),'tumbler':((.06,.11),(.08,.25)),
+                 'cup':((.06,.11),(.06,.16)),'can':((.05,.08),(.09,.17))}
+
+
+class Implausible(ValueError):
+    """A measured body that no object of its class can have; the body is dropped."""
+
+
 def assign_video_supports(objects,support):
-    """Choose a support from measured world bounds, including secondary tables."""
+    """Choose what each measured body rests on; never default to a slab it is not over.
+
+    A body inside a table footprint with its bottom near that table top rests on it.
+    Otherwise it stands on the floor when its bottom is near the floor (or it is
+    floor furniture), and is reported UNSUPPORTED so the caller can drop it.
+    """
     from .assets import object_mesh,rotation
     tables=[o for o in objects if o.is_static and o.label=='table']
     assigned={}
     for obj in objects:
-        if obj.is_static or obj.supported_by=='floor':continue
+        if obj.is_static:continue
         vertices=object_mesh(obj).vertices@rotation(obj.rotation_euler).T+obj.position
         bottom=float(vertices[:,1].min());x,_,z=obj.position
+        if obj.supported_by=='floor':
+            assigned[obj.id]='floor';continue
         candidates=[]
-        if abs(x)<=support.size[0]/2+.03 and abs(z)<=support.size[1]/2+.03:
+        if abs(x)<=support.size[0]/2+.03 and abs(z)<=support.size[1]/2+.03 and bottom>support.height-.15:
             candidates.append((abs(bottom-support.height),'support'))
         for table in tables:
             local=rotation(table.rotation_euler).T@(np.array(obj.position)-table.position)
-            if abs(local[0])<=table.size[0]/2+.03 and abs(local[2])<=table.size[2]/2+.03:
-                candidates.append((abs(bottom-(table.position[1]+table.size[1]/2)),table.id))
+            top=table.position[1]+table.size[1]/2
+            if abs(local[0])<=table.size[0]/2+.03 and abs(local[2])<=table.size[2]/2+.03 and bottom>top-.15:
+                candidates.append((abs(bottom-top),table.id))
         if candidates:obj.supported_by=min(candidates)[1]
+        elif bottom<.25:obj.supported_by='floor'
+        else:obj.supported_by=UNSUPPORTED
         assigned[obj.id]=obj.supported_by
     return assigned
+
+
+def chair_collision(w,h,d,seat_height=None):
+    """Stool/chair completion: base disc, stem, seat narrower than the envelope, narrow back.
+
+    Local origin is the centre of the w x h x d envelope; the back is on the -Z side.
+    """
+    seat_height=float(np.clip(.62*h if seat_height is None else seat_height,.35*h,.80*h))
+    seat_thickness=.05;base_height=.03;seat_w,seat_d=.8*w,.8*d
+    stem=max(seat_height-seat_thickness-base_height,.05)
+    back=max(h-seat_height,.05)
+    return Collision(parts=[
+        CollisionPart(type='cylinder',radius=min(w,d)*.45,height=base_height,position=(0,-h/2+base_height/2,0)),
+        CollisionPart(type='cylinder',radius=.03,height=stem,position=(0,-h/2+base_height+stem/2,0)),
+        CollisionPart(size=(seat_w,seat_thickness,seat_d),position=(0,-h/2+seat_height-seat_thickness/2,0)),
+        CollisionPart(size=(.7*seat_w,back,.04),position=(0,-h/2+seat_height+back/2,-seat_d/2+.02)),
+    ])
+
+
+def robust_extent(points):
+    lo,hi=np.percentile(points,[2,98],axis=0)
+    return lo,hi
+
+
+def check_video_limits(label,height,horizontal):
+    low,high,width=VIDEO_LIMITS.get(label,VIDEO_DEFAULT_LIMIT)
+    if not low<=height<=high or horizontal>width:
+        raise Implausible(f'{label} measured {horizontal:.2f} m wide x {height:.2f} m tall, outside {width:.2f} m x {low:.2f}-{high:.2f} m')
+
+
+def lift_multiview(inst,points,index,support_height):
+    """Class-aware body from a multi-view consensus cloud (metric world, Y up)."""
+    label=inst['label'];mass,friction,soft,prior=PRIORS.get(label,PRIORS['unknown object'])
+    lo,hi=robust_extent(points);extent=hi-lo;extra=None;fallback=None
+    if label in CYLINDER_RANGES:
+        check_video_limits(label,float(extent[1]),float(max(extent[0],extent[2])))
+        (dmin,dmax),(hmin,hmax)=CYLINDER_RANGES[label]
+        diameter=float(np.clip(np.sqrt(extent[0]*extent[2]),dmin,dmax))
+        # The base stands on the supporting surface; the measured top is the reliable end.
+        bottom=support_height if abs(lo[1]-support_height)<.08 else float(lo[1])
+        height=float(np.clip(hi[1]-bottom,hmin,hmax));center=np.median(points,0)
+        size=np.array([diameter,height,diameter]);position=np.array([center[0],bottom+height/2,center[2]])
+        collision=Collision(parts=[CollisionPart(type='cylinder',radius=diameter/2,height=height)])
+        shape='cylinder';method='multiview_extent_cylinder';euler=np.zeros(3)
+        extra=dict(measured_diameter_m=float(np.sqrt(extent[0]*extent[2])),measured_height_m=float(extent[1]))
+    elif label=='chair':
+        fit=g.fit_box(points);local=(points-fit['center'])@_yaw(fit['rotation_euler'][1])
+        llo,lhi=np.percentile(local,[2,98],axis=0);measured=lhi-llo
+        check_video_limits(label,float(hi[1]),float(max(measured[0],measured[2])))
+        w=float(np.clip(measured[0],.35,.70));d=float(np.clip(measured[2],.35,.70));h=float(np.clip(hi[1],.60,1.30))
+        center=fit['center']+_yaw(fit['rotation_euler'][1])@np.array([(llo[0]+lhi[0])/2,0,(llo[2]+lhi[2])/2])
+        # The seat is the densest horizontal band between 35 % and 80 % of the height.
+        band=points[(points[:,1]>.35*h)&(points[:,1]<.85*h),1];seat=None
+        if len(band)>50:
+            histogram,edges=np.histogram(band,bins=max(4,int(.45*h/.03)));seat=float(edges[histogram.argmax()+1])
+            if not .45*h<=seat<=.80*h:seat=None  # an occluded seat: use the class proportion
+        size=np.array([w,h,d]);position=np.array([center[0],h/2,center[2]])
+        collision=chair_collision(w,h,d,seat);shape='compound';method='multiview_stool_compound'
+        euler=np.array([0,float(fit['rotation_euler'][1]),0])
+        extra=dict(measured_envelope_m=[float(measured[0]),float(hi[1]),float(measured[2])],seat_height_m=seat,
+                   completion='base disc, stem, seat and back are a class completion of the measured envelope')
+    else:
+        fit=g.fit_box(points);local=(points-fit['center'])@_yaw(fit['rotation_euler'][1])
+        llo,lhi=np.percentile(local,[2,98],axis=0);size=np.maximum(lhi-llo,.004)
+        check_video_limits(label,float(size[1]),float(max(size[0],size[2])))
+        position=fit['center']+_yaw(fit['rotation_euler'][1])@((llo+lhi)/2);euler=np.array([0,float(fit['rotation_euler'][1]),0])
+        shape='box';method='multiview_gravity_aligned_obb'
+        if label=='laptop':
+            fit=dict(size=size.copy(),center=position.copy(),rotation_euler=euler)
+            shape,collision,method,extra=build_laptop(points,inst,fit);size=fit['size']
+            position[1]=float(lo[1]+.009)  # compound origin is the base slab centre
+        else:
+            if label in ('phone','paper','keyboard') and size[1]>.08:size[1]=prior[1];fallback='thin_object_thickness_prior'
+            collision=Collision(parts=[CollisionPart(size=tuple(np.maximum(size,.002)))])
+    obj=SceneObject(id=f'object_{index:03}',label=label,confidence=inst['confidence'],shape=shape,collision=collision,
+        shape_method=method,size=tuple(np.maximum(size,.002)),position=tuple(map(float,position)),rotation_euler=tuple(map(float,euler)),
+        mass_kg=mass,friction=friction,soft_approx=soft,supported_by='floor' if label in FLOOR_CLASSES else 'support',
+        linear_damping=.6 if soft else .04,angular_damping=.8 if soft else .04)
+    inst['object_id']=obj.id
+    return obj,dict(id=obj.id,label=obj.label,detector_label=inst.get('detector_label'),shape_method=method,valid_points=len(points),
+                    fallback=fallback,residual_m=None,details=extra)
+
+
+def _yaw(yaw):
+    c,s_=np.cos(yaw),np.sin(yaw)
+    return np.array([[c,0,s_],[0,1,0],[-s_,0,c]])
+
+
+def frame_view(camera_pose,factor,frame_camera,base_camera):
+    """Intrinsics and world pose of another video frame, from its pose in first-camera coordinates."""
+    world_to_camera=np.array(camera_pose['world_to_camera']);origin=np.array(camera_pose['origin_world'])
+    k=np.array(frame_camera['intrinsics']);rotation=np.array(frame_camera['camera_to_world']);center=np.array(frame_camera['center'])
+    camera=dict(fx=float(k[0,0]),fy=float(k[1,1]),cx=float(k[0,2]),cy=float(k[1,2]),width=base_camera['width'],height=base_camera['height'])
+    return camera,dict(origin_world=(origin+factor*center@world_to_camera).tolist(),world_to_camera=(rotation.T@world_to_camera).tolist())
+
+
+def consistent_frames(views_world,center,radius=.2):
+    """Frames in which a track's points still sit on the fitted body (SAM 2 tracks jump to neighbours)."""
+    return [int(frame) for frame,points in views_world
+            if len(points)>=12 and float(np.hypot(*(np.median(points,0)-center)[[0,2]]))<=radius]
+
+
+def _support_top_mask(support,camera,pose,shape,scale):
+    """Image region hidden by the table top for a camera above it (occluder for floor furniture)."""
+    from .assets import camera_points,project
+    mask=np.zeros(shape,np.uint8)
+    if support is None or pose['origin_world'][1]<=support.height:return mask>0
+    hx,hz=support.size[0]/2,support.size[1]/2;corners=np.array([[-hx,-hz],[hx,-hz],[hx,hz],[-hx,hz]])
+    ring=np.concatenate([np.linspace(corners[i],corners[(i+1)%4],30,endpoint=False) for i in range(4)])
+    cam=camera_points(np.column_stack([ring[:,0],np.full(len(ring),support.height),ring[:,1]]),pose);ok=cam[:,2]>.1
+    if ok.sum()>=3:cv2.fillPoly(mask,[np.int32(np.clip(project(cam[ok],camera)*scale,-10000,10000))],1)
+    return mask>0
+
+
+def orient_chairs(objects,instances,camera,camera_pose,frames_by_id=None,support=None):
+    """A near-round stool has no reliable PCA yaw: pick the yaw whose completed silhouette fits the masks.
+
+    frames_by_id: object id -> [(camera, pose, mask)] of the frames in which the track is on the body.
+    Scoring one view only mis-orients a stool seen through table legs in the reference frame, so
+    candidates (8 yaws x a small horizontal shift) are ranked by their mean IoU over those frames.
+    """
+    from .refinement import vertices
+    from .assets import rotation,camera_points,project
+    by_id={inst.get('object_id'):inst for inst in instances};reports=[]
+    for obj in objects:
+        if obj.shape_method!='multiview_stool_compound' or obj.id not in by_id:continue
+        frames=list((frames_by_id or {}).get(obj.id) or [(camera,camera_pose,by_id[obj.id]['mask'],None)])
+        if len(frames)>10:frames=[frames[i] for i in np.linspace(0,len(frames)-1,10).round().astype(int)]
+        targets=[]
+        for cam_k,pose_k,mask_k,others in frames:
+            scale=min(1.,360/cam_k['width']);shape=(round(cam_k['height']*scale),round(cam_k['width']*scale))
+            small=lambda m:cv2.resize(np.asarray(m).astype(np.uint8),(shape[1],shape[0]),interpolation=cv2.INTER_NEAREST)>0
+            target=small(mask_k);hidden=_support_top_mask(support,cam_k,pose_k,shape,scale)
+            if others is not None:hidden|=small(others)
+            if target.sum()>=30:targets.append((cam_k,pose_k,target,scale,hidden&~target))
+        if not targets:continue
+        w,h,d=obj.size;seat=obj.collision.parts[2].position[1]+h/2+.025;scores=[]
+        parts=[(vertices(part)@rotation(part.rotation_euler).T+part.position) for part in chair_collision(w,h,d,seat).parts]
+        shifts=[(0.,0.)] if len(targets)<3 else [(0.,0.),(.08,0.),(-.08,0.),(0.,.08),(0.,-.08)]
+        for dx,dz in shifts:
+            position=np.array(obj.position)+[dx,0,dz]
+            for k in range(8):
+                yaw=obj.rotation_euler[1]+k*np.pi/4;rot=rotation([0,yaw,0]);values=[]
+                for cam_k,pose_k,target,scale,hidden in targets:
+                    mask=np.zeros(target.shape,np.uint8)
+                    for part in parts:
+                        cam=camera_points(part@rot.T+position,pose_k)
+                        if np.any(cam[:,2]<.05):continue
+                        cv2.fillConvexPoly(mask,cv2.convexHull(np.int32(np.clip(project(cam,cam_k)*scale,-10000,10000))),1)
+                    drawn=(mask>0)&~hidden
+                    values.append(float((drawn&target).sum()/max((drawn|target).sum(),1)))
+                # A shift must earn its keep: the measured position wins ties.
+                scores.append((float(np.mean(values))-(.01 if dx or dz else 0.),yaw,dx,dz,values[0]))
+        best=max(scores);obj.rotation_euler=(0.,float((best[1]+np.pi)%(2*np.pi)-np.pi),0.)
+        obj.position=(float(obj.position[0]+best[2]),float(obj.position[1]),float(obj.position[2]+best[3]))
+        reports.append(dict(id=obj.id,yaw_rad=obj.rotation_euler[1],silhouette_iou_proxy=best[0],frames_scored=len(targets),
+            shift_m=[best[2],best[3]],candidates=[sc for sc,_,dx,dz,_ in scores if not dx and not dz]))
+    return reports
 
 
 def build_laptop(points,inst,fit):
@@ -161,7 +350,7 @@ def lift(inst,cloud_world,valid,index,support_height,points_override=None):
         size=tuple(np.maximum(size,.002)),position=tuple(fit['center']),rotation_euler=tuple(fit['rotation_euler']),
         mass_kg=mass,friction=friction,soft_approx=soft,supported_by='support',
         linear_damping=.6 if soft else .04,angular_damping=.8 if soft else .04)
-    if label=='chair':obj.supported_by='floor'
+    if label in ('chair','person'):obj.supported_by='floor'
     inst['object_id']=obj.id
     return obj,dict(id=obj.id,label=obj.label,shape_method=method,valid_points=len(points),fallback=fallback,
                     residual_m=fit.get('residual_m'),details=extra)
@@ -276,6 +465,22 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                     chosen=int(np.bincount(components,weights=overlap.astype(float)).argmax())
                     selected=np.zeros(surface.shape,bool);selected[surface]=components==chosen;surface=selected
             extents=np.percentile(cloud_world[surface][:,[0,2]],[1,99],axis=0) if surface.sum()>30 else np.array([[-.6,-.4],[.6,.4]])
+            if geometry_override is not None and surface.sum()>30:
+                # The world X axis is camera-0's; a table oblique to the first view gets an inflated
+                # axis-aligned box, and Support has no yaw. Align the world frame to the table instead.
+                from .structure import table_rectangle
+                multiview=geometry_override.get('multiview_points')
+                rectangle=table_rectangle((multiview[0]-origin)@basis.T if multiview is not None else np.empty((0,3)),
+                    multiview[1] if multiview is not None else np.empty(0,int),cloud_world[surface][:,[0,2]])
+                if rectangle is not None:
+                    n=basis[1];x=np.array([rectangle['axis'][0],0,rectangle['axis'][1]])@basis
+                    if x@basis[0]<0:x=-x
+                    origin=origin+basis.T@np.array([rectangle['center'][0],0,rectangle['center'][1]])
+                    basis=np.array([x,n,np.cross(x,n)]);plane['basis']=basis
+                    half=rectangle['size']/2;extents=np.array([-half,half])
+                    stage['table_rectangle']=dict(source=rectangle['source'],size_unscaled=rectangle['size'].tolist(),
+                        yaw_from_camera_x_deg=float(np.degrees(np.arctan2(rectangle['axis'][1],rectangle['axis'][0]))),
+                        seed_size_unscaled=rectangle.get('seed_size'))
             center_xz=extents.mean(0);origin=origin+basis.T@np.array([center_xz[0],0,center_xz[1]])
             cloud_world=(cloud-origin)@basis.T
             plane_mask=valid & (np.abs(cloud_world[:,:,1])<.018)
@@ -295,7 +500,8 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                          gravity_source='table_plane_normal',world_basis=basis.tolist())
         with timed(report,'instances') as stage:
             instances,dropped=deduplicate(masks,depth,plane_mask)
-            instances=split_depth_clusters(instances,depth)
+            # A tracked instance owns one multi-view cloud; splitting its mask would duplicate the body.
+            if geometry_override is None:instances=split_depth_clusters(instances,depth)
             try: model.classify(image,instances)
             except Exception as exc: report['warnings'].append(f'CLIP unavailable: {type(exc).__name__}: {str(exc)[:250]}')
             # Reject automatic background and small parts contained within known bodies.
@@ -343,7 +549,21 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                 a,b,meters=distance_reference
                 pa=cloud[int(a[1]),int(a[0])];pb=cloud[int(b[1]),int(b[0])]
                 manual=float(meters)/np.linalg.norm(pa-pb)
-            scale=g.solve_scale(references,manual);stage.update(scale)
+            prior_only=False
+            if geometry_override is not None and manual is None and calibration is None:
+                # VGGT units are not metres. Without a bottle reference a hand-held camera
+                # height is a far better guess than factor 1.0, and is reported as such.
+                references=[];raw_camera=float(((-origin)@basis.T)[1]);floor_raw=None
+                floor_pixels=[m['mask'] for m in masks if m['label']=='floor']
+                if floor_pixels:
+                    try:floor_raw=float(g.fit_plane(cloud_world[np.logical_or.reduce(floor_pixels)&valid],normal_hint=[0,1,0])['center'][1])
+                    except ValueError:pass
+                if floor_raw is not None and raw_camera-floor_raw>1e-3:
+                    references=[dict(id='camera_height_prior',label='handheld_camera_height',reference_m=1.45,observed_m=raw_camera-floor_raw)]
+                    prior_only=True
+                    report['warnings'].append('No metric reference object found; scene scale assumes a 1.45 m hand-held camera height.')
+                else:report['warnings'].append('No metric reference found; scene scale is unverified.')
+            scale=g.solve_scale(references,manual);stage.update(scale);stage['prior_only']=prior_only
             factor=scale['factor'];cloud_world*=factor;depth*=factor
             support_size=np.maximum((extents[1]-extents[0])*factor,[.3,.3])
             if np.max(support_size)>10: raise ValueError('Implausible support dimensions; provide a scale reference')
@@ -368,14 +588,31 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
             except ValueError:pass
         support=Support(size=tuple(support_size),height=support_height,thickness=.03)
         with timed(report,'lift') as stage:
-            objects=[];fused_world_by_id={}
+            objects=[];fused_world_by_id={};lift_dropped=[];stage['dropped']=lift_dropped
+            def to_world(points):return (points-origin)@basis.T*factor+[0,support.height,0]
+            track_views=geometry_override.get('track_views') if geometry_override else None
+            max_range=float(os.getenv('RECON_VIDEO_MAX_RANGE_M','3.0'))
             for i,inst in enumerate(instances[:240]):
                 try:
-                    fused=None
-                    if geometry_override and inst.get('track_id') in geometry_override.get('fused',{}):
-                        fused=geometry_override['fused'][inst['track_id']]
-                        fused=(fused-origin)@basis.T*factor+[0,support.height,0]
-                    obj,details=lift(inst,cloud_world,valid,i,support.height,points_override=fused)
+                    fused=None;consensus=None
+                    if track_views is not None and inst.get('track_id') in track_views:
+                        from .structure import fuse_views
+                        fused,consensus=fuse_views([(frame,to_world(points)) for frame,points in track_views[inst['track_id']]])
+                        reason=None
+                        if consensus['views_kept']<min(3,consensus['views_observed']) or consensus['views_kept']<2 or consensus['points']<150:
+                            reason=f"insufficient_multiview_support ({consensus['views_kept']} consistent views, {consensus['points']} points)"
+                        elif float(np.hypot(*np.median(fused,0)[[0,2]]))>max_range:
+                            reason=f'beyond_{max_range:g}m_of_main_support'
+                        if reason:
+                            lift_dropped.append(dict(index=i,track_id=inst.get('track_id'),label=inst['label'],reason=reason));continue
+                        try:obj,details=lift_multiview(inst,fused,i,support.height)
+                        except Implausible as exc:
+                            lift_dropped.append(dict(index=i,track_id=inst.get('track_id'),label=inst['label'],reason=f'implausible_size: {exc}'));continue
+                        details['multiview']=consensus
+                    else:
+                        if geometry_override and inst.get('track_id') in geometry_override.get('fused',{}):
+                            fused=to_world(geometry_override['fused'][inst['track_id']])
+                        obj,details=lift(inst,cloud_world,valid,i,support.height,points_override=fused)
                     details['fused_multiview_points']=0 if fused is None else len(fused)
                     objects.append(obj);report['objects'].append(details)
                     if fused is not None and len(fused):fused_world_by_id[obj.id]=fused
@@ -392,12 +629,21 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                 if abs(wall_plane['normal'][1])>.35:
                     report['warnings'].append(f'Wall candidate {j} rejected: its observed plane is not vertical.')
                     continue
+                if geometry_override is not None:
+                    # A mask spanning a pillar corner or two walls is not one slab; a box around
+                    # it cuts through the room. Keep only single planes clear of the main table.
+                    near=np.abs((pts-wall_plane['center'])@wall_plane['normal'])<.03
+                    clearance=abs(float(wall_plane['center']@wall_plane['normal']))-float(np.hypot(*support.size))/2
+                    if near.mean()<.8 or clearance<.1:
+                        lift_dropped.append(dict(label='wall',reason=f'not_a_single_clear_plane (inliers {near.mean():.2f}, clearance {clearance:.2f} m)'));continue
+                    pts=pts[near]
                 fitted=g.fit_box(pts);dims=fitted['size'];dims[2]=.03
                 objects.append(SceneObject(id=f'wall_{j}',label='wall',size=tuple(dims),position=tuple(fitted['center']),
                     rotation_euler=tuple(fitted['rotation_euler']),is_static=True,shape_method='plane_slab',confidence=mask['confidence']))
             if geometry_override is not None:
                 from .structure import table_surfaces
-                surfaces=table_surfaces(table_regions,cloud_world,valid,support)
+                surfaces=[t for t in table_surfaces(table_regions,cloud_world,valid,support,min_area=.3)
+                          if float(np.hypot(t['position'][0],t['position'][2]))<=max_range]
                 for j,surface in enumerate(surfaces):
                     details=dict(surface);details.pop('observed_points')
                     objects.append(SceneObject(id=f'table_{j}',label='table',**details,
@@ -493,7 +739,27 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                 if obj.supported_by!='floor':contact_points.append(world_contact[[0,2]])
             except (ValueError,IndexError): continue
         if geometry_override is not None:
-            report['stages']['lift']['support_assignments']=assign_video_supports(objects,support)
+            assignments=assign_video_supports(objects,support);report['stages']['lift']['support_assignments']=assignments
+            # Nothing is under these bodies: placing them on the main table would be an invention.
+            for obj in [o for o in objects if o.supported_by==UNSUPPORTED]:
+                objects.remove(obj);fused_world_by_id.pop(obj.id,None)
+                report['stages']['lift']['dropped'].append(dict(id=obj.id,label=obj.label,reason='no_support_under_body'))
+                for inst in instances:
+                    if inst.get('object_id')==obj.id:inst.pop('object_id')
+            report['objects']=[d for d in report['objects'] if any(o.id==d['id'] for o in objects)]
+            frames_by_id={};frame_cameras=geometry_override.get('cameras');frame_masks=geometry_override.get('track_masks') or {}
+            details_by_id={d['id']:d for d in report['objects']}
+            for inst in instances:
+                obj=by_id.get(inst.get('object_id'))
+                if obj is None or obj not in objects or track_views is None or inst.get('track_id') not in track_views:continue
+                agreeing=consistent_frames([(frame,to_world(points)) for frame,points in track_views[inst['track_id']]],np.array(obj.position))
+                if 'multiview' in details_by_id.get(obj.id,{}):details_by_id[obj.id]['multiview']['consistent_frames']=agreeing
+                if frame_cameras:
+                    # Other tracked objects hide parts of this one; their masks are "cannot be seen here" regions.
+                    frames_by_id[obj.id]=[(*frame_view(camera_pose,factor,frame_cameras[frame],camera),frame_masks[(frame,inst['track_id'])],
+                        np.logical_or.reduce([np.zeros(depth.shape,bool),*[m for (f,t),m in frame_masks.items() if f==frame and t!=inst['track_id']]]))
+                        for frame in agreeing if (frame,inst['track_id']) in frame_masks]
+            report['stages']['lift']['chair_orientation']=orient_chairs(objects,instances,camera,camera_pose,frames_by_id,support)
             # Do not stretch the main tabletop to reach furniture on other tables.
             contact_points=[]
         if contact_points:
@@ -525,11 +791,20 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                     if item['status']=='fallback':report['warnings'].append(f"{item['id']} mesh fallback: {item['reason']}")
         scene=Scene(objects=objects,support=support)
         with timed(report,'settle') as stage:
-            scene,contacts=settle(scene,extend_support=geometry_override is None);stage.update(contacts);report['metrics']['contacts_after_settle']=contacts
+            scene,contacts=settle(scene,extend_support=geometry_override is None,measured_poses=geometry_override is not None);stage.update(contacts);report['metrics']['contacts_after_settle']=contacts
         with timed(report,'stability') as stage:
             measured=stability(scene);stage.update(measured);report['metrics']['stability']=measured
+            if geometry_override is not None and os.getenv('RECON_VIDEO_STATIC_FURNITURE','1')=='1':
+                # Stools and chairs were settled and drift-tested as dynamic bodies above. They are
+                # published static: a bottle cannot move them, and bodies this large are outside the
+                # learned world model's trained range (it drifts them by centimetres with no action).
+                frozen=[obj.id for obj in scene.objects if not obj.is_static and obj.label in FLOOR_CLASSES]
+                for obj in scene.objects:
+                    if obj.id in frozen:obj.is_static=True
+                stage['published_static_after_measurement']=frozen
+                if frozen:report['warnings'].append(f"Furniture is fixed in place ({', '.join(frozen)}): pushing it has no effect. Set RECON_VIDEO_STATIC_FURNITURE=0 to make it movable.")
         report.update(detected_count=len(detections),kept_count=len(instances),detector='grounding_dino',depth='metric_depth',
-            detections=safe_report_instances(instances),scale_confidence='medium' if scale['references'] or manual else 'low',
+            detections=safe_report_instances(instances),scale_confidence='medium' if (scale['references'] and not prior_only) or manual else 'low',
             scale_basis=scale['source'],scale=scale,camera=camera,camera_pose=camera_pose)
         report['body_count']=len(scene.objects)
         report['dynamic_body_count']=sum(not obj.is_static for obj in scene.objects)
@@ -548,6 +823,19 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                 except Exception as exc: report['warnings'].append(f'{obj.id} GLB export failed: {type(exc).__name__}: {exc}')
         with timed(report,'debug_and_metrics'):
             write_debug(directory,image,depth,cloud_world,valid,instances,scene,camera,camera_pose,report)
+        if geometry_override is None:
+            # Same measured gates as the video path, so a client can tell a fitted scene from a guess.
+            metrics=report['metrics'];contacts=metrics.get('contacts_after_settle',{});iou=metrics.get('reprojection_mean_iou')
+            if primary_table is None:
+                report['warnings'].append('No table or desk was detected; the support plane is a guess from the lower part of the image.')
+            if iou is not None and iou<.2:
+                report['warnings'].append(f'Reconstructed bodies barely overlap their image masks (mean silhouette IoU {iou:.2f}); treat this scene as unreliable.')
+            report['quality_checks']={'table_detected':primary_table is not None,
+                'contacts':contacts.get('float_count')==0 and contacts.get('penetration_count')==0,
+                'stability':metrics.get('stability',{}).get('max_drift_m',float('inf'))<.01,
+                'reprojection':iou is not None and iou>=.75}
+            report['quality_status']='passed_measured_checks' if all(report['quality_checks'].values()) else 'needs_review'
+            report['status']='complete'
         report['duration_s']=time.perf_counter()-start
         report['photo_latency_pass']=report['duration_s']<60
         report['acceptance_pass']=False

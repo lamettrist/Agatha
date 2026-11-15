@@ -15,6 +15,8 @@
 <h2><span class="step">01</span> Bring a scene</h2>
 <button id="load-demo" class="primary">Load offline desk <span>↗</span></button>
 <button id="load-bottle" class="bottle-demo">Load bottle experiment ↗</button>
+<button id="load-laptop" class="bottle-demo">Load laptop (joints) ↗</button>
+<button id="load-soft" class="bottle-demo">Load soft body ↗</button>
 <label class="upload" for="photo">＋ Upload a photo, video or scan<input id="photo" type="file" accept="image/*,video/*,.ply,.obj,.usdz"></label>
 <label class="field">Table width reference (optional, m)<input id="table-width" type="number" min="0.3" max="3" step="0.1" placeholder="e.g. 1.2"></label>
 <div id="photo-wrap" hidden><canvas id="detections" aria-label="Uploaded photo with detection boxes"></canvas></div>
@@ -31,7 +33,7 @@
 </details>
 <label class="field">Click in 3D<select id="click-mode"><option value="inspect">Inspect object</option><option value="push">Push object</option></select></label>
 <label class="collision-control"><input id="table-collisions" type="checkbox" checked> Solid table collisions</label><p class="muted">Uncheck to deliberately let objects pass through the table.</p>
-<label class="field">Learned model<select id="architecture"><option value="default">Selected default</option><option value="mlp_multistep">A / Multi-step MLP</option><option value="graph_impulse">B / Graph impulses</option><option value="contact_gnn">C / Contact graph net (new)</option></select></label>
+<label class="field">Learned model<select id="architecture"><option value="default">Selected default</option><option value="auto">Auto (router)</option><option value="mlp_multistep">A / Multi-step MLP</option><option value="graph_impulse">B / Graph impulses</option><option value="contact_gnn">C / Contact graph net (new)</option></select></label>
 <label class="field">Intervention<select id="action"><option value="push">Push → +X (impulse, Ns)</option><option value="toss">Toss upward (impulse, Ns)</option><option value="remove">Remove object</option><option value="set_mass">Set object mass (kg)</option><option value="tilt_support">Tilt support around Z (degrees)</option><option value="set_gravity">Set gravity (m/s²)</option></select></label>
 <label class="field" id="amount-field">Amount<input id="amount" type="number" value="0.55" step="0.05" min="0.01" max="20"></label>
 <button id="run" class="primary">Run both engines <span>▶</span></button>
@@ -42,7 +44,7 @@
 <label class="field">Scene view<select id="scene-view"><option value="scene">3D scene</option><option value="photo">Original photo</option><option value="overlay">Photo + reconstruction</option></select></label>
 <div id="photo-stage" hidden><img id="stage-image" alt="Original scene or reconstruction overlaid on original photo"></div>
 <div id="views">
-<div class="viewport" id="physics-panel"><div class="viewport-label"><span class="tag physics">PHYSICS</span><span>PyBullet · 240 Hz</span></div><div class="canvas-wrap" id="physics-view"></div><span class="view-hint">CLICK AN OBJECT TO INSPECT ↗</span></div>
+<div class="viewport" id="physics-panel"><div class="viewport-label"><span class="tag physics">PHYSICS</span><span id="physics-label">PyBullet · 240 Hz</span></div><div class="canvas-wrap" id="physics-view"></div><span class="view-hint">CLICK AN OBJECT TO INSPECT ↗</span></div>
 <div class="viewport" id="learned-panel"><div class="viewport-label"><span class="tag learned">LEARNED</span><span id="model-label">Learned dynamics</span></div><div class="canvas-wrap" id="learned-view"></div><span class="view-hint">AUTOREGRESSIVE / NO PHYSICS STEPPING</span></div>
 </div>
 <div class="playback"><button id="play" title="Replay" aria-label="Replay simulation">▶</button><input id="timeline" type="range" min="0" max="90" value="0" aria-label="Simulation time"><span id="time">0.00 / 3.00 s</span></div>

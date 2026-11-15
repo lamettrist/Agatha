@@ -40,7 +40,7 @@ class Store:
             return json.loads(json.dumps(self.scenes[key]))
 
     def demo(self,scenario: str = 'desk') -> dict:
-        filename='demo_bottle.json' if scenario=='bottle' else 'demo_desk.json'
+        filename={'bottle':'demo_bottle.json','laptop':'demo_laptop.json','soft':'demo_soft.json'}.get(scenario,'demo_desk.json')
         scene=Scene.model_validate_json((ROOT/'scenes'/filename).read_text())
         return self.add(scene,dict(source='bundled_demo',scenario=scenario,estimated=['all masses and dimensions']))
 

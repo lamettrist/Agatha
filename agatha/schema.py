@@ -65,14 +65,62 @@ class Support(StrictModel):
     size: tuple[Positive, Positive] = (1.2, 0.8)  # width, depth
     height: float = Field(default=0.75, ge=0, le=5)
 
+class Joint(StrictModel):
+    """Joint between two box objects (agatha/joint_gnn.py conventions).
+
+    anchor_parent / axis are in the parent body frame (WORLD coordinates when parent is None),
+    anchor_child in the child body frame.  At joint coordinate 0 the child has the parent's orientation.
+    """
+    id: str = Field(min_length=1, max_length=80)
+    type: Literal["hinge", "ball", "prismatic", "fixed"]
+    parent: str | None = None  # object id; None = fixed to the world
+    child: str
+    anchor_parent: Vec3
+    anchor_child: Vec3
+    axis: Vec3 = (0, 0, 1)
+    lower: float = -3.2
+    upper: float = 3.2
+    damping: float = Field(default=0, ge=0, le=10)
+
+class SoftBody(StrictModel):
+    """Procedural deformable body for the experimental soft_gnn path (size in m, position = centre)."""
+    id: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=120)
+    kind: Literal["cube", "ball", "cloth"]
+    size: Vec3  # cloth: (width, ignored, depth)
+    position: Vec3
+    rotation_euler: Vec3 = (0, 0, 0)
+    mass_kg: float = Field(default=0.3, gt=0, le=100)
+    stiffness: float = Field(default=0.5, ge=0, le=1)  # 0 softest .. 1 stiffest of the trained range
+    friction: float = Field(default=0.5, ge=0, le=2)
+    velocity: Vec3 = (0, 0, 0)
+
 class Scene(StrictModel):
     objects: list[SceneObject] = Field(max_length=256)
     support: Support = Field(default_factory=Support)
+    joints: list[Joint] = Field(default_factory=list, max_length=64)
+    soft_bodies: list[SoftBody] = Field(default_factory=list, max_length=8)
     @model_validator(mode="after")
     def unique_ids(self):
         ids = [o.id for o in self.objects]
         if len(ids) != len(set(ids)) or set(ids) & {"support", "floor"}:
             raise ValueError("Object IDs must be unique and cannot be support/floor")
+        soft = [s.id for s in self.soft_bodies]
+        if len(soft) != len(set(soft)) or set(soft) & (set(ids) | {"support", "floor"}):
+            raise ValueError("Soft body IDs must be unique and distinct from object IDs")
+        names = [j.id for j in self.joints]
+        if len(names) != len(set(names)): raise ValueError("Joint IDs must be unique")
+        for j in self.joints:
+            if j.child not in ids or (j.parent is not None and j.parent not in ids) or j.parent == j.child:
+                raise ValueError(f"Joint {j.id} must connect two different existing objects (parent may be null = world)")
+            if j.lower > j.upper: raise ValueError(f"Joint {j.id}: lower must not exceed upper")
+        parent_of = {j.child: j.parent for j in self.joints}
+        if len(parent_of) != len(self.joints): raise ValueError("An object can be the child of at most one joint (joint_gnn was trained on trees)")
+        for start in parent_of:
+            seen, node = {start}, parent_of[start]
+            while node in parent_of:
+                if node in seen: raise ValueError("Joints must not form a cycle")
+                seen.add(node); node = parent_of[node]
         return self
 
 class Push(StrictModel):
@@ -109,6 +157,6 @@ class SimulationRequest(StrictModel):
     scene_id: str
     actions: list[Action] = Field(default_factory=list, max_length=20)
     engine: Literal["physics", "learned", "both"] = "both"
-    learned_architecture: Literal['default','mlp_multistep','graph_impulse','contact_gnn'] = 'default'
+    learned_architecture: Literal['default','mlp_multistep','graph_impulse','contact_gnn','auto','joint_gnn','soft_gnn'] = 'default'
     duration: float = Field(default=3, ge=0.1, le=5)
     fps: Literal[10, 20, 30] = 30

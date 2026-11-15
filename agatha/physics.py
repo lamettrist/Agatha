@@ -164,8 +164,10 @@ def summarize(scene: Scene, frames: list[dict], contacts: list[dict] | None = No
             o = initial[state["id"]]
             if o.is_static: continue
             pos = np.asarray(state["position"])
+            # Floor-standing furniture never was on the support, so it cannot fall off it.
+            on_floor = o.supported_by == 'floor'
             local = rot.T @ (pos - [0, scene.support.height-scene.support.thickness/2, 0])
-            if (not scene.support.collisions_enabled or abs(local[0]) > scene.support.size[0]/2 or abs(local[2]) > scene.support.size[1]/2) and local[1] < scene.support.thickness/2-.03:
+            if (not scene.support.collisions_enabled or abs(local[0]) > scene.support.size[0]/2 or abs(local[2]) > scene.support.size[1]/2) and local[1] < scene.support.thickness/2-.03 and not on_floor:
                 fell.add(o.id)
             r = p.getMatrixFromQuaternion(state["quaternion"])
             if r[4] < math.cos(math.radians(35)):

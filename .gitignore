@@ -12,3 +12,4 @@ models/vision/
 .venv-train/
 models/runs/
 logs/
+tests/images/Example_*.mp4

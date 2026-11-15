@@ -104,7 +104,7 @@ def job(index,image,inst,obj,observed,directory,fused=None):
             mesh.vertices=(mesh.vertices-np.asarray(obj.position))@rotation(obj.rotation_euler)
             method='fused_multiview_poisson';alignment={'fused_points':len(fused)}
         else:
-            device=registry().device(index%7);model=load_model(device)
+            device=registry().device(index);model=load_model(device)
             with MODEL_LOCKS[device],torch.inference_mode():
                 code=model([masked_crop(image,inst)],device=device)
                 mesh=model.extract_mesh(code,has_vertex_color=False,resolution=96)[0]

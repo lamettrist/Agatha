@@ -1,12 +1,12 @@
 {
-  "pipeline": "video_multiview_v5",
+  "pipeline": "video_multiview_v8",
   "input": "video",
   "image_size": [
     518,
     294
   ],
   "cache_hit": false,
-  "run_id": "1157ec2a2594bf92da360d620a781d630378c510e5b9271039e7b3a9ddf767b9",
+  "run_id": "6a9c339a8f0ddee3ea5a149867ed9246df61c652bb64ad52e9cdbc8d1bf6e94f",
   "stages": {
     "input": {
       "status": "ok",
@@ -15,8 +15,8 @@
         294
       ],
       "camera": {
-        "fx": 314.716796875,
-        "fy": 314.9442443847656,
+        "fx": 314.6803894042969,
+        "fy": 314.9169006347656,
         "cx": 259.0,
         "cy": 147.0,
         "width": 518,
@@ -30,79 +30,82 @@
       "depth_model": "VGGT-1B",
       "detector": "IDEA-Research/grounding-dino-tiny",
       "detected_count": 43,
-      "duration_s": 0.0012
+      "duration_s": 0.0004
     },
     "depth_cleanup": {
       "status": "ok",
-      "edge_pixels": 21933,
+      "edge_pixels": 21922,
       "dark_pixels": 360,
       "clipped_pixels": 43,
-      "valid_fraction": 0.8538268589288998,
+      "valid_fraction": 0.8538990885929661,
       "confidence_method": "image_and_depth_gradient_heuristic",
-      "duration_s": 0.0378
+      "duration_s": 0.031
     },
     "segmentation": {
       "status": "ok",
-      "raw_masks": 32,
+      "raw_masks": 14,
       "duration_s": 0.0
     },
     "structure": {
       "status": "ok",
       "vertical_alignment_fallback": "Need three independent vertical silhouettes",
+      "table_rectangle": {
+        "source": "multi_frame_min_area_rectangle",
+        "size_unscaled": [
+          0.6290390246926629,
+          0.3316751221106768
+        ],
+        "yaw_from_camera_x_deg": 30.963752746582028,
+        "seed_size_unscaled": [
+          0.5758193578297102,
+          0.3332378900650682
+        ]
+      },
       "normal_camera": [
-        0.034412543650595505,
-        -0.9097026935656735,
-        -0.41383183318692873
+        0.03434410495688065,
+        -0.909705556177601,
+        -0.41383122588117055
       ],
-      "inlier_ratio": 0.6716666666666666,
-      "rms_m": 0.0044235888295469,
+      "inlier_ratio": 0.6715,
+      "rms_m": 0.004388953709945732,
       "gravity_source": "table_plane_normal",
       "world_basis": [
         [
-          0.9994077130178133,
-          0.03132373629263262,
-          0.01424944578479285
+          0.8569870964967997,
+          0.23984655142682695,
+          -0.4561214182722
         ],
         [
-          0.034412543650595505,
-          -0.9097026935656735,
-          -0.41383183318692873
+          0.03434410495688065,
+          -0.909705556177601,
+          -0.41383122588117055
         ],
         [
-          1.734723475976807e-18,
-          0.41407708565438367,
-          -0.9102418179450843
+          -0.5141921808941629,
+          0.33898293884539393,
+          -0.7878432383913974
         ]
       ],
-      "duration_s": 0.3279,
-      "floor_height_correction_m": -0.2727539150952361,
-      "support_height_m": 1.022753915095236
+      "duration_s": 0.3665,
+      "floor_height_correction_m": -0.2723808302781321,
+      "support_height_m": 1.022380830278132
     },
     "instances": {
       "status": "ok",
-      "kept": 24,
-      "dropped": [
-        {
-          "label": "keyboard",
-          "reason": "belongs_to_structure"
-        },
-        {
-          "label": "chair",
-          "reason": "belongs_to_structure"
-        }
-      ],
-      "duration_s": 0.2741
+      "kept": 6,
+      "dropped": [],
+      "duration_s": 0.0436
     },
     "scale": {
       "status": "ok",
       "bottle_camera_height": {
-        "factor": 0.4364976136940431,
+        "factor": 0.43639480815175585,
         "references": [
           {
             "id": 1,
             "label": "plastic water bottle",
             "reference_m": 0.21,
-            "observed_m": 0.4811022865000049
+            "observed_m": 0.48121562419453145
           }
         ],
         "rejected": [],
@@ -110,322 +113,214 @@
         "source": "assumed_reference_median",
         "all_ratio_disagreement": 0.0
       },
-      "factor": 2.4686148510766746,
+      "factor": 2.4685909082836655,
       "references": [
         {
           "id": "camera_height_from_bottles",
           "label": "bottle_silhouette",
-          "reference_m": 0.4364976136940431,
-          "observed_m": 0.17681883972449844
+          "reference_m": 0.43639480815175585,
+          "observed_m": 0.17677890925036566
         }
       ],
       "rejected": [],
       "disagreement": 0.0,
       "source": "assumed_reference_median",
       "all_ratio_disagreement": 0.0,
-      "duration_s": 0.0084
+      "prior_only": false,
+      "duration_s": 0.0037
     },
     "lift": {
       "status": "ok",
-      "body_count": 29,
-      "duration_s": 0.3015,
+      "dropped": [
+        {
+          "index": 5,
+          "track_id": 5,
+          "label": "can",
+          "reason": "insufficient_multiview_support (0 consistent views, 0 points)"
+        },
+        {
+          "label": "wall",
+          "reason": "not_a_single_clear_plane (inliers 0.49, clearance 2.17 m)"
+        }
+      ],
+      "secondary_table_surfaces": [],
+      "body_count": 5,
+      "duration_s": 0.4003,
       "support_assignments": {
         "object_000": "support",
         "object_001": "support",
-        "object_005": "support",
-        "object_007": "support",
-        "object_008": "support",
-        "object_009": "table_3",
-        "object_010": "support",
-        "object_014": "support",
-        "object_022": "support",
-        "object_023": "support"
-      }
+        "object_002": "floor",
+        "object_003": "floor",
+        "object_004": "floor"
+      },
+      "chair_orientation": [
+        {
+          "id": "object_002",
+          "yaw_rad": 1.7006914262734378,
+          "silhouette_iou_proxy": 0.6540937247826696,
+          "frames_scored": 9,
+          "shift_m": [
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            0.44490169735867874,
+            0.5816872696401009,
+            0.6540937247826696,
+            0.5574148930726809,
+            0.5477656065021538,
+            0.5177207800235388,
+            0.5067286619128588,
+            0.5175188160032382
+          ]
+        },
+        {
+          "id": "object_003",
+          "yaw_rad": -2.4782547879845307,
+          "silhouette_iou_proxy": 0.3351011956674982,
+          "frames_scored": 10,
+          "shift_m": [
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            0.24641645164868242,
+            0.22648285200346435,
+            0.2580368823326504,
+            0.2851478134290198,
+            0.28896648073893927,
+            0.3061059001463606,
+            0.3351011956674982,
+            0.3185042065218061
+          ]
+        },
+        {
+          "id": "object_004",
+          "yaw_rad": -1.4205324405430222,
+          "silhouette_iou_proxy": 0.3741234328055153,
+          "frames_scored": 10,
+          "shift_m": [
+            0.0,
+            0.0
+          ],
+          "candidates": [
+            0.2849194061093474,
+            0.28451304807912925,
+            0.26994775863148385,
+            0.24906014895736223,
+            0.2998018874781117,
+            0.3719137628215446,
+            0.3741234328055153,
+            0.3324232378266358
+          ]
+        }
+      ]
     },
     "silhouette_refinement": {
       "status": "ok",
       "objects": [
         {
           "id": "object_000",
-          "initial_iou_proxy": 0.45476190476190476,
-          "optimized_iou_proxy": 0.5807453416149069,
+          "initial_iou_proxy": 0.676595744680851,
+          "optimized_iou_proxy": 0.9076923076923077,
           "accepted": true,
-          "evaluations": 114,
-          "method": "bounded_Powell_on_projected_primitives"
+          "evaluations": 169,
+          "method": "bounded_Powell_on_projected_primitives",
+          "support_height_m": 1.022380830278132
         },
         {
           "id": "object_001",
-          "initial_iou_proxy": 0.34182590233545646,
-          "optimized_iou_proxy": 0.4353932584269663,
+          "initial_iou_proxy": 0.6711111111111111,
+          "optimized_iou_proxy": 0.8333333333333334,
           "accepted": true,
-          "evaluations": 137,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_005",
-          "initial_iou_proxy": 0.3868312757201646,
-          "optimized_iou_proxy": 0.40652173913043477,
-          "accepted": true,
-          "evaluations": 138,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_007",
-          "initial_iou_proxy": 0.14606741573033707,
-          "optimized_iou_proxy": 0.3670886075949367,
-          "accepted": true,
-          "evaluations": 154,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_008",
-          "initial_iou_proxy": 0.3413173652694611,
-          "optimized_iou_proxy": 0.4206896551724138,
-          "accepted": true,
-          "evaluations": 230,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_009",
-          "initial_iou_proxy": 0.0,
-          "optimized_iou_proxy": 0.0,
-          "accepted": false,
-          "evaluations": 37,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_010",
-          "initial_iou_proxy": 0.15555555555555556,
-          "optimized_iou_proxy": 0.20689655172413793,
-          "accepted": true,
-          "evaluations": 147,
-          "method": "bounded_Powell_on_projected_primitives"
+          "evaluations": 121,
+          "method": "bounded_Powell_on_projected_primitives",
+          "support_height_m": 1.022380830278132
         }
       ],
-      "duration_s": 0.4776
+      "duration_s": 0.1515
     },
     "irregular_meshes": {
       "status": "ok",
-      "objects": [
-        {
-          "id": "object_005",
-          "status": "fallback",
-          "method": "gravity_aligned_obb_silhouette_refined",
-          "surface": null,
-          "alignment": {
-            "fused_points": 179
-          },
-          "vertices": 451,
-          "convex_hulls": 8,
-          "duration_s": 3.354739271104336,
-          "baseline_silhouette_iou_proxy": 0.3573667711598746,
-          "candidate_silhouette_iou_proxy": 0.3026315789473684,
-          "reason": "Generated mesh silhouette is worse than the completed box; kept the better fit"
-        }
-      ],
-      "workers": 7,
-      "duration_s": 3.3603
+      "objects": [],
+      "workers": 1,
+      "duration_s": 0.0
     },
     "settle": {
       "status": "ok",
-      "float_count": 7,
-      "floating_ids": [
-        "object_005",
-        "object_007",
-        "object_008",
-        "object_010",
-        "object_014",
-        "object_022",
-        "object_023"
-      ],
+      "float_count": 0,
+      "floating_ids": [],
       "penetration_count": 0,
       "penetrations": [],
       "support_distance_m": {
-        "object_000": -1.3188581491336768e-05,
-        "object_001": -1.0456715746181774e-05,
-        "object_002": -2.0341901031051962e-05,
-        "object_003": -9.870952428057793e-06,
-        "object_004": -1.9201469165305504e-05,
-        "object_005": 1.2380403866457594,
-        "object_006": -1.1115506594260374e-05,
-        "object_007": 1.921306769711952,
-        "object_008": 3.1014015529087624,
-        "object_009": -1.3561210788632684e-05,
-        "object_010": 2.233086877424885,
-        "object_011": -1.023566249352438e-05,
-        "object_012": -1.1136372381028922e-05,
-        "object_013": -1.093192483927509e-05,
-        "object_014": 1.0588566141522981,
-        "object_015": -1.0821569668409067e-05,
-        "object_016": -1.346438768184445e-05,
-        "object_017": -1.0512717292800525e-05,
-        "object_018": -1.248180574531417e-05,
-        "object_019": -2.635424931489959e-05,
-        "object_020": -1.1098344177834854e-05,
-        "object_021": -1.1333737218783071e-05,
-        "object_022": 0.6742500733670665,
-        "object_023": 1.693651499296675
+        "object_000": -1.2241157793487986e-05,
+        "object_001": -1.1975567813694507e-05,
+        "object_002": -1.3690750435722474e-05,
+        "object_003": -1.2794771957756398e-05,
+        "object_004": -1.3176200304427718e-05
       },
       "tolerance_m": 0.005,
-      "horizontal_corrections_m": {
-        "object_001": [
-          0.1919942311219779,
-          0.0,
-          0.0
-        ],
-        "object_003": [
-          -0.017599471186181315,
-          0.0,
-          0.2507771312976808
-        ],
-        "object_005": [
-          0.0,
-          0.0,
-          -0.18935186526518355
-        ],
-        "object_006": [
-          0.0,
-          0.0,
-          0.5506338164159159
-        ],
-        "object_011": [
-          0.06820865443487367,
-          0.0,
-          -0.6638790782947379
-        ],
-        "object_012": [
-          -0.7343006402098657,
-          0.0,
-          0.0
-        ],
-        "object_013": [
-          0.7385933860202039,
-          0.0,
-          0.041377965703778885
-        ],
-        "object_015": [
-          -0.058423554406731235,
-          0.0,
-          0.23482365625102136
-        ],
-        "object_016": [
-          0.0,
-          0.0,
-          -0.23482365625102136
-        ],
-        "object_020": [
-          -0.27213917579793534,
-          0.0,
-          0.0
-        ],
-        "object_021": [
-          0.25806132995945485,
-          0.0,
-          0.07186729617504312
-        ],
-        "object_022": [
-          0.1471739778184557,
-          0.0,
-          -0.40687832996276996
-        ],
-        "object_023": [
-          -0.7358698890922786,
-          0.0,
-          0.0
-        ]
+      "horizontal_corrections_m": {},
+      "static_overlap_corrections_m": {},
+      "settle_displacement_m": {
+        "object_000": 1.4194077044565773e-05,
+        "object_001": 3.0551488244738414e-05,
+        "object_002": 1.627848725319711e-05,
+        "object_003": 1.3808894471181248e-05,
+        "object_004": 1.3188920519061797e-05
       },
+      "reverted_to_measured_pose": [],
       "inferred_support_extension_m": [
         0.0,
         0.0
       ],
-      "duration_s": 0.4567
+      "duration_s": 0.0548
     },
     "stability": {
       "status": "ok",
-      "duration_s": 1.4572,
-      "max_drift_m": 0.02583454533408653,
+      "duration_s": 0.2296,
+      "max_drift_m": 0.00010229963852740501,
       "per_object_max_drift_m": {
-        "object_000": 6.070828337962321e-05,
-        "object_001": 7.872134530243818e-05,
-        "object_002": 0.008018216869740889,
-        "object_003": 0.02583454533408653,
-        "object_004": 0.005083637121863874,
-        "object_005": 0.0007888050985520547,
-        "object_006": 5.0932446338327524e-05,
-        "object_007": 6.210591240907932e-05,
-        "object_008": 0.00020097074741574314,
-        "object_009": 6.674271525649864e-07,
-        "object_010": 0.00025368611334678864,
-        "object_011": 0.00010875347517245785,
-        "object_012": 5.0932202824988676e-05,
-        "object_013": 5.093415858116895e-05,
-        "object_014": 0.00011677524684426734,
-        "object_015": 5.0935365608147475e-05,
-        "object_016": 4.349126636220152e-05,
-        "object_017": 3.961627346943834e-05,
-        "object_018": 0.00016023046529968567,
-        "object_019": 0.0006165514617703382,
-        "object_020": 5.093255275250836e-05,
-        "object_021": 5.093050688206745e-05,
-        "object_022": 0.00023595895150597452,
-        "object_023": 5.521542486354823e-06
+        "object_000": 3.611398484896632e-05,
+        "object_001": 9.046332262222584e-05,
+        "object_002": 0.00010229963852740501,
+        "object_003": 4.991838447587745e-05,
+        "object_004": 6.830337310573865e-05
       },
-      "passed": false,
+      "passed": true,
       "final_contacts": {
-        "float_count": 7,
-        "floating_ids": [
-          "object_005",
-          "object_007",
-          "object_008",
-          "object_010",
-          "object_014",
-          "object_022",
-          "object_023"
-        ],
+        "float_count": 0,
+        "floating_ids": [],
         "penetration_count": 0,
         "penetrations": [],
         "support_distance_m": {
-          "object_000": -1.0039712677883603e-05,
-          "object_001": -1.0002270503182628e-05,
-          "object_002": -1.1446139317798643e-05,
-          "object_003": -1.4222909381546127e-05,
-          "object_004": -2.0292521853862086e-05,
-          "object_005": 1.2373671044212133,
-          "object_006": -1.0209037030998666e-05,
-          "object_007": 1.9213818792855135,
-          "object_008": 3.1015111445314054,
-          "object_009": -1.3305897038379689e-05,
-          "object_010": 2.2333393721551604,
-          "object_011": -1.1264801804628313e-05,
-          "object_012": -1.0227624422804935e-05,
-          "object_013": -1.026821674256738e-05,
-          "object_014": 1.0588056338505816,
-          "object_015": -1.0280052527287739e-05,
-          "object_016": -1.1024961487872062e-05,
-          "object_017": -1.2057710949557252e-05,
-          "object_018": -1.3807465249147596e-05,
-          "object_019": -2.4647569959358392e-05,
-          "object_020": -1.019579093576757e-05,
-          "object_021": -1.0302191972280314e-05,
-          "object_022": 0.6742888331497331,
-          "object_023": 1.6936513910749411
+          "object_000": -1.1394937177297212e-05,
+          "object_001": -1.3361837181742262e-05,
+          "object_002": -1.314793676999472e-05,
+          "object_003": -1.1455026787456427e-05,
+          "object_004": -1.1999621177342587e-05
         },
         "tolerance_m": 0.005
-      }
+      },
+      "published_static_after_measurement": [
+        "object_002",
+        "object_003",
+        "object_004"
+      ]
     },
     "visual_assets": {
       "status": "ok",
-      "duration_s": 0.1443
+      "duration_s": 0.0389
     },
     "debug_and_metrics": {
       "status": "ok",
-      "duration_s": 1.5933
+      "duration_s": 0.6484
     }
   },
   "warnings": [
     "Wall candidate 0 rejected: its observed plane is not vertical.",
-    "object_005 mesh fallback: Generated mesh silhouette is worse than the completed box; kept the better fit",
-    "Video scene needs review: contacts, stability, reprojection checks did not pass. See measured metrics."
+    "Furniture is fixed in place (object_002, object_003, object_004): pushing it has no effect. Set RECON_VIDEO_STATIC_FURNITURE=0 to make it movable.",
+    "Video scene needs review: reprojection checks did not pass. See measured metrics."
   ],
   "estimated": [
     "mass, friction and restitution priors",
@@ -440,112 +335,28 @@
   },
   "metrics": {
     "contacts_after_settle": {
-      "float_count": 7,
-      "floating_ids": [
-        "object_005",
-        "object_007",
-        "object_008",
-        "object_010",
-        "object_014",
-        "object_022",
-        "object_023"
-      ],
+      "float_count": 0,
+      "floating_ids": [],
       "penetration_count": 0,
       "penetrations": [],
       "support_distance_m": {
-        "object_000": -1.3188581491336768e-05,
-        "object_001": -1.0456715746181774e-05,
-        "object_002": -2.0341901031051962e-05,
-        "object_003": -9.870952428057793e-06,
-        "object_004": -1.9201469165305504e-05,
-        "object_005": 1.2380403866457594,
-        "object_006": -1.1115506594260374e-05,
-        "object_007": 1.921306769711952,
-        "object_008": 3.1014015529087624,
-        "object_009": -1.3561210788632684e-05,
-        "object_010": 2.233086877424885,
-        "object_011": -1.023566249352438e-05,
-        "object_012": -1.1136372381028922e-05,
-        "object_013": -1.093192483927509e-05,
-        "object_014": 1.0588566141522981,
-        "object_015": -1.0821569668409067e-05,
-        "object_016": -1.346438768184445e-05,
-        "object_017": -1.0512717292800525e-05,
-        "object_018": -1.248180574531417e-05,
-        "object_019": -2.635424931489959e-05,
-        "object_020": -1.1098344177834854e-05,
-        "object_021": -1.1333737218783071e-05,
-        "object_022": 0.6742500733670665,
-        "object_023": 1.693651499296675
+        "object_000": -1.2241157793487986e-05,
+        "object_001": -1.1975567813694507e-05,
+        "object_002": -1.3690750435722474e-05,
+        "object_003": -1.2794771957756398e-05,
+        "object_004": -1.3176200304427718e-05
       },
       "tolerance_m": 0.005,
-      "horizontal_corrections_m": {
-        "object_001": [
-          0.1919942311219779,
-          0.0,
-          0.0
-        ],
-        "object_003": [
-          -0.017599471186181315,
-          0.0,
-          0.2507771312976808
-        ],
-        "object_005": [
-          0.0,
-          0.0,
-          -0.18935186526518355
-        ],
-        "object_006": [
-          0.0,
-          0.0,
-          0.5506338164159159
-        ],
-        "object_011": [
-          0.06820865443487367,
-          0.0,
-          -0.6638790782947379
-        ],
-        "object_012": [
-          -0.7343006402098657,
-          0.0,
-          0.0
-        ],
-        "object_013": [
-          0.7385933860202039,
-          0.0,
-          0.041377965703778885
-        ],
-        "object_015": [
-          -0.058423554406731235,
-          0.0,
-          0.23482365625102136
-        ],
-        "object_016": [
-          0.0,
-          0.0,
-          -0.23482365625102136
-        ],
-        "object_020": [
-          -0.27213917579793534,
-          0.0,
-          0.0
-        ],
-        "object_021": [
-          0.25806132995945485,
-          0.0,
-          0.07186729617504312
-        ],
-        "object_022": [
-          0.1471739778184557,
-          0.0,
-          -0.40687832996276996
-        ],
-        "object_023": [
-          -0.7358698890922786,
-          0.0,
-          0.0
-        ]
+      "horizontal_corrections_m": {},
+      "static_overlap_corrections_m": {},
+      "settle_displacement_m": {
+        "object_000": 1.4194077044565773e-05,
+        "object_001": 3.0551488244738414e-05,
+        "object_002": 1.627848725319711e-05,
+        "object_003": 1.3808894471181248e-05,
+        "object_004": 1.3188920519061797e-05
       },
+      "reverted_to_measured_pose": [],
       "inferred_support_extension_m": [
         0.0,
         0.0
@@ -553,581 +364,435 @@
     },
     "stability": {
       "duration_s": 5,
-      "max_drift_m": 0.02583454533408653,
+      "max_drift_m": 0.00010229963852740501,
       "per_object_max_drift_m": {
-        "object_000": 6.070828337962321e-05,
-        "object_001": 7.872134530243818e-05,
-        "object_002": 0.008018216869740889,
-        "object_003": 0.02583454533408653,
-        "object_004": 0.005083637121863874,
-        "object_005": 0.0007888050985520547,
-        "object_006": 5.0932446338327524e-05,
-        "object_007": 6.210591240907932e-05,
-        "object_008": 0.00020097074741574314,
-        "object_009": 6.674271525649864e-07,
-        "object_010": 0.00025368611334678864,
-        "object_011": 0.00010875347517245785,
-        "object_012": 5.0932202824988676e-05,
-        "object_013": 5.093415858116895e-05,
-        "object_014": 0.00011677524684426734,
-        "object_015": 5.0935365608147475e-05,
-        "object_016": 4.349126636220152e-05,
-        "object_017": 3.961627346943834e-05,
-        "object_018": 0.00016023046529968567,
-        "object_019": 0.0006165514617703382,
-        "object_020": 5.093255275250836e-05,
-        "object_021": 5.093050688206745e-05,
-        "object_022": 0.00023595895150597452,
-        "object_023": 5.521542486354823e-06
+        "object_000": 3.611398484896632e-05,
+        "object_001": 9.046332262222584e-05,
+        "object_002": 0.00010229963852740501,
+        "object_003": 4.991838447587745e-05,
+        "object_004": 6.830337310573865e-05
       },
-      "passed": false,
+      "passed": true,
       "final_contacts": {
-        "float_count": 7,
-        "floating_ids": [
-          "object_005",
-          "object_007",
-          "object_008",
-          "object_010",
-          "object_014",
-          "object_022",
-          "object_023"
-        ],
+        "float_count": 0,
+        "floating_ids": [],
         "penetration_count": 0,
         "penetrations": [],
         "support_distance_m": {
-          "object_000": -1.0039712677883603e-05,
-          "object_001": -1.0002270503182628e-05,
-          "object_002": -1.1446139317798643e-05,
-          "object_003": -1.4222909381546127e-05,
-          "object_004": -2.0292521853862086e-05,
-          "object_005": 1.2373671044212133,
-          "object_006": -1.0209037030998666e-05,
-          "object_007": 1.9213818792855135,
-          "object_008": 3.1015111445314054,
-          "object_009": -1.3305897038379689e-05,
-          "object_010": 2.2333393721551604,
-          "object_011": -1.1264801804628313e-05,
-          "object_012": -1.0227624422804935e-05,
-          "object_013": -1.026821674256738e-05,
-          "object_014": 1.0588056338505816,
-          "object_015": -1.0280052527287739e-05,
-          "object_016": -1.1024961487872062e-05,
-          "object_017": -1.2057710949557252e-05,
-          "object_018": -1.3807465249147596e-05,
-          "object_019": -2.4647569959358392e-05,
-          "object_020": -1.019579093576757e-05,
-          "object_021": -1.0302191972280314e-05,
-          "object_022": 0.6742888331497331,
-          "object_023": 1.6936513910749411
+          "object_000": -1.1394937177297212e-05,
+          "object_001": -1.3361837181742262e-05,
+          "object_002": -1.314793676999472e-05,
+          "object_003": -1.1455026787456427e-05,
+          "object_004": -1.1999621177342587e-05
         },
         "tolerance_m": 0.005
       }
     },
-    "reprojection_mean_iou": 0.08731148720368825,
-    "depth_mae_m": 0.4656281783245504,
+    "reprojection_mean_iou": 0.5653851967190204,
+    "depth_mae_m": 0.09716934040188789,
     "per_object": [
       {
         "id": "object_000",
-        "label": "black insulated bottle",
-        "shape_method": "template_cylinder_silhouette_refined",
-        "reprojection_iou": 0.5678233438485805,
-        "depth_mae_m": 0.05350538715720177,
-        "depth_compared_pixels": 360
+        "label": "bottle",
+        "shape_method": "multiview_extent_cylinder_silhouette_refined",
+        "reprojection_iou": 0.813953488372093,
+        "depth_mae_m": 0.03422580286860466,
+        "depth_compared_pixels": 315
       },
       {
         "id": "object_001",
-        "label": "plastic water bottle",
-        "shape_method": "template_cylinder_silhouette_refined",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
+        "label": "bottle",
+        "shape_method": "multiview_extent_cylinder_silhouette_refined",
+        "reprojection_iou": 0.7602179836512262,
+        "depth_mae_m": 0.020492054522037506,
+        "depth_compared_pixels": 279
       },
       {
         "id": "object_002",
         "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.44391971664698937,
-        "depth_mae_m": 0.23343999683856964,
-        "depth_compared_pixels": 10528
+        "shape_method": "multiview_stool_compound",
+        "reprojection_iou": 0.5917241379310345,
+        "depth_mae_m": 0.10490889102220535,
+        "depth_compared_pixels": 9438
       },
       {
         "id": "object_003",
         "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.19424117627037882,
-        "depth_mae_m": 0.6083772778511047,
-        "depth_compared_pixels": 5707
+        "shape_method": "multiview_stool_compound",
+        "reprojection_iou": 0.5445180279617365,
+        "depth_mae_m": 0.09333991259336472,
+        "depth_compared_pixels": 6660
       },
       {
         "id": "object_004",
         "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.03264828303850156,
-        "depth_mae_m": 0.3572750687599182,
-        "depth_compared_pixels": 251
-      },
-      {
-        "id": "object_005",
-        "label": "gray backpack black backpack",
-        "shape_method": "gravity_aligned_obb_silhouette_refined",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_006",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_007",
-        "label": "partially visible laptop",
-        "shape_method": "box_closed_laptop_silhouette_refined",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_008",
-        "label": "open laptop closed laptop",
-        "shape_method": "compound_laptop_template_silhouette_refined",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_009",
-        "label": "partially visible laptop",
-        "shape_method": "compound_laptop_template",
-        "reprojection_iou": 0.28125,
-        "depth_mae_m": 0.07703901827335358,
-        "depth_compared_pixels": 54
-      },
-      {
-        "id": "object_010",
-        "label": "open laptop closed laptop monitor",
-        "shape_method": "box_closed_laptop_silhouette_refined",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_011",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_012",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_013",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_014",
-        "label": "can",
-        "shape_method": "template_cylinder",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_015",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_016",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_017",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.1485148514851485,
-        "depth_mae_m": 0.24259568750858307,
-        "depth_compared_pixels": 45
-      },
-      {
-        "id": "object_018",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.035754189944134075,
-        "depth_mae_m": 1.5814564228057861,
-        "depth_compared_pixels": 32
-      },
-      {
-        "id": "object_019",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_020",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_021",
-        "label": "chair",
-        "shape_method": "compound_chair_from_points",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_022",
-        "label": "monitor",
-        "shape_method": "gravity_aligned_obb",
-        "reprojection_iou": 0.39132413165478536,
-        "depth_mae_m": 0.571336567401886,
-        "depth_compared_pixels": 7740
-      },
-      {
-        "id": "object_023",
-        "label": "keyboard",
-        "shape_method": "gravity_aligned_obb",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
+        "shape_method": "multiview_stool_compound",
+        "reprojection_iou": 0.11651234567901235,
+        "depth_mae_m": 0.23288004100322723,
+        "depth_compared_pixels": 302
       }
     ],
-    "mask_pixel_assignment_fraction": 0.28518241273343314,
+    "mask_pixel_assignment_fraction": 0.162543009481785,
     "coverage_nonplane_pixels": null,
-    "coverage_note": "Independent foreground annotation unavailable; mask union/image fraction is not foreground coverage."
+    "coverage_note": "Independent foreground annotation unavailable; mask union/image fraction is not foreground coverage.",
+    "multiview_silhouette": {
+      "frames": [
+        0,
+        4,
+        8,
+        12,
+        17,
+        21,
+        25,
+        29
+      ],
+      "per_object": {
+        "object_000": {
+          "mean_iou": 0.699107880665128,
+          "frames": 7
+        },
+        "object_001": {
+          "mean_iou": 0.6735781404222468,
+          "frames": 7
+        },
+        "object_002": {
+          "mean_iou": 0.618301213207474,
+          "frames": 3
+        },
+        "object_003": {
+          "mean_iou": 0.28679183618544646,
+          "frames": 6
+        },
+        "object_004": {
+          "mean_iou": 0.38943173962207733,
+          "frames": 7
+        }
+      },
+      "mean_iou": 0.5334421620204746
+    }
   },
-  "debug_url": "/api/reconstructions/1157ec2a2594bf92da360d620a781d630378c510e5b9271039e7b3a9ddf767b9",
+  "debug_url": "/api/reconstructions/6a9c339a8f0ddee3ea5a149867ed9246df61c652bb64ad52e9cdbc8d1bf6e94f",
   "objects": [
     {
       "id": "object_000",
-      "label": "black insulated bottle",
-      "shape_method": "template_cylinder_silhouette_refined",
-      "valid_points": 5271,
-      "fallback": "Cylinder fit has poor consensus",
-      "residual_m": 0.018722311975672846,
-      "details": null,
-      "fused_multiview_points": 5271,
-      "initial_shape_method": "template_cylinder"
+      "label": "bottle",
+      "detector_label": "black insulated bottle",
+      "shape_method": "multiview_extent_cylinder_silhouette_refined",
+      "valid_points": 3282,
+      "fallback": null,
+      "residual_m": null,
+      "details": {
+        "measured_diameter_m": 0.06381005983982865,
+        "measured_height_m": 0.2386717029537182
+      },
+      "multiview": {
+        "views_observed": 27,
+        "views_kept": 27,
+        "kept_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          20,
+          22,
+          23,
+          24,
+          25,
+          27,
+          28,
+          29
+        ],
+        "points": 3282,
+        "voted": true,
+        "consistent_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          20,
+          22,
+          23,
+          24,
+          25,
+          27,
+          28,
+          29
+        ]
+      },
+      "fused_multiview_points": 3282,
+      "initial_shape_method": "multiview_extent_cylinder"
     },
     {
       "id": "object_001",
-      "label": "plastic water bottle",
-      "shape_method": "template_cylinder_silhouette_refined",
-      "valid_points": 3117,
-      "fallback": "Cylinder fit has poor consensus",
-      "residual_m": 0.028589044997538587,
-      "details": null,
-      "fused_multiview_points": 3117,
-      "initial_shape_method": "template_cylinder"
+      "label": "bottle",
+      "detector_label": "plastic water bottle",
+      "shape_method": "multiview_extent_cylinder_silhouette_refined",
+      "valid_points": 3890,
+      "fallback": null,
+      "residual_m": null,
+      "details": {
+        "measured_diameter_m": 0.07486075332472805,
+        "measured_height_m": 0.1847780993227659
+      },
+      "multiview": {
+        "views_observed": 27,
+        "views_kept": 19,
+        "kept_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          16,
+          18,
+          20,
+          21,
+          22,
+          23
+        ],
+        "points": 3890,
+        "voted": true,
+        "consistent_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          20,
+          21,
+          22,
+          23,
+          26,
+          27,
+          28,
+          29
+        ]
+      },
+      "fused_multiview_points": 3890,
+      "initial_shape_method": "multiview_extent_cylinder"
     },
     {
       "id": "object_002",
       "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 49224,
+      "detector_label": "chair",
+      "shape_method": "multiview_stool_compound",
+      "valid_points": 45327,
       "fallback": null,
-      "residual_m": 0.08918662870913559,
+      "residual_m": null,
       "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
+        "measured_envelope_m": [
+          0.5585611884003108,
+          1.1563840171898383,
+          0.5298982977839921
+        ],
+        "seat_height_m": 0.81287809968413,
+        "completion": "base disc, stem, seat and back are a class completion of the measured envelope"
       },
-      "fused_multiview_points": 49224,
-      "initial_shape_method": "compound_chair_from_points"
+      "multiview": {
+        "views_observed": 12,
+        "views_kept": 9,
+        "kept_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "points": 45327,
+        "voted": true,
+        "consistent_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      "fused_multiview_points": 45327,
+      "initial_shape_method": "multiview_stool_compound"
     },
     {
       "id": "object_003",
       "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 23424,
+      "detector_label": "chair",
+      "shape_method": "multiview_stool_compound",
+      "valid_points": 13244,
       "fallback": null,
-      "residual_m": 0.13616242151991692,
+      "residual_m": null,
       "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
+        "measured_envelope_m": [
+          0.5406180485068217,
+          1.1769361520820822,
+          0.46680277311619217
+        ],
+        "seat_height_m": 0.8277461516200979,
+        "completion": "base disc, stem, seat and back are a class completion of the measured envelope"
       },
-      "fused_multiview_points": 23424,
-      "initial_shape_method": "compound_chair_from_points"
+      "multiview": {
+        "views_observed": 29,
+        "views_kept": 6,
+        "kept_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "points": 13244,
+        "voted": true,
+        "consistent_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          8,
+          9,
+          11,
+          13,
+          16,
+          17,
+          18,
+          20,
+          21,
+          28,
+          29
+        ]
+      },
+      "fused_multiview_points": 13244,
+      "initial_shape_method": "multiview_stool_compound"
     },
     {
       "id": "object_004",
       "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 61512,
+      "detector_label": "chair",
+      "shape_method": "multiview_stool_compound",
+      "valid_points": 9589,
       "fallback": null,
-      "residual_m": 0.11686874947654821,
+      "residual_m": null,
       "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
+        "measured_envelope_m": [
+          0.5238738821285817,
+          1.1093319293791701,
+          0.4844821353122538
+        ],
+        "seat_height_m": null,
+        "completion": "base disc, stem, seat and back are a class completion of the measured envelope"
       },
-      "fused_multiview_points": 61512,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_005",
-      "label": "gray backpack black backpack",
-      "shape_method": "gravity_aligned_obb_silhouette_refined",
-      "valid_points": 179,
-      "fallback": "image_to_3d_unavailable; gravity_aligned_obb",
-      "residual_m": 0.019330157683834885,
-      "details": null,
-      "fused_multiview_points": 179,
-      "initial_shape_method": "gravity_aligned_obb"
-    },
-    {
-      "id": "object_006",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 5585,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.12894342594928804,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
+      "multiview": {
+        "views_observed": 29,
+        "views_kept": 9,
+        "kept_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          9
+        ],
+        "points": 9589,
+        "voted": true,
+        "consistent_frames": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29
+        ]
       },
-      "fused_multiview_points": 5585,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_007",
-      "label": "partially visible laptop",
-      "shape_method": "box_closed_laptop_silhouette_refined",
-      "valid_points": 332,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.09280274549256437,
-      "details": null,
-      "fused_multiview_points": 332,
-      "initial_shape_method": "box_closed_laptop"
-    },
-    {
-      "id": "object_008",
-      "label": "open laptop closed laptop",
-      "shape_method": "compound_laptop_template_silhouette_refined",
-      "valid_points": 601,
-      "fallback": null,
-      "residual_m": 0.032622701906490165,
-      "details": {
-        "hinge_angle_rad": 1.1344640137963142,
-        "hinge_measured": false,
-        "base_depth_estimated": true
-      },
-      "fused_multiview_points": 601,
-      "initial_shape_method": "compound_laptop_template"
-    },
-    {
-      "id": "object_009",
-      "label": "partially visible laptop",
-      "shape_method": "compound_laptop_template",
-      "valid_points": 218,
-      "fallback": null,
-      "residual_m": 0.029018289896543925,
-      "details": {
-        "hinge_angle_rad": 1.8325957145940461,
-        "hinge_measured": false,
-        "base_depth_estimated": true
-      },
-      "fused_multiview_points": 218,
-      "initial_shape_method": "compound_laptop_template"
-    },
-    {
-      "id": "object_010",
-      "label": "open laptop closed laptop monitor",
-      "shape_method": "box_closed_laptop_silhouette_refined",
-      "valid_points": 439,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.05700407164609911,
-      "details": null,
-      "fused_multiview_points": 439,
-      "initial_shape_method": "box_closed_laptop"
-    },
-    {
-      "id": "object_011",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 3045,
-      "fallback": null,
-      "residual_m": 0.13713361735562685,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 3045,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_012",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 4306,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.12334903188278,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 4306,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_013",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 4306,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.12334903188278,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 4306,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_014",
-      "label": "can",
-      "shape_method": "template_cylinder",
-      "valid_points": 194,
-      "fallback": "cylinder_extent_outside_plausible_range",
-      "residual_m": 0.04090157602355508,
-      "details": null,
-      "fused_multiview_points": 194,
-      "initial_shape_method": "template_cylinder"
-    },
-    {
-      "id": "object_015",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 2527,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.2182035425722068,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 2527,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_016",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 2527,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.2182035425722068,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 2527,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_017",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 46,
-      "fallback": null,
-      "residual_m": 0.023985698029405637,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 46,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_018",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 3636,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.19999187754121325,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 3636,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_019",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 200,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.046316918952824804,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 200,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_020",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 4183,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.12030689728647695,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 4183,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_021",
-      "label": "chair",
-      "shape_method": "compound_chair_from_points",
-      "valid_points": 4183,
-      "fallback": "unreliable_depth_extent",
-      "residual_m": 0.12030689728647695,
-      "details": {
-        "seat_back_and_stand": "class completion of observed bounds"
-      },
-      "fused_multiview_points": 4183,
-      "initial_shape_method": "compound_chair_from_points"
-    },
-    {
-      "id": "object_022",
-      "label": "monitor",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 89761,
-      "fallback": null,
-      "residual_m": 0.2521478710154969,
-      "details": null,
-      "fused_multiview_points": 89761,
-      "initial_shape_method": "gravity_aligned_obb"
-    },
-    {
-      "id": "object_023",
-      "label": "keyboard",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 809,
-      "fallback": "thin_object_thickness_prior",
-      "residual_m": 0.0663677543134651,
-      "details": null,
-      "fused_multiview_points": 809,
-      "initial_shape_method": "gravity_aligned_obb"
+      "fused_multiview_points": 9589,
+      "initial_shape_method": "multiview_stool_compound"
     }
   ],
   "detected_count": 43,
-  "kept_count": 24,
+  "kept_count": 6,
   "detector": "grounding_dino",
   "depth": "metric_depth",
   "detections": [
@@ -1143,10 +808,11 @@
       "confidence": 0.8396255970001221,
       "mask_score": 0.9001234769821167,
       "mask_source": "sam2_box",
-      "median_depth_m": 0.8956093192100525,
+      "median_depth_m": 0.8955081105232239,
+      "geometry_confidence": 3.863579034805298,
       "track_id": 0,
       "classifier_label": "phone",
-      "classifier_confidence": 0.13663722574710846,
+      "classifier_confidence": 0.13078568875789642,
       "label_disagreement": true,
       "object_id": "object_000"
     },
@@ -1162,10 +828,11 @@
       "confidence": 0.5915800333023071,
       "mask_score": 0.916372537612915,
       "mask_source": "sam2_box",
-      "median_depth_m": 0.8435588479042053,
+      "median_depth_m": 0.8434550166130066,
+      "geometry_confidence": 3.039351224899292,
       "track_id": 1,
       "classifier_label": "laptop",
-      "classifier_confidence": 0.16775603592395782,
+      "classifier_confidence": 0.15436504781246185,
       "label_disagreement": true,
       "object_id": "object_001"
     },
@@ -1181,10 +848,11 @@
       "confidence": 0.5350183844566345,
       "mask_score": 0.940472424030304,
       "mask_source": "sam2_box",
-      "median_depth_m": 0.5996086597442627,
+      "median_depth_m": 0.5994606614112854,
+      "geometry_confidence": 3.495802879333496,
       "track_id": 2,
       "classifier_label": "chair",
-      "classifier_confidence": 0.9725160002708435,
+      "classifier_confidence": 0.9721794724464417,
       "label_disagreement": false,
       "object_id": "object_002"
     },
@@ -1200,10 +868,11 @@
       "confidence": 0.49545347690582275,
       "mask_score": 0.9248030185699463,
       "mask_source": "sam2_box",
-      "median_depth_m": 0.7044507265090942,
+      "median_depth_m": 0.7044640183448792,
+      "geometry_confidence": 2.9435203075408936,
       "track_id": 3,
       "classifier_label": "monitor",
-      "classifier_confidence": 0.5143475532531738,
+      "classifier_confidence": 0.5118817090988159,
       "label_disagreement": true,
       "object_id": "object_003"
     },
@@ -1219,189 +888,13 @@
       "confidence": 0.49398696422576904,
       "mask_score": 0.7555094361305237,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.183427333831787,
+      "median_depth_m": 1.1831767559051514,
+      "geometry_confidence": 1.8359107971191406,
       "track_id": 4,
       "classifier_label": "chair",
-      "classifier_confidence": 0.3694286048412323,
+      "classifier_confidence": 0.3626972436904907,
       "label_disagreement": false,
       "object_id": "object_004"
-    },
-    {
-      "label": "backpack",
-      "detector_label": "gray backpack black backpack",
-      "bbox": [
-        191.77346801757812,
-        0.32749617099761963,
-        213.64488220214844,
-        24.110063552856445
-      ],
-      "confidence": 0.488664835691452,
-      "mask_score": 0.8107965588569641,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.737209439277649,
-      "track_id": 5,
-      "classifier_label": "tumbler",
-      "classifier_confidence": 0.18058624863624573,
-      "label_disagreement": true,
-      "object_id": "object_005"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        360.3304443359375,
-        31.14261817932129,
-        404.4200439453125,
-        114.75279998779297
-      ],
-      "confidence": 0.4297526180744171,
-      "mask_score": 0.8200141787528992,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.0013480186462402,
-      "track_id": 6,
-      "classifier_label": "monitor",
-      "classifier_confidence": 0.49581336975097656,
-      "label_disagreement": true,
-      "object_id": "object_006"
-    },
-    {
-      "label": "laptop",
-      "detector_label": "partially visible laptop",
-      "bbox": [
-        232.49776649475098,
-        32.43012809753418,
-        248.50425338745117,
-        43.67502403259277
-      ],
-      "confidence": 0.4158227741718292,
-      "original_detector_label": "monitor",
-      "refinement": "single_class_crop_query",
-      "mask_score": 0.8696120977401733,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.5189709663391113,
-      "track_id": 7,
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.22361135482788086,
-      "label_disagreement": false,
-      "object_id": "object_007"
-    },
-    {
-      "label": "laptop",
-      "detector_label": "open laptop closed laptop",
-      "bbox": [
-        330.810546875,
-        27.20358657836914,
-        353.4532470703125,
-        37.50083923339844
-      ],
-      "confidence": 0.41128602623939514,
-      "mask_score": 0.9231047034263611,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.305152416229248,
-      "track_id": 8,
-      "classifier_label": "monitor",
-      "classifier_confidence": 0.2353045791387558,
-      "label_disagreement": true,
-      "object_id": "object_008"
-    },
-    {
-      "label": "laptop",
-      "detector_label": "partially visible laptop",
-      "bbox": [
-        273.0607376098633,
-        36.57885551452637,
-        285.98851013183594,
-        44.2626895904541
-      ],
-      "confidence": 0.39265623688697815,
-      "original_detector_label": "monitor",
-      "refinement": "single_class_crop_query",
-      "mask_score": 0.8827835321426392,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.7550106048583984,
-      "track_id": 9,
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.19102448225021362,
-      "label_disagreement": false,
-      "object_id": "object_009"
-    },
-    {
-      "label": "laptop",
-      "detector_label": "open laptop closed laptop monitor",
-      "bbox": [
-        258.1127624511719,
-        33.56511306762695,
-        272.86883544921875,
-        45.4071044921875
-      ],
-      "confidence": 0.37993183732032776,
-      "mask_score": 0.9036796689033508,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.639512777328491,
-      "track_id": 10,
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.24034787714481354,
-      "label_disagreement": false,
-      "object_id": "object_010"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        338.6204833984375,
-        32.607078552246094,
-        384.3597717285156,
-        75.56763458251953
-      ],
-      "confidence": 0.376242071390152,
-      "mask_score": 0.760221004486084,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.9888205528259277,
-      "track_id": 11,
-      "classifier_label": "chair",
-      "classifier_confidence": 0.47629258036613464,
-      "label_disagreement": false,
-      "object_id": "object_011"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        310.0,
-        52.0,
-        338.0,
-        72.0
-      ],
-      "confidence": 0.3243390917778015,
-      "mask_score": 0.9050503969192505,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.98703134059906,
-      "track_id": 13,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "keyboard",
-      "classifier_confidence": 0.12478666752576828,
-      "label_disagreement": true,
-      "object_id": "object_012"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        309.0,
-        31.0,
-        340.0,
-        54.0
-      ],
-      "confidence": 0.3243390917778015,
-      "mask_score": 0.9050503969192505,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.98703134059906,
-      "track_id": 13,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.19019919633865356,
-      "label_disagreement": true,
-      "object_id": "object_013"
     },
     {
       "label": "can",
@@ -1415,197 +908,24 @@
       "confidence": 0.31384071707725525,
       "mask_score": 0.9037373065948486,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.0632941722869873,
-      "track_id": 14,
+      "median_depth_m": 1.0630971193313599,
+      "geometry_confidence": 1.8521349430084229,
+      "track_id": 5,
       "classifier_label": "bag",
-      "classifier_confidence": 0.18695096671581268,
-      "label_disagreement": true,
-      "object_id": "object_014"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        207.0,
-        46.0,
-        237.0,
-        59.0
-      ],
-      "confidence": 0.31088757514953613,
-      "mask_score": 0.8284772634506226,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.8379030227661133,
-      "track_id": 15,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "keyboard",
-      "classifier_confidence": 0.20767903327941895,
-      "label_disagreement": true,
-      "object_id": "object_015"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        208.0,
-        37.0,
-        237.0,
-        53.0
-      ],
-      "confidence": 0.31088757514953613,
-      "mask_score": 0.8284772634506226,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.8379030227661133,
-      "track_id": 15,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "unknown object",
-      "classifier_confidence": 0.30064937472343445,
-      "label_disagreement": true,
-      "object_id": "object_016"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        500.4676208496094,
-        85.21642303466797,
-        517.9738159179688,
-        121.81319427490234
-      ],
-      "confidence": 0.26751455664634705,
-      "mask_score": 0.8225359916687012,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.0282130241394043,
-      "track_id": 16,
-      "classifier_label": "keyboard",
-      "classifier_confidence": 0.20540884137153625,
-      "label_disagreement": true,
-      "object_id": "object_017"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        258.128173828125,
-        36.1007194519043,
-        289.2411193847656,
-        65.41464233398438
-      ],
-      "confidence": 0.25740566849708557,
-      "mask_score": 0.7853434085845947,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.5463614463806152,
-      "track_id": 17,
-      "classifier_label": "box",
-      "classifier_confidence": 0.6934919953346252,
-      "label_disagreement": true,
-      "object_id": "object_018"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        204.53456115722656,
-        44.193199157714844,
-        216.5619354248047,
-        57.20137023925781
-      ],
-      "confidence": 0.23413942754268646,
-      "mask_score": 0.8542342185974121,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.114810585975647,
-      "track_id": 18,
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.14952082931995392,
-      "label_disagreement": true,
-      "object_id": "object_019"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        310.0,
-        52.0,
-        337.0,
-        72.0
-      ],
-      "confidence": 0.2263115793466568,
-      "mask_score": 0.9375393390655518,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.8088622093200684,
-      "track_id": 19,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "keyboard",
-      "classifier_confidence": 0.1277933567762375,
-      "label_disagreement": true,
-      "object_id": "object_020"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        309.0,
-        31.0,
-        337.0,
-        54.0
-      ],
-      "confidence": 0.2263115793466568,
-      "mask_score": 0.9375393390655518,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.8088622093200684,
-      "track_id": 19,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "monitor",
-      "classifier_confidence": 0.18826459348201752,
-      "label_disagreement": true,
-      "object_id": "object_021"
-    },
-    {
-      "label": "monitor",
-      "bbox": [
-        46.0,
-        0.0,
-        195.0,
-        193.0
-      ],
-      "confidence": 0.84718918800354,
-      "mask_score": 0.934160053730011,
-      "mask_source": "sam2_automatic",
-      "classifier_label": "monitor",
-      "classifier_confidence": 0.8471886515617371,
-      "label_disagreement": false,
-      "median_depth_m": 0.9723345041275024,
-      "track_id": 21,
-      "object_id": "object_022"
-    },
-    {
-      "label": "keyboard",
-      "bbox": [
-        0.0,
-        106.0,
-        70.0,
-        129.0
-      ],
-      "confidence": 0.37327879667282104,
-      "mask_score": 0.8886790871620178,
-      "mask_source": "sam2_automatic",
-      "classifier_label": "keyboard",
-      "classifier_confidence": 0.37327840924263,
-      "label_disagreement": false,
-      "median_depth_m": 1.5754735469818115,
-      "track_id": 22,
-      "object_id": "object_023"
+      "classifier_confidence": 0.16680467128753662,
+      "label_disagreement": true
     }
   ],
   "scale_confidence": "medium",
   "scale_basis": "assumed_reference_median",
   "scale": {
-    "factor": 2.4686148510766746,
+    "factor": 2.4685909082836655,
     "references": [
       {
         "id": "camera_height_from_bottles",
         "label": "bottle_silhouette",
-        "reference_m": 0.4364976136940431,
-        "observed_m": 0.17681883972449844
+        "reference_m": 0.43639480815175585,
+        "observed_m": 0.17677890925036566
       }
     ],
     "rejected": [],
@@ -1614,8 +934,8 @@
     "all_ratio_disagreement": 0.0
   },
   "camera": {
-    "fx": 314.716796875,
-    "fy": 314.9442443847656,
+    "fx": 314.6803894042969,
+    "fy": 314.9169006347656,
     "cx": 259.0,
     "cy": 147.0,
     "width": 518,
@@ -1624,31 +944,31 @@
   },
   "camera_pose": {
     "origin_world": [
-      -0.1904830886856518,
-      1.459251528789279,
-      2.119303825638472
+      1.1284919887526408,
+      1.4587756384298878,
+      1.9175996646228775
     ],
     "world_to_camera": [
       [
-        0.9994077130178133,
-        0.034412543650595505,
-        1.734723475976807e-18
+        0.8569870964967997,
+        0.03434410495688065,
+        -0.5141921808941629
       ],
       [
-        0.03132373629263262,
-        -0.9097026935656735,
-        0.41407708565438367
+        0.23984655142682695,
+        -0.909705556177601,
+        0.33898293884539393
       ],
       [
-        0.01424944578479285,
-        -0.41383183318692873,
-        -0.9102418179450843
+        -0.4561214182722,
+        -0.41383122588117055,
+        -0.7878432383913974
       ]
     ]
   },
-  "body_count": 29,
-  "dynamic_body_count": 24,
-  "duration_s": 92.18128324300051,
+  "body_count": 5,
+  "dynamic_body_count": 2,
+  "duration_s": 56.240193167701364,
   "acceptance_pass": false,
   "acceptance_note": "Requires independent object inventory, metric references and fixture annotations; not inferred from model confidence.",
   "video": {
@@ -2388,79 +1708,186 @@
         "alignments": [
           {
             "overlap_frame": 8,
-            "scale": 0.9771487216878171,
-            "median_residual": 0.011607029159135862
+            "scale": 0.9775644498689734,
+            "median_residual": 0.011502621873911666
           },
           {
             "overlap_frame": 16,
-            "scale": 0.87867468197784,
-            "median_residual": 0.02240721849546713
+            "scale": 0.8787471232398505,
+            "median_residual": 0.02239637331740335
           },
           {
             "overlap_frame": 24,
-            "scale": 1.0344201605489487,
-            "median_residual": 0.06805188690050186
+            "scale": 1.0345844831643793,
+            "median_residual": 0.06799485563412284
           }
         ],
         "frames": 30,
-        "metric_scale": false
+        "metric_scale": false,
+        "chunk": 10,
+        "consistency": {
+          "usable": true,
+          "confident_fraction": 0.26459017326364265,
+          "required_fraction": 0.1,
+          "confidence_threshold": 1.1
+        }
+      },
+      "reference_selection": {
+        "tracked": 6,
+        "dropped": [
+          {
+            "index": 5,
+            "track_id": null,
+            "label": "backpack",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0
+          },
+          {
+            "index": 6,
+            "track_id": null,
+            "label": "chair",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.000000238418579
+          },
+          {
+            "index": 7,
+            "track_id": null,
+            "label": "laptop",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0
+          },
+          {
+            "index": 8,
+            "track_id": null,
+            "label": "laptop",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0
+          },
+          {
+            "index": 9,
+            "track_id": null,
+            "label": "laptop",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0000001192092896
+          },
+          {
+            "index": 10,
+            "track_id": null,
+            "label": "laptop",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0000941753387451
+          },
+          {
+            "index": 11,
+            "track_id": null,
+            "label": "chair",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0000356435775757
+          },
+          {
+            "index": 12,
+            "track_id": null,
+            "label": "keyboard",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0014880895614624
+          },
+          {
+            "index": 13,
+            "track_id": null,
+            "label": "chair",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0084538459777832
+          },
+          {
+            "index": 15,
+            "track_id": null,
+            "label": "chair",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0
+          },
+          {
+            "index": 16,
+            "track_id": null,
+            "label": "chair",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0
+          },
+          {
+            "index": 17,
+            "track_id": null,
+            "label": "chair",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0
+          },
+          {
+            "index": 18,
+            "track_id": null,
+            "label": "chair",
+            "reason": "low_geometry_confidence",
+            "geometry_confidence": 1.0000039339065552
+          },
+          {
+            "index": 19,
+            "track_id": null,
+            "label": "monitor",
+            "reason": "automatic_mask_not_tracked",
+            "geometry_confidence": null
+          },
+          {
+            "index": 20,
+            "track_id": null,
+            "label": "tumbler",
+            "reason": "automatic_mask_not_tracked",
+            "geometry_confidence": null
+          },
+          {
+            "index": 21,
+            "track_id": null,
+            "label": "keyboard",
+            "reason": "automatic_mask_not_tracked",
+            "geometry_confidence": null
+          }
+        ]
       },
       "tracking": {
         "method": "SAM2_video_propagation",
-        "tracks": 23,
-        "observations": 690,
-        "workers": 7,
+        "tracks": 6,
+        "observations": 180,
+        "workers": 1,
         "status": "ok",
         "reference_frame_fallback_tracks": [],
         "fused_point_counts": {
           "0": 5271,
-          "7": 332,
-          "14": 194,
-          "21": 89761,
-          "1": 3117,
-          "8": 601,
-          "15": 2527,
-          "22": 809,
-          "2": 49224,
-          "9": 218,
-          "16": 46,
-          "3": 23424,
-          "10": 439,
-          "17": 3636,
-          "4": 61512,
-          "11": 3045,
-          "18": 200,
-          "5": 179,
-          "12": 824,
-          "19": 4183,
-          "6": 5585,
-          "13": 4306,
-          "20": 243041
+          "1": 3120,
+          "2": 49225,
+          "3": 23423,
+          "4": 61521,
+          "5": 194
         },
         "point_filter": "reference_frame_spatial_consistency"
       },
       "fusion": {
-        "points": 1378119,
+        "points": 1376897,
         "voxel_size_unscaled": 0.006,
         "scale_note": "VGGT units; scene scale solved separately"
       }
     },
     "warnings": [],
     "timings_s": {
-      "sampling": 1.2151724938303232,
-      "geometry": 37.09338232502341,
-      "detection_and_masks": 4.882244965061545,
-      "tracking": 35.26281109638512,
-      "fusion": 4.990594362840056,
-      "scene_lift_and_validation": 8.542452497407794
+      "sampling": 1.3736364394426346,
+      "geometry": 24.10633301921189,
+      "detection_and_masks": 3.4312306083738804,
+      "tracking": 21.086518727242947,
+      "fusion": 2.819978006184101,
+      "scene_lift_and_validation": 2.5076834484934807
     }
   },
-  "photo_run_id": "830d51264ef3453cc3e82af98369b81253b81f5ca7747b869cd76135a10c98dd",
+  "photo_run_id": "6509ee99635d71970b2b3d4f054a458d0a336cc6c6601f0d126c72fe3b67defa",
   "video_latency_pass": true,
   "quality_checks": {
     "tracking": true,
-    "contacts": false,
-    "stability": false,
+    "contacts": true,
+    "stability": true,
     "reprojection": false
   },
   "quality_status": "needs_review",

@@ -4,6 +4,30 @@ import numpy as np
 from .models import PLANE_LABELS
 
 
+def uncovered_automatic_masks(instances):
+    """Separate automatic proposals from already explained furniture/background.
+
+    A SAM proposal may span a wall and a chair. Classifying that entire region
+    can create another furniture body. Classify only connected, uncovered pixels.
+    """
+    grounded=[i for i in instances if i['mask_source']!='sam2_automatic']
+    if not grounded:return instances
+    explained=np.logical_or.reduce([i['mask'] for i in grounded])
+    result=list(grounded)
+    for inst in instances:
+        if inst['mask_source']!='sam2_automatic':continue
+        remaining=inst['mask']&~explained
+        if remaining.sum()<max(60,.15*inst['mask'].sum()):continue
+        count,labels,stats,_=cv2.connectedComponentsWithStats(remaining.astype('uint8'),8)
+        for component in range(1,count):
+            if stats[component,cv2.CC_STAT_AREA]<60:continue
+            mask=labels==component;yy,xx=np.where(mask)
+            result.append(dict(inst,mask=mask,label='unknown object',
+                bbox=[float(xx.min()),float(yy.min()),float(xx.max()+1),float(yy.max()+1)],
+                automatic_cleanup='connected_uncovered_pixels'))
+    return result
+
+
 def deduplicate(instances, depth, plane_mask=None):
     kept=[]; dropped=[]
     # Box prompts first. Automatic masks only add uncovered physical pieces.

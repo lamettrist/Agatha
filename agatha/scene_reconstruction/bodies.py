@@ -107,7 +107,37 @@ def resolve_overlaps(world, iterations=80):
     return {k:v.tolist() for k,v in corrections.items() if np.linalg.norm(v)>1e-8}
 
 
-def settle(scene: Scene, seconds=2., *, extend_support=True):
+def clear_static_overlaps(world, limit=.6, step=.01):
+    """Slide floor-standing bodies horizontally out of static geometry they intersect.
+
+    The solver would otherwise eject a stool fitted partly inside the table slab.
+    Only actual narrow-phase penetration moves a body: a seat under a table stays.
+    """
+    statics=[name for name in ['support',*[o.id for o in world.scene.objects if o.is_static]] if name in world.bodies]
+    corrections={}
+    for obj in world.scene.objects:
+        if obj.is_static or obj.supported_by!='floor':continue
+        body=world.bodies[obj.id];moved=np.zeros(3)
+        for _ in range(int(limit/step)):
+            hit=None
+            for name in statics:
+                cps=p.getClosestPoints(body,world.bodies[name],distance=0,physicsClientId=world.client)
+                if min([cp[8] for cp in cps],default=0.)<-.002:hit=name;break
+            if hit is None:break
+            lo,hi=aabb(world,hit);pos,q=p.getBasePositionAndOrientation(body,physicsClientId=world.client)
+            xy=np.array(pos[:2]);outside=xy-np.clip(xy,lo[:2],hi[:2])
+            if np.linalg.norm(outside)>1e-6:direction=outside/np.linalg.norm(outside)
+            else:
+                exits=[(xy[0]-lo[0],(-1,0)),(hi[0]-xy[0],(1,0)),(xy[1]-lo[1],(0,-1)),(hi[1]-xy[1],(0,1))]
+                direction=np.array(min(exits)[1],float)
+            delta=np.array([direction[0]*step,direction[1]*step,0.])
+            p.resetBasePositionAndOrientation(body,(np.array(pos)+delta).tolist(),q,physicsClientId=world.client)
+            moved+=delta
+        if np.linalg.norm(moved)>1e-8:corrections[obj.id]=list(from_bullet(moved))
+    return corrections
+
+
+def settle(scene: Scene, seconds=2., *, extend_support=True, measured_poses=False):
     """Snap actual collision bottoms to declared support, damp, simulate, save poses.
 
     Never relocates overlapping objects to invented stacks. Remaining failures are reported.
@@ -125,7 +155,10 @@ def settle(scene: Scene, seconds=2., *, extend_support=True):
             p.resetBasePositionAndOrientation(world.bodies[obj.id],pos,q,physicsClientId=world.client)
             for link in range(-1,p.getNumJoints(world.bodies[obj.id],physicsClientId=world.client)):
                 p.changeDynamics(world.bodies[obj.id],link,linearDamping=.9,angularDamping=.9,physicsClientId=world.client)
+        static_corrections=clear_static_overlaps(world) if measured_poses else {}
         corrections=resolve_overlaps(world)
+        snapped={obj.id:p.getBasePositionAndOrientation(world.bodies[obj.id],physicsClientId=world.client)
+                 for obj in world.scene.objects if not obj.is_static}
         # Cropped images can omit support edges. Keep all declared table-supported
         # collision footprints on a finite slab, recording any inferred extension.
         required=np.array(world.scene.support.size,dtype=float)
@@ -140,6 +173,16 @@ def settle(scene: Scene, seconds=2., *, extend_support=True):
             world._box('support',(required[0],world.scene.support.thickness,required[1]),
                 (0,world.scene.support.height-world.scene.support.thickness/2,0),0)
         world.step(round(seconds*240))
+        displacement={};reverted=[]
+        for name,(pos0,q0) in snapped.items():
+            pos,q=p.getBasePositionAndOrientation(world.bodies[name],physicsClientId=world.client)
+            moved=float(np.linalg.norm(np.array(pos)-pos0));turned=float(p.getAxisAngleFromQuaternion(p.getDifferenceQuaternion(q0,q))[1])
+            turned=min(turned,2*np.pi-turned);displacement[name]=moved
+            # Multi-view poses are measurements. A settle that moves one far is an artefact of
+            # residual overlap, not physics worth saving; keep the measured, snapped pose.
+            if measured_poses and (moved>.03 or turned>.09):
+                p.resetBasePositionAndOrientation(world.bodies[name],pos0,q0,physicsClientId=world.client)
+                p.resetBaseVelocity(world.bodies[name],[0,0,0],[0,0,0],physicsClientId=world.client);reverted.append(name)
         for obj in result.objects:
             if obj.is_static: continue
             pos,q=p.getBasePositionAndOrientation(world.bodies[obj.id],physicsClientId=world.client)
@@ -148,6 +191,8 @@ def settle(scene: Scene, seconds=2., *, extend_support=True):
             obj.rotation_euler=tuple(p.getEulerFromQuaternion(quat_from_bullet(q)))
         metrics=contact_metrics(world)
         metrics['horizontal_corrections_m']=corrections
+        metrics['static_overlap_corrections_m']=static_corrections
+        metrics['settle_displacement_m']=displacement;metrics['reverted_to_measured_pose']=reverted
         metrics['inferred_support_extension_m']=(required-original).tolist() if extend_support else [0.,0.]
     return result,metrics
 
