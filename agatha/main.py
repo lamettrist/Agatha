@@ -7,12 +7,19 @@ torch.set_num_threads(4)
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
-from .reconstruction import reconstruct
+from .scene_reconstruction.pipeline import reconstruct
 from .storage import Store
 
 app=FastAPI(title='Agatha · Foresight',version='0.1.0')
 app.add_middleware(CORSMiddleware,allow_origins=[o.strip() for o in os.getenv('CORS_ORIGINS','http://localhost:8017,http://127.0.0.1:8017,http://localhost:8000,http://127.0.0.1:8000').split(',') if o.strip()],allow_methods=['GET','POST'],allow_headers=['*'])
 store=Store()
+
+@app.on_event('startup')
+def preload_reconstruction():
+    if os.getenv('VISION_OFFLINE') != '1' and os.getenv('RECON_PRELOAD','1') == '1':
+        from .scene_reconstruction.models import registry
+        app.state.reconstruction_models = registry().preload()
+
 
 def get_record(key: str) -> dict:
     try: return store.get(key)
@@ -27,7 +34,7 @@ def demo(scenario: str = 'desk'):
 def get_scene(scene_id: str): return get_record(scene_id)
 
 @app.post('/api/scenes')
-async def from_image(image: UploadFile = File(...), table_width_m: float | None = Form(None)):
+async def from_image(image: UploadFile = File(...), table_width_m: float | None = Form(None), distance_reference: str | None = Form(None)):
     data=await image.read(10*1024*1024+1)
     if len(data)>10*1024*1024: raise HTTPException(413,'Image exceeds 10 MB')
     try:
@@ -37,8 +44,21 @@ async def from_image(image: UploadFile = File(...), table_width_m: float | None 
     except (UnidentifiedImageError,OSError,Image.DecompressionBombError):
         raise HTTPException(422,'Upload a valid JPEG/PNG/WebP image')
     from starlette.concurrency import run_in_threadpool
-    try: scene,report=await run_in_threadpool(reconstruct,im,table_width_m)
-    except ValueError as exc: raise HTTPException(422,str(exc))
+    try:
+        reference=None
+        if distance_reference:
+            import json, math
+            reference=json.loads(distance_reference)
+            if len(reference)!=3 or len(reference[0])!=2 or len(reference[1])!=2:
+                raise ValueError('distance_reference must be [[x1,y1],[x2,y2],meters] in resized image coordinates')
+            from PIL import ImageOps
+            w,h=ImageOps.exif_transpose(im).size; ratio=min(1,1280/max(w,h))
+            if not all(0<=pt[0]<int(w*ratio) and 0<=pt[1]<int(h*ratio) for pt in reference[:2]):
+                raise ValueError('Reference points outside resized image')
+            if not math.isfinite(float(reference[2])) or reference[2]<=0 or reference[0]==reference[1]:
+                raise ValueError('Reference requires distinct points and a positive finite distance')
+        scene,report=await run_in_threadpool(reconstruct,im,table_width_m,**({'distance_reference':reference} if reference is not None else {}))
+    except (ValueError,TypeError,KeyError,IndexError) as exc: raise HTTPException(422,str(exc))
     return store.add(scene,report)
 
 from .schema import Scene, SimulationRequest
@@ -49,6 +69,8 @@ from .world_model import rollout, compare, load_model
 def run_simulation(request: SimulationRequest):
     scene=Scene.model_validate(get_record(request.scene_id)['scene'])
     result={'scene_id':request.scene_id,'physics':None,'learned':None,'error':None,'warnings':[]}
+    if request.engine in ('both','learned') and any(o.shape!='box' for o in scene.objects):
+        result['warnings'].append('Learned dynamics uses bounding-box dimensions; it was not trained on these collision shapes.')
     try:
         if request.engine in ('physics','both'):
             result['physics']=simulate(scene,request.actions,request.duration,request.fps)
@@ -98,3 +120,44 @@ app.mount('/static',StaticFiles(directory=ROOT/'static'),name='static')
 
 @app.get('/',include_in_schema=False)
 def index(): return FileResponse(ROOT/'static/index.html')
+
+
+@app.get('/api/reconstructions/{run_id}/{filename}')
+def reconstruction_asset(run_id: str, filename: str):
+    from .scene_reconstruction.pipeline import root_dir
+    import re
+    if not re.fullmatch(r'[a-f0-9]{64}',run_id): raise HTTPException(404,'Run not found')
+    if not re.fullmatch(r'[a-zA-Z0-9_]+\.(jpg|png|json|ply|glb|npy|npz)',filename):
+        raise HTTPException(404,'Asset not found')
+    path=root_dir()/run_id/filename
+    if not path.is_file(): raise HTTPException(404,'Asset not found')
+    return FileResponse(path)
+
+class ObjectEdit(StrictModel):
+    mass_kg: float | None = Field(default=None,gt=0,le=1000)
+    shape: str | None = None
+    size: tuple[float,float,float] | None = None
+
+@app.post('/api/scenes/{scene_id}/objects/{object_id}')
+def edit_scene_object(scene_id: str, object_id: str, edit: ObjectEdit):
+    from .schema import Collision, CollisionPart
+    record=get_record(scene_id);scene=Scene.model_validate(record['scene'])
+    obj=next((o for o in scene.objects if o.id==object_id),None)
+    if obj is None: raise HTTPException(404,'Object not found')
+    if edit.mass_kg is not None: obj.mass_kg=edit.mass_kg;obj.mass_source='user'
+    if edit.shape is not None or edit.size is not None:
+        shape=edit.shape or obj.shape
+        if shape not in ('box','cylinder'): raise HTTPException(422,'Choose box or cylinder for a manual shape')
+        size=edit.size or obj.size
+        if not all(0<v<=100 for v in size): raise HTTPException(422,'Size must be positive meters')
+        obj.size=size;obj.shape=shape;obj.shape_method='user_edited';obj.visual_mesh_url=None
+        obj.collision=Collision(parts=[CollisionPart(size=size)] if shape=='box' else
+            [CollisionPart(type='cylinder',radius=size[0]/2,height=size[1])])
+    from .scene_reconstruction.bodies import settle,stability
+    scene,contacts=settle(scene)
+    report=dict(record.get('report') or {})
+    report['metrics']={'contacts_after_settle':contacts,'stability':stability(scene),
+                       'reprojection_mean_iou':None,'depth_mae_m':None,'coverage_nonplane_pixels':None}
+    report['edited_from']=scene_id;report['acceptance_pass']=False
+    report['warnings']=[*report.get('warnings',[]),'Manually edited scene; original image metrics no longer apply.']
+    return store.add(scene,report)

@@ -9,13 +9,13 @@
 <body>
 <header><a class="brand" href="/">F<span class="brand-dot">◉</span>RESIGHT</a><span class="subtitle">AGATHA / WHAT IF, IN MOTION</span><span class="track">Hack the Nest · OpenAI + Exa</span></header>
 <main>
-<div class="intro"><div><p class="eyebrow">FROM A REAL SCENE TO A POSSIBLE FUTURE</p><h1>Give your desk a little chaos.</h1><p class="lede">Rebuild a photo. Poke the scene. Compare physics with a learned world model.</p></div><div class="units">METERS · KG · SECONDS<br><span>Y-up / approximate boxes</span></div></div>
+<div class="intro"><div><p class="eyebrow">FROM A REAL SCENE TO A POSSIBLE FUTURE</p><h1>Give your desk a little chaos.</h1><p class="lede">Rebuild a photo. Poke the scene. Compare physics with a learned world model.</p></div><div class="units">METERS · KG · SECONDS<br><span>Separate bodies · estimated properties</span></div></div>
 <div class="workspace">
 <aside class="card controls">
 <h2><span class="step">01</span> Bring a scene</h2>
 <button id="load-demo" class="primary">Load offline desk <span>↗</span></button>
 <button id="load-bottle" class="bottle-demo">Load bottle experiment ↗</button>
-<label class="upload" for="photo">＋ Upload a desk photo<input id="photo" type="file" accept="image/*"></label>
+<label class="upload" for="photo">＋ Upload a photo, video or scan<input id="photo" type="file" accept="image/*,video/*,.ply,.obj,.usdz"></label>
 <label class="field">Table width reference (optional, m)<input id="table-width" type="number" min="0.3" max="3" step="0.1" placeholder="e.g. 1.2"></label>
 <div id="photo-wrap" hidden><canvas id="detections" aria-label="Uploaded photo with detection boxes"></canvas></div>
 <p id="reconstruction" class="muted">The bundled desk runs with no network or API keys.</p>
@@ -24,17 +24,25 @@
 <h2><span class="step">02</span> Make it fall</h2>
 <label class="field">Object<select id="object"></select></label>
 <div id="object-meta" class="meta"></div>
+<details id="object-editor"><summary>Edit selected object</summary>
+<label class="field">Mass (kg)<input id="edit-mass" type="number" min="0.001" max="1000" step="0.05"></label>
+<label class="field">Shape<select id="edit-shape"><option value="keep">Keep reconstructed shape</option><option value="box">Box</option><option value="cylinder">Cylinder</option></select></label>
+<button id="save-object">Save object changes</button>
+</details>
+<label class="field">Click in 3D<select id="click-mode"><option value="inspect">Inspect object</option><option value="push">Push object</option></select></label>
 <label class="collision-control"><input id="table-collisions" type="checkbox" checked> Solid table collisions</label><p class="muted">Uncheck to deliberately let objects pass through the table.</p>
 <label class="field">Learned model<select id="architecture"><option value="default">Selected default</option><option value="mlp_multistep">A / Multi-step MLP</option><option value="graph_impulse">B / Graph impulses</option></select></label>
 <label class="field">Intervention<select id="action"><option value="push">Push → +X (impulse, Ns)</option><option value="toss">Toss upward (impulse, Ns)</option><option value="remove">Remove object</option><option value="set_mass">Set object mass (kg)</option><option value="tilt_support">Tilt support around Z (degrees)</option><option value="set_gravity">Set gravity (m/s²)</option></select></label>
 <label class="field" id="amount-field">Amount<input id="amount" type="number" value="0.55" step="0.05" min="0.01" max="20"></label>
 <button id="run" class="primary">Run both engines <span>▶</span></button>
-<p class="muted">Or click any object in 3D to push it toward +X. Each run starts from the original scene.</p>
+<p class="muted">Choose “Push object” to push by clicking in 3D. Each run starts from the original scene.</p>
 </aside>
 <section class="stage-area">
 <div class="stage-toolbar"><span class="live-dot"></span><span id="scene-label">DESK / READY</span><label class="engine-toggle">View <select id="engine"><option value="both">Side by side</option><option value="physics">Physics only</option><option value="learned">Learned only</option></select></label></div>
+<label class="field">Scene view<select id="scene-view"><option value="scene">3D scene</option><option value="photo">Original photo</option><option value="overlay">Photo + reconstruction</option></select></label>
+<div id="photo-stage" hidden><img id="stage-image" alt="Original scene or reconstruction overlaid on original photo"></div>
 <div id="views">
-<div class="viewport" id="physics-panel"><div class="viewport-label"><span class="tag physics">PHYSICS</span><span>PyBullet · 240 Hz</span></div><div class="canvas-wrap" id="physics-view"></div><span class="view-hint">CLICK A BOX TO PUSH ↗</span></div>
+<div class="viewport" id="physics-panel"><div class="viewport-label"><span class="tag physics">PHYSICS</span><span>PyBullet · 240 Hz</span></div><div class="canvas-wrap" id="physics-view"></div><span class="view-hint">CLICK AN OBJECT TO INSPECT ↗</span></div>
 <div class="viewport" id="learned-panel"><div class="viewport-label"><span class="tag learned">LEARNED</span><span id="model-label">Learned dynamics</span></div><div class="canvas-wrap" id="learned-view"></div><span class="view-hint">AUTOREGRESSIVE / NO PHYSICS STEPPING</span></div>
 </div>
 <div class="playback"><button id="play" title="Replay" aria-label="Replay simulation">▶</button><input id="timeline" type="range" min="0" max="90" value="0" aria-label="Simulation time"><span id="time">0.00 / 3.00 s</span></div>
@@ -47,6 +55,6 @@
 <div class="card leaderboard"><div class="assistant-heading"><h2>Make it fall / local leaderboard</h2><span class="muted">FALL COUNT + DISPLACEMENT (m)</span></div><form id="score-form"><input id="name" placeholder="Team name" maxlength="40" required aria-label="Leaderboard name"><button id="save-score" type="submit">Submit physics score ↗</button></form><ol id="scores"></ol></div>
 </section>
 </div>
-<footer><span class="warning-dot">●</span> A sandbox for possibilities. Monocular scale, box shapes and unsourced masses are estimates. Predictions are not guaranteed real-world outcomes.</footer>
+<footer><span class="warning-dot">●</span> A sandbox for possibilities. Monocular scale, hidden surfaces and physical properties are estimates. Orange objects need review. Predictions are not guaranteed real-world outcomes.</footer>
 </main><script type="module" src="/static/app.js"></script>
 </body></html>

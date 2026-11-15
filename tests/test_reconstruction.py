@@ -33,6 +33,7 @@ def test_detector_failure_is_honest(monkeypatch):
 def test_photo_endpoint_and_disk(monkeypatch,tmp_path):
     from agatha import main
     monkeypatch.setattr(main,'store',Store(tmp_path))
+    monkeypatch.setattr(main,'reconstruct',r.reconstruct)
     monkeypatch.setattr(r,'detect',lambda im:[])
     client=TestClient(app); buf=BytesIO(); Image.new('RGB',(50,50)).save(buf,format='PNG')
     response=client.post('/api/scenes',files={'image':('a.png',buf.getvalue(),'image/png')})

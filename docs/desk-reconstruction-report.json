@@ -1,0 +1,1457 @@
+{
+  "pipeline": "metric-photo-v6",
+  "input": "photo",
+  "image_size": [
+    1280,
+    721
+  ],
+  "cache_hit": false,
+  "run_id": "c800ecf0493fc03b6372527c266a8a605513c0fcb2f7ee7d91ca1454fe6d057b",
+  "stages": {
+    "input": {
+      "status": "ok",
+      "original_size": [
+        4000,
+        2252
+      ],
+      "camera": {
+        "fx": 1108.5125168440816,
+        "fy": 1108.5125168440816,
+        "cx": 639.84,
+        "cy": 360.16,
+        "width": 1280,
+        "height": 721,
+        "source": "assumed_60deg_horizontal_FOV"
+      },
+      "duration_s": 0.0
+    },
+    "geometry_and_detection": {
+      "status": "ok",
+      "depth_model": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
+      "detector": "IDEA-Research/grounding-dino-tiny",
+      "detected_count": 23,
+      "duration_s": 0.8678
+    },
+    "depth_cleanup": {
+      "status": "ok",
+      "edge_pixels": 30917,
+      "dark_pixels": 9766,
+      "clipped_pixels": 119,
+      "valid_fraction": 0.9563529386269071,
+      "confidence_method": "image_and_depth_gradient_heuristic",
+      "duration_s": 0.1532
+    },
+    "segmentation": {
+      "status": "ok",
+      "raw_masks": 101,
+      "duration_s": 1.5551
+    },
+    "structure": {
+      "status": "ok",
+      "vertical_alignment": {
+        "vanishing_point_px": [
+          481.87092700542263,
+          4042.819070205031
+        ],
+        "line_count": 4,
+        "median_line_residual_px": 47.60855452898818
+      },
+      "depth_normal_disagreement_deg": 7.534651216945049,
+      "normal_camera": [
+        0.0410402986081798,
+        -0.9567532748547832,
+        -0.28799108483562286
+      ],
+      "inlier_ratio": 0.8393333333333334,
+      "rms_m": 0.005747130058302963,
+      "gravity_source": "table_plane_normal",
+      "world_basis": [
+        [
+          0.9991574920352403,
+          0.03929854943529696,
+          0.011829206318687883
+        ],
+        [
+          0.0410402986081798,
+          -0.9567532748547832,
+          -0.28799108483562286
+        ],
+        [
+          1.734723475976807e-18,
+          0.2882339242124857,
+          -0.957560026804101
+        ]
+      ],
+      "duration_s": 0.1512
+    },
+    "instances": {
+      "status": "ok",
+      "kept": 16,
+      "dropped": [
+        {
+          "label": "phone",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "keyboard",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "keyboard",
+          "reason": "belongs_to_structure"
+        },
+        {
+          "label": "backpack",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "keyboard",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "keyboard",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "belongs_to_structure"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "duplicate_or_part_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "automatic_structure_mask"
+        },
+        {
+          "label": "paper",
+          "reason": "automatic_structure_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "automatic_structure_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "automatic_structure_mask"
+        },
+        {
+          "label": "paper",
+          "reason": "automatic_structure_mask"
+        },
+        {
+          "label": "paper",
+          "reason": "automatic_structure_mask"
+        },
+        {
+          "label": "unknown object",
+          "reason": "automatic_structure_mask"
+        }
+      ],
+      "duration_s": 3.5654
+    },
+    "scale": {
+      "status": "ok",
+      "bottle_camera_height": {
+        "factor": 0.46427353383795006,
+        "references": [
+          {
+            "id": 5,
+            "label": "plastic water bottle",
+            "reference_m": 0.21,
+            "observed_m": 0.44914236874809504
+          },
+          {
+            "id": 7,
+            "label": "plastic water bottle",
+            "reference_m": 0.21,
+            "observed_m": 0.4555192240413294
+          }
+        ],
+        "rejected": [],
+        "disagreement": 0.007073904175185275,
+        "source": "assumed_reference_median",
+        "all_ratio_disagreement": 0.007073904175185275
+      },
+      "factor": 0.9814205364136527,
+      "references": [
+        {
+          "id": "camera_height_from_bottles",
+          "label": "bottle_silhouette",
+          "reference_m": 0.46427353383795006,
+          "observed_m": 0.4730627866566941
+        }
+      ],
+      "rejected": [],
+      "disagreement": 0.0,
+      "source": "assumed_reference_median",
+      "all_ratio_disagreement": 0.0,
+      "duration_s": 0.0705
+    },
+    "lift": {
+      "status": "ok",
+      "body_count": 17,
+      "duration_s": 0.35
+    },
+    "settle": {
+      "status": "ok",
+      "float_count": 0,
+      "floating_ids": [],
+      "penetration_count": 0,
+      "penetrations": [],
+      "support_distance_m": {
+        "object_000": -1.070499555953612e-05,
+        "object_001": -1.1952052527150134e-05,
+        "object_002": -1.6359193737157038e-05,
+        "object_003": -1.0000005404308537e-05,
+        "object_004": -1.0000222755724916e-05,
+        "object_005": -1.4326553964249741e-05,
+        "object_006": -1.0000000000563378e-05,
+        "object_007": -1.0091639904714553e-05,
+        "object_008": -1.0000000000988385e-05,
+        "object_009": -1.0076867116624519e-05,
+        "object_010": -1.5846200039262848e-05,
+        "object_011": -1.000000000065445e-05,
+        "object_012": -1.0000001310460013e-05,
+        "object_013": -1.2413491961694653e-05,
+        "object_014": -1.0000000067923558e-05,
+        "object_015": -1.3314811937595664e-05
+      },
+      "tolerance_m": 0.005,
+      "horizontal_corrections_m": {
+        "object_000": [
+          0.005306592105436657,
+          0.0,
+          0.0
+        ],
+        "object_001": [
+          -0.07189654432968563,
+          0.0,
+          0.0
+        ],
+        "object_004": [
+          -0.0382798469073326,
+          0.0,
+          0.0
+        ],
+        "object_005": [
+          0.0016246549221168717,
+          0.0,
+          0.009289126670264911
+        ],
+        "object_006": [
+          0.1291994732899761,
+          0.0,
+          0.0
+        ],
+        "object_007": [
+          -0.0016246549221168717,
+          0.0,
+          0.0
+        ],
+        "object_008": [
+          0.021968388545181725,
+          0.0,
+          0.0
+        ],
+        "object_010": [
+          -0.013604660428250977,
+          0.0,
+          0.06411961070199831
+        ],
+        "object_011": [
+          0.22091563855246443,
+          0.0,
+          0.0
+        ],
+        "object_012": [
+          -0.04228359388339898,
+          0.0,
+          -0.08034954595482846
+        ],
+        "object_013": [
+          -0.006878915692232702,
+          0.0,
+          0.0
+        ]
+      },
+      "inferred_support_extension_m": [
+        0.44083127710492875,
+        0.014202073927747305
+      ],
+      "duration_s": 0.2921
+    },
+    "stability": {
+      "status": "ok",
+      "duration_s": 0.7984,
+      "max_drift_m": 0.00020617037179110519,
+      "per_object_max_drift_m": {
+        "object_000": 5.510981309876647e-05,
+        "object_001": 5.879178886179563e-05,
+        "object_002": 9.930718716407127e-05,
+        "object_003": 2.423488444675182e-07,
+        "object_004": 2.200844349645848e-06,
+        "object_005": 0.00020617037179110519,
+        "object_006": 1.1769838392669361e-10,
+        "object_007": 3.964716842804503e-05,
+        "object_008": 3.6412350285840936e-09,
+        "object_009": 4.18229694622921e-05,
+        "object_010": 2.0235878231262844e-05,
+        "object_011": 5.6596406388676126e-12,
+        "object_012": 4.56206301715606e-07,
+        "object_013": 7.775682617364953e-05,
+        "object_014": 8.725569700856952e-09,
+        "object_015": 5.339799940405828e-05
+      },
+      "passed": true,
+      "final_contacts": {
+        "float_count": 0,
+        "floating_ids": [],
+        "penetration_count": 0,
+        "penetrations": [],
+        "support_distance_m": {
+          "object_000": -1.0706125680102693e-05,
+          "object_001": -1.2057433343924326e-05,
+          "object_002": -1.6361128160473012e-05,
+          "object_003": -9.999985069131852e-06,
+          "object_004": -1.0277518021266016e-05,
+          "object_005": -1.1848216387283159e-05,
+          "object_006": -1.0000000099907522e-05,
+          "object_007": -1.117054063379079e-05,
+          "object_008": -1.0000000045157914e-05,
+          "object_009": -1.1987074924382432e-05,
+          "object_010": -1.0157949769313765e-05,
+          "object_011": -1.0000000001020477e-05,
+          "object_012": -1.0066942130055809e-05,
+          "object_013": -1.1938224300983569e-05,
+          "object_014": -9.999999956520483e-06,
+          "object_015": -1.1888337807899538e-05
+        },
+        "tolerance_m": 0.005
+      }
+    },
+    "visual_assets": {
+      "status": "ok",
+      "duration_s": 0.267
+    },
+    "debug_and_metrics": {
+      "status": "ok",
+      "duration_s": 3.5601
+    }
+  },
+  "warnings": [],
+  "estimated": [
+    "mass, friction and restitution priors",
+    "hidden surfaces",
+    "support height .75 m",
+    "hidden table bounds expanded to include observed object contact rays"
+  ],
+  "models": {
+    "depth": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
+    "detector": "IDEA-Research/grounding-dino-tiny",
+    "sam": "facebook/sam2.1-hiera-small",
+    "clip": "openai/clip-vit-base-patch32"
+  },
+  "metrics": {
+    "contacts_after_settle": {
+      "float_count": 0,
+      "floating_ids": [],
+      "penetration_count": 0,
+      "penetrations": [],
+      "support_distance_m": {
+        "object_000": -1.070499555953612e-05,
+        "object_001": -1.1952052527150134e-05,
+        "object_002": -1.6359193737157038e-05,
+        "object_003": -1.0000005404308537e-05,
+        "object_004": -1.0000222755724916e-05,
+        "object_005": -1.4326553964249741e-05,
+        "object_006": -1.0000000000563378e-05,
+        "object_007": -1.0091639904714553e-05,
+        "object_008": -1.0000000000988385e-05,
+        "object_009": -1.0076867116624519e-05,
+        "object_010": -1.5846200039262848e-05,
+        "object_011": -1.000000000065445e-05,
+        "object_012": -1.0000001310460013e-05,
+        "object_013": -1.2413491961694653e-05,
+        "object_014": -1.0000000067923558e-05,
+        "object_015": -1.3314811937595664e-05
+      },
+      "tolerance_m": 0.005,
+      "horizontal_corrections_m": {
+        "object_000": [
+          0.005306592105436657,
+          0.0,
+          0.0
+        ],
+        "object_001": [
+          -0.07189654432968563,
+          0.0,
+          0.0
+        ],
+        "object_004": [
+          -0.0382798469073326,
+          0.0,
+          0.0
+        ],
+        "object_005": [
+          0.0016246549221168717,
+          0.0,
+          0.009289126670264911
+        ],
+        "object_006": [
+          0.1291994732899761,
+          0.0,
+          0.0
+        ],
+        "object_007": [
+          -0.0016246549221168717,
+          0.0,
+          0.0
+        ],
+        "object_008": [
+          0.021968388545181725,
+          0.0,
+          0.0
+        ],
+        "object_010": [
+          -0.013604660428250977,
+          0.0,
+          0.06411961070199831
+        ],
+        "object_011": [
+          0.22091563855246443,
+          0.0,
+          0.0
+        ],
+        "object_012": [
+          -0.04228359388339898,
+          0.0,
+          -0.08034954595482846
+        ],
+        "object_013": [
+          -0.006878915692232702,
+          0.0,
+          0.0
+        ]
+      },
+      "inferred_support_extension_m": [
+        0.44083127710492875,
+        0.014202073927747305
+      ]
+    },
+    "stability": {
+      "duration_s": 5,
+      "max_drift_m": 0.00020617037179110519,
+      "per_object_max_drift_m": {
+        "object_000": 5.510981309876647e-05,
+        "object_001": 5.879178886179563e-05,
+        "object_002": 9.930718716407127e-05,
+        "object_003": 2.423488444675182e-07,
+        "object_004": 2.200844349645848e-06,
+        "object_005": 0.00020617037179110519,
+        "object_006": 1.1769838392669361e-10,
+        "object_007": 3.964716842804503e-05,
+        "object_008": 3.6412350285840936e-09,
+        "object_009": 4.18229694622921e-05,
+        "object_010": 2.0235878231262844e-05,
+        "object_011": 5.6596406388676126e-12,
+        "object_012": 4.56206301715606e-07,
+        "object_013": 7.775682617364953e-05,
+        "object_014": 8.725569700856952e-09,
+        "object_015": 5.339799940405828e-05
+      },
+      "passed": true,
+      "final_contacts": {
+        "float_count": 0,
+        "floating_ids": [],
+        "penetration_count": 0,
+        "penetrations": [],
+        "support_distance_m": {
+          "object_000": -1.0706125680102693e-05,
+          "object_001": -1.2057433343924326e-05,
+          "object_002": -1.6361128160473012e-05,
+          "object_003": -9.999985069131852e-06,
+          "object_004": -1.0277518021266016e-05,
+          "object_005": -1.1848216387283159e-05,
+          "object_006": -1.0000000099907522e-05,
+          "object_007": -1.117054063379079e-05,
+          "object_008": -1.0000000045157914e-05,
+          "object_009": -1.1987074924382432e-05,
+          "object_010": -1.0157949769313765e-05,
+          "object_011": -1.0000000001020477e-05,
+          "object_012": -1.0066942130055809e-05,
+          "object_013": -1.1938224300983569e-05,
+          "object_014": -9.999999956520483e-06,
+          "object_015": -1.1888337807899538e-05
+        },
+        "tolerance_m": 0.005
+      }
+    },
+    "reprojection_mean_iou": 0.35277566182096026,
+    "depth_mae_m": 0.22261001355946064,
+    "per_object": [
+      {
+        "id": "object_000",
+        "label": "white tumbler",
+        "shape_method": "silhouette_cylinder_metric_reference",
+        "reprojection_iou": 0.633349198794225,
+        "depth_mae_m": 0.13208496570587158,
+        "depth_compared_pixels": 3992
+      },
+      {
+        "id": "object_001",
+        "label": "black insulated bottle",
+        "shape_method": "silhouette_cylinder_metric_reference",
+        "reprojection_iou": 0.0006663516640618375,
+        "depth_mae_m": 0.25619351863861084,
+        "depth_compared_pixels": 55
+      },
+      {
+        "id": "object_002",
+        "label": "monitor",
+        "shape_method": "gravity_aligned_obb",
+        "reprojection_iou": 0.0,
+        "depth_mae_m": null,
+        "depth_compared_pixels": 0
+      },
+      {
+        "id": "object_003",
+        "label": "mouse",
+        "shape_method": "small_object_template",
+        "reprojection_iou": 0.0,
+        "depth_mae_m": null,
+        "depth_compared_pixels": 0
+      },
+      {
+        "id": "object_004",
+        "label": "gray backpack black backpack",
+        "shape_method": "occlusion_completed_box_template",
+        "reprojection_iou": 0.5479624416099149,
+        "depth_mae_m": 0.42111265659332275,
+        "depth_compared_pixels": 69680
+      },
+      {
+        "id": "object_005",
+        "label": "plastic water bottle",
+        "shape_method": "silhouette_cylinder_metric_reference",
+        "reprojection_iou": 0.620846002026991,
+        "depth_mae_m": 0.11157654225826263,
+        "depth_compared_pixels": 11639
+      },
+      {
+        "id": "object_006",
+        "label": "jacket",
+        "shape_method": "occlusion_completed_box_template",
+        "reprojection_iou": 0.20236330781881307,
+        "depth_mae_m": 0.134799987077713,
+        "depth_compared_pixels": 9967
+      },
+      {
+        "id": "object_007",
+        "label": "plastic water bottle",
+        "shape_method": "silhouette_cylinder_metric_reference",
+        "reprojection_iou": 0.6780230062193847,
+        "depth_mae_m": 0.10594861209392548,
+        "depth_compared_pixels": 12319
+      },
+      {
+        "id": "object_008",
+        "label": "open laptop closed laptop",
+        "shape_method": "open_laptop_template_glossy_depth",
+        "reprojection_iou": 0.653570352515818,
+        "depth_mae_m": 0.05856012925505638,
+        "depth_compared_pixels": 108460
+      },
+      {
+        "id": "object_009",
+        "label": "black insulated bottle",
+        "shape_method": "silhouette_cylinder_metric_reference",
+        "reprojection_iou": 0.6595533050004522,
+        "depth_mae_m": 0.02603132091462612,
+        "depth_compared_pixels": 21882
+      },
+      {
+        "id": "object_010",
+        "label": "open laptop closed laptop",
+        "shape_method": "open_laptop_template_glossy_depth",
+        "reprojection_iou": 0.3082982913716932,
+        "depth_mae_m": 0.0888059139251709,
+        "depth_compared_pixels": 17376
+      },
+      {
+        "id": "object_011",
+        "label": "phone",
+        "shape_method": "small_object_template",
+        "reprojection_iou": 0.0,
+        "depth_mae_m": null,
+        "depth_compared_pixels": 0
+      },
+      {
+        "id": "object_012",
+        "label": "gray backpack black backpack",
+        "shape_method": "occlusion_completed_box_template",
+        "reprojection_iou": 0.30448326410945514,
+        "depth_mae_m": 0.6377764344215393,
+        "depth_compared_pixels": 9970
+      },
+      {
+        "id": "object_013",
+        "label": "can",
+        "shape_method": "silhouette_cylinder_metric_reference",
+        "reprojection_iou": 0.19141914191419143,
+        "depth_mae_m": 0.08705432713031769,
+        "depth_compared_pixels": 174
+      },
+      {
+        "id": "object_014",
+        "label": "laptop",
+        "shape_method": "closed_laptop_template",
+        "reprojection_iou": 0.006284685214451101,
+        "depth_mae_m": 0.10980471223592758,
+        "depth_compared_pixels": 171
+      },
+      {
+        "id": "object_015",
+        "label": "tumbler",
+        "shape_method": "silhouette_cylinder_metric_reference",
+        "reprojection_iou": 0.8375912408759124,
+        "depth_mae_m": 0.724181056022644,
+        "depth_compared_pixels": 7344
+      }
+    ],
+    "mask_pixel_assignment_fraction": 0.44472954230235784,
+    "coverage_nonplane_pixels": null,
+    "coverage_note": "Independent foreground annotation unavailable; mask union/image fraction is not foreground coverage."
+  },
+  "debug_url": "/api/reconstructions/c800ecf0493fc03b6372527c266a8a605513c0fcb2f7ee7d91ca1454fe6d057b",
+  "objects": [
+    {
+      "id": "object_000",
+      "label": "white tumbler",
+      "shape_method": "silhouette_cylinder_metric_reference",
+      "valid_points": 5226,
+      "fallback": "Cylinder fit has poor consensus",
+      "residual_m": 0.016819082635410945,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "template_cylinder"
+    },
+    {
+      "id": "object_001",
+      "label": "black insulated bottle",
+      "shape_method": "silhouette_cylinder_metric_reference",
+      "valid_points": 34847,
+      "fallback": null,
+      "residual_m": 0.006965936476361099,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "ransac_cylinder"
+    },
+    {
+      "id": "object_002",
+      "label": "monitor",
+      "shape_method": "gravity_aligned_obb",
+      "valid_points": 5071,
+      "fallback": null,
+      "residual_m": 0.017474621346379098,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "gravity_aligned_obb"
+    },
+    {
+      "id": "object_003",
+      "label": "mouse",
+      "shape_method": "small_object_template",
+      "valid_points": 904,
+      "fallback": null,
+      "residual_m": 0.006583697427683565,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "gravity_aligned_obb"
+    },
+    {
+      "id": "object_004",
+      "label": "gray backpack black backpack",
+      "shape_method": "occlusion_completed_box_template",
+      "valid_points": 80210,
+      "fallback": "image_to_3d_unavailable; gravity_aligned_obb",
+      "residual_m": 0.06279815949076083,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "gravity_aligned_obb"
+    },
+    {
+      "id": "object_005",
+      "label": "plastic water bottle",
+      "shape_method": "silhouette_cylinder_metric_reference",
+      "valid_points": 12431,
+      "fallback": "Cylinder fit has poor consensus",
+      "residual_m": 0.01635975525508134,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "template_cylinder"
+    },
+    {
+      "id": "object_006",
+      "label": "jacket",
+      "shape_method": "occlusion_completed_box_template",
+      "valid_points": 31371,
+      "fallback": "image_to_3d_unavailable; gravity_aligned_obb",
+      "residual_m": 0.041685408889697295,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "gravity_aligned_obb"
+    },
+    {
+      "id": "object_007",
+      "label": "plastic water bottle",
+      "shape_method": "silhouette_cylinder_metric_reference",
+      "valid_points": 13063,
+      "fallback": "Cylinder fit has poor consensus",
+      "residual_m": 0.020322409575430064,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "template_cylinder"
+    },
+    {
+      "id": "object_008",
+      "label": "open laptop closed laptop",
+      "shape_method": "open_laptop_template_glossy_depth",
+      "valid_points": 113595,
+      "fallback": null,
+      "residual_m": 0.028303765440293734,
+      "details": {
+        "hinge_angle_rad": 1.1344640137963142,
+        "hinge_measured": true,
+        "base_depth_estimated": true
+      },
+      "fused_multiview_points": 0,
+      "initial_shape_method": "compound_laptop_screen_fit"
+    },
+    {
+      "id": "object_009",
+      "label": "black insulated bottle",
+      "shape_method": "silhouette_cylinder_metric_reference",
+      "valid_points": 23370,
+      "fallback": "Cylinder fit has poor consensus",
+      "residual_m": 0.01590116443484855,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "template_cylinder"
+    },
+    {
+      "id": "object_010",
+      "label": "open laptop closed laptop",
+      "shape_method": "open_laptop_template_glossy_depth",
+      "valid_points": 23253,
+      "fallback": null,
+      "residual_m": 0.03272086365143234,
+      "details": {
+        "hinge_angle_rad": 1.1344640137963142,
+        "hinge_measured": false,
+        "base_depth_estimated": true
+      },
+      "fused_multiview_points": 0,
+      "initial_shape_method": "compound_laptop_template"
+    },
+    {
+      "id": "object_011",
+      "label": "phone",
+      "shape_method": "small_object_template",
+      "valid_points": 1625,
+      "fallback": null,
+      "residual_m": 0.011381773361325509,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "gravity_aligned_obb"
+    },
+    {
+      "id": "object_012",
+      "label": "gray backpack black backpack",
+      "shape_method": "occlusion_completed_box_template",
+      "valid_points": 23740,
+      "fallback": "image_to_3d_unavailable; gravity_aligned_obb",
+      "residual_m": 0.06755105741774038,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "gravity_aligned_obb"
+    },
+    {
+      "id": "object_013",
+      "label": "can",
+      "shape_method": "silhouette_cylinder_metric_reference",
+      "valid_points": 676,
+      "fallback": null,
+      "residual_m": 0.006545117570375306,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "ransac_cylinder"
+    },
+    {
+      "id": "object_014",
+      "label": "laptop",
+      "shape_method": "closed_laptop_template",
+      "valid_points": 12239,
+      "fallback": null,
+      "residual_m": 0.012951143842675022,
+      "details": {
+        "hinge_angle_rad": 1.1344640137963142,
+        "hinge_measured": true,
+        "base_depth_estimated": true
+      },
+      "fused_multiview_points": 0,
+      "initial_shape_method": "compound_laptop_screen_fit"
+    },
+    {
+      "id": "object_015",
+      "label": "tumbler",
+      "shape_method": "silhouette_cylinder_metric_reference",
+      "valid_points": 7237,
+      "fallback": null,
+      "residual_m": 0.007828872433852208,
+      "details": null,
+      "fused_multiview_points": 0,
+      "initial_shape_method": "ransac_cylinder"
+    }
+  ],
+  "detected_count": 23,
+  "kept_count": 16,
+  "detector": "grounding_dino",
+  "depth": "metric_depth",
+  "detections": [
+    {
+      "label": "tumbler",
+      "detector_label": "white tumbler",
+      "bbox": [
+        440.6087646484375,
+        206.3406219482422,
+        506.5789794921875,
+        319.6344909667969
+      ],
+      "confidence": 0.834794819355011,
+      "mask_score": 0.9781621694564819,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.8941158056259155,
+      "classifier_label": "tumbler",
+      "classifier_confidence": 0.9083211421966553,
+      "label_disagreement": false,
+      "object_id": "object_000"
+    },
+    {
+      "label": "bottle",
+      "detector_label": "black insulated bottle",
+      "bbox": [
+        235.5592041015625,
+        287.6760559082031,
+        362.5993347167969,
+        660.6905517578125
+      ],
+      "confidence": 0.6686086654663086,
+      "mask_score": 0.9909337759017944,
+      "mask_source": "sam2_box",
+      "median_depth_m": 0.8295016288757324,
+      "classifier_label": "tumbler",
+      "classifier_confidence": 0.9058070778846741,
+      "label_disagreement": true,
+      "object_id": "object_001"
+    },
+    {
+      "label": "monitor",
+      "detector_label": "monitor",
+      "bbox": [
+        355.60418701171875,
+        215.12982177734375,
+        433.8095703125,
+        326.0374755859375
+      ],
+      "confidence": 0.6550165414810181,
+      "mask_score": 0.9827799797058105,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.5730476379394531,
+      "classifier_label": "monitor",
+      "classifier_confidence": 0.3585508465766907,
+      "label_disagreement": false,
+      "object_id": "object_002"
+    },
+    {
+      "label": "mouse",
+      "detector_label": "mouse",
+      "bbox": [
+        217.56651306152344,
+        536.763427734375,
+        252.88755798339844,
+        581.4194946289062
+      ],
+      "confidence": 0.6435413360595703,
+      "mask_score": 0.9751502275466919,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.0146310329437256,
+      "classifier_label": "keyboard",
+      "classifier_confidence": 0.19012774527072906,
+      "label_disagreement": true,
+      "object_id": "object_003"
+    },
+    {
+      "label": "backpack",
+      "detector_label": "gray backpack black backpack",
+      "bbox": [
+        500.6177978515625,
+        29.234375,
+        804.2432861328125,
+        468.70550537109375
+      ],
+      "confidence": 0.6263120174407959,
+      "mask_score": 0.9882069230079651,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.5131357908248901,
+      "classifier_label": "jacket",
+      "classifier_confidence": 0.6818915605545044,
+      "label_disagreement": true,
+      "object_id": "object_004"
+    },
+    {
+      "label": "bottle",
+      "detector_label": "plastic water bottle",
+      "bbox": [
+        798.95458984375,
+        311.7792053222656,
+        887.2488403320312,
+        531.3549194335938
+      ],
+      "confidence": 0.5887189507484436,
+      "mask_score": 0.980114758014679,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.1644909381866455,
+      "classifier_label": "tumbler",
+      "classifier_confidence": 0.6279629468917847,
+      "label_disagreement": true,
+      "object_id": "object_005"
+    },
+    {
+      "label": "jacket",
+      "detector_label": "jacket",
+      "bbox": [
+        1016.2883911132812,
+        232.61306762695312,
+        1277.83056640625,
+        457.29541015625
+      ],
+      "confidence": 0.5432853102684021,
+      "mask_score": 0.8923428058624268,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.5816289186477661,
+      "classifier_label": "gloves",
+      "classifier_confidence": 0.24254286289215088,
+      "label_disagreement": true,
+      "object_id": "object_006"
+    },
+    {
+      "label": "bottle",
+      "detector_label": "plastic water bottle",
+      "bbox": [
+        725.8965454101562,
+        307.9134521484375,
+        812.6831665039062,
+        531.4049072265625
+      ],
+      "confidence": 0.532434344291687,
+      "mask_score": 0.981544017791748,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.1645524501800537,
+      "classifier_label": "bottle",
+      "classifier_confidence": 0.8925002217292786,
+      "label_disagreement": false,
+      "object_id": "object_007"
+    },
+    {
+      "label": "laptop",
+      "detector_label": "open laptop closed laptop",
+      "bbox": [
+        323.64141845703125,
+        306.44580078125,
+        800.517822265625,
+        711.260009765625
+      ],
+      "confidence": 0.5193811058998108,
+      "mask_score": 0.9924759268760681,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.0587546825408936,
+      "classifier_label": "laptop",
+      "classifier_confidence": 0.9729185700416565,
+      "label_disagreement": false,
+      "object_id": "object_008"
+    },
+    {
+      "label": "bottle",
+      "detector_label": "black insulated bottle",
+      "bbox": [
+        895.0399780273438,
+        267.5496826171875,
+        1013.529052734375,
+        550.3026733398438
+      ],
+      "confidence": 0.4606279134750366,
+      "mask_score": 0.9784165620803833,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.031207799911499,
+      "classifier_label": "tumbler",
+      "classifier_confidence": 0.5000454187393188,
+      "label_disagreement": true,
+      "object_id": "object_009"
+    },
+    {
+      "label": "laptop",
+      "detector_label": "open laptop closed laptop",
+      "bbox": [
+        801.4694213867188,
+        236.71487426757812,
+        1170.3150634765625,
+        506.9583740234375
+      ],
+      "confidence": 0.39254704117774963,
+      "mask_score": 0.9383246302604675,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.4786300659179688,
+      "classifier_label": "monitor",
+      "classifier_confidence": 0.2760521173477173,
+      "label_disagreement": true,
+      "object_id": "object_010"
+    },
+    {
+      "label": "phone",
+      "detector_label": "phone",
+      "bbox": [
+        1222.3634033203125,
+        421.0693664550781,
+        1278.9334716796875,
+        472.6325988769531
+      ],
+      "confidence": 0.3731977939605713,
+      "mask_score": 0.9613422155380249,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.414467453956604,
+      "classifier_label": "bag",
+      "classifier_confidence": 0.28655776381492615,
+      "label_disagreement": true,
+      "object_id": "object_011"
+    },
+    {
+      "label": "backpack",
+      "detector_label": "gray backpack black backpack",
+      "bbox": [
+        913.19384765625,
+        83.40208435058594,
+        1158.1109619140625,
+        322.14306640625
+      ],
+      "confidence": 0.29814648628234863,
+      "mask_score": 0.981290876865387,
+      "mask_source": "sam2_box",
+      "median_depth_m": 2.0185976028442383,
+      "classifier_label": "backpack",
+      "classifier_confidence": 0.7090400457382202,
+      "label_disagreement": false,
+      "object_id": "object_012"
+    },
+    {
+      "label": "can",
+      "detector_label": "can",
+      "bbox": [
+        425.2732849121094,
+        271.05584716796875,
+        446.258544921875,
+        319.8034973144531
+      ],
+      "confidence": 0.28194358944892883,
+      "mask_score": 0.9495271444320679,
+      "mask_source": "sam2_box",
+      "median_depth_m": 1.856383204460144,
+      "classifier_label": "can",
+      "classifier_confidence": 0.1985841989517212,
+      "label_disagreement": false,
+      "object_id": "object_013"
+    },
+    {
+      "label": "laptop",
+      "bbox": [
+        117.0,
+        393.0,
+        246.0,
+        522.0
+      ],
+      "confidence": 0.5891539454460144,
+      "mask_score": 0.9708097577095032,
+      "mask_source": "sam2_automatic",
+      "median_depth_m": 1.3375616073608398,
+      "classifier_label": "laptop",
+      "classifier_confidence": 0.5891539454460144,
+      "label_disagreement": true,
+      "object_id": "object_014"
+    },
+    {
+      "label": "tumbler",
+      "bbox": [
+        854.0,
+        602.0,
+        929.0,
+        721.0
+      ],
+      "confidence": 0.6399101614952087,
+      "mask_score": 0.9504681825637817,
+      "mask_source": "sam2_automatic",
+      "median_depth_m": 1.5158283710479736,
+      "classifier_label": "tumbler",
+      "classifier_confidence": 0.6399101614952087,
+      "label_disagreement": true,
+      "object_id": "object_015"
+    }
+  ],
+  "scale_confidence": "medium",
+  "scale_basis": "assumed_reference_median",
+  "scale": {
+    "factor": 0.9814205364136527,
+    "references": [
+      {
+        "id": "camera_height_from_bottles",
+        "label": "bottle_silhouette",
+        "reference_m": 0.46427353383795006,
+        "observed_m": 0.4730627866566941
+      }
+    ],
+    "rejected": [],
+    "disagreement": 0.0,
+    "source": "assumed_reference_median",
+    "all_ratio_disagreement": 0.0
+  },
+  "camera": {
+    "fx": 1108.5125168440816,
+    "fy": 1108.5125168440816,
+    "cx": 639.84,
+    "cy": 360.16,
+    "width": 1280,
+    "height": 721,
+    "source": "assumed_60deg_horizontal_FOV"
+  },
+  "camera_pose": {
+    "origin_world": [
+      -0.13174283322418143,
+      1.21427353383795,
+      1.2077460819110941
+    ],
+    "world_to_camera": [
+      [
+        0.9991574920352403,
+        0.0410402986081798,
+        1.734723475976807e-18
+      ],
+      [
+        0.03929854943529696,
+        -0.9567532748547832,
+        0.2882339242124857
+      ],
+      [
+        0.011829206318687883,
+        -0.28799108483562286,
+        -0.957560026804101
+      ]
+    ]
+  },
+  "duration_s": 11.762416331097484,
+  "photo_latency_pass": true,
+  "acceptance_pass": false,
+  "acceptance_note": "Requires independent object inventory, metric references and fixture annotations; not inferred from model confidence.",
+  "acceptance_checks": {
+    "metric_pipeline": true,
+    "inventory": false,
+    "photo_latency": true,
+    "silhouette_iou": false,
+    "no_floating": true,
+    "no_penetration": true,
+    "stable": true,
+    "left_bottle_tips": true
+  },
+  "inventory_counts": {
+    "bottle": 4,
+    "tumbler": 2,
+    "laptop": 3,
+    "backpack": 2,
+    "jacket": 1,
+    "gloves": 0,
+    "mouse": 1,
+    "phone": 1
+  },
+  "missing_inventory": {
+    "laptop": 1,
+    "gloves": 1
+  },
+  "metric_size_validation": "Independent measurements absent; standard bottle/laptop size priors are not ground truth."
+}

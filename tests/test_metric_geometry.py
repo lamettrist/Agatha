@@ -59,10 +59,11 @@ def test_settle_stability_and_tip():
     assert 'bottle' in simulate(s,[Push(type='push',id='bottle',direction=(1,0),impulse_Ns=.35)],2)['events']['tipped']
 
 
-def test_overlap_is_reported_not_hidden():
+def test_overlap_resolution_is_auditable():
     s=bottle_scene(); s.objects.append(s.objects[0].model_copy(update={'id':'other'}))
     _,report=settle(s,seconds=0)
-    assert report['penetration_count']>0
+    assert report['penetration_count']==0
+    assert report['horizontal_corrections_m']
 
 
 def test_edge_pixels_excluded_from_geometry():

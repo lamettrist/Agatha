@@ -19,8 +19,12 @@ def solve_scale(references: list[dict], manual: float | None = None) -> dict:
     if not valid:
         return dict(factor=1., references=[], disagreement=None, source='metric_model_unverified', rejected=[])
     logs = np.log([r['reference_m']/r['observed_m'] for r in valid])
-    med = np.median(logs); mad = np.median(np.abs(logs-med))
-    keep = np.abs(logs-med) <= max(3*1.4826*mad, math.log(1.25))
+    # Find the largest internally consistent multiplicative cluster first.
+    # A broad MAD must not silently retain mutually inconsistent references.
+    clusters=[np.abs(logs-value)<=math.log(1.25) for value in logs]
+    seed=max(clusters,key=lambda mask:(int(mask.sum()),-abs(float(np.median(logs[mask])))))
+    med=np.median(logs[seed]); mad=np.median(np.abs(logs[seed]-med))
+    keep=np.abs(logs-med)<=min(math.log(1.25),max(3*1.4826*mad,math.log(1.08)))
     factor = float(np.exp(np.median(logs[keep])))
     return dict(factor=factor, references=[r for r,k in zip(valid,keep) if k],
                 rejected=[r for r,k in zip(valid,keep) if not k],
@@ -164,3 +168,53 @@ def fit_cylinder(points: np.ndarray) -> dict:
     return dict(size=np.array([2*radius,height,2*radius]),center=np.array([cx,(lo+hi)/2,cz]),
                 radius=radius,height=height,rotation_euler=np.zeros(3),method='ransac_cylinder',
                 residual_m=float(np.median(abs(np.linalg.norm(xz-[cx,cz],axis=1)-radius))))
+
+
+def vertical_gravity(instances, camera):
+    """Intersect visible bottle centerlines to estimate the vertical vanishing point."""
+    lines=[]
+    for inst in instances:
+        if inst['label'] != 'bottle': continue
+        mask=inst['mask']; yy,xx=np.where(mask)
+        if not len(yy) or np.ptp(yy)<70: continue
+        low,hi=np.percentile(yy,[30,85]); pts=[]
+        for row in range(int(low),int(hi)):
+            xs=np.flatnonzero(mask[row])
+            if len(xs)>4: pts.append([np.median(xs),row,1.])
+        if len(pts)<15: continue
+        _,_,vh=np.linalg.svd(np.asarray(pts),full_matrices=False)
+        line=vh[-1];line/=np.linalg.norm(line[:2]);lines.append(line)
+    if len(lines)<3: raise ValueError('Need three independent vertical silhouettes')
+    _,_,vh=np.linalg.svd(np.asarray(lines));vp=vh[-1]
+    if abs(vp[2])<1e-8: raise ValueError('Vertical vanishing point at infinity')
+    vp=vp[:2]/vp[2]
+    n=np.array([(vp[0]-camera['cx'])/camera['fx'],(vp[1]-camera['cy'])/camera['fy'],1.])
+    n/=np.linalg.norm(n)
+    if n[1]>0:n=-n
+    residual=float(np.median(abs(np.asarray(lines)@np.r_[vp,1.])))
+    if abs(n[1])<.5 or residual/max(np.linalg.norm(vp),1)>.04: raise ValueError('Vertical-axis consensus unreliable')
+    return n,dict(vanishing_point_px=vp.tolist(),line_count=len(lines),median_line_residual_px=residual)
+
+
+def ray(pixel,camera):
+    return np.array([(pixel[0]-camera['cx'])/camera['fx'],(pixel[1]-camera['cy'])/camera['fy'],1.])
+
+
+def mask_anchor(inst):
+    yy,xx=np.where(inst['mask']); bottom=int(np.percentile(yy,99));top=int(np.percentile(yy,1))
+    lower=xx[yy>=bottom-3];upper=xx[yy<=top+3]
+    return [float(np.median(lower)),float(bottom)],[float(np.median(upper)),float(top)]
+
+
+def reference_camera_height(instances,camera,normal):
+    refs=[]
+    for index,inst in enumerate(instances):
+        if inst['label']!='bottle' or 'plastic' not in inst.get('detector_label',''): continue
+        bottom,top=mask_anchor(inst);rb,rt=ray(bottom,camera),ray(top,camera)
+        if normal@rb>=-.03:continue
+        base=rb*(-1/(normal@rb))
+        _,height=np.linalg.lstsq(np.column_stack([rt,-normal]),base,rcond=None)[0]
+        if height>.02:refs.append(dict(id=index,label='plastic water bottle',reference_m=.21,observed_m=float(height)))
+    result=solve_scale(refs)
+    if not refs: raise ValueError('No complete plastic bottle references')
+    return result['factor'],result

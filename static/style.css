@@ -3,3 +3,5 @@
 .bottle-demo{width:100%;margin-top:8px;color:var(--purple)}
 
 .collision-control{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--purple);margin-top:15px}.collision-control input{width:auto;accent-color:var(--purple)}
+
+#photo-stage img{width:100%;height:auto;max-height:620px;object-fit:contain;background:#111923} #object-editor{margin:12px 0} #save-object{width:100%} #stage-image{display:block} [hidden]{display:none!important}
