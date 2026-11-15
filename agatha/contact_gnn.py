@@ -379,7 +379,7 @@ def _combine(contributions: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_lin: float = .03, sleep_ang: float = .25,
-            slop: float = 0., vel_slop: float = .001, stable_margin: float = .003) -> torch.Tensor:
+            slop: float = 0., vel_slop: float = .003, stable_margin: float = .003) -> torch.Tensor:
     """Non-learned clean-up of a predicted state: remove penetrations, then put slow supported objects to sleep.
 
     Positions are corrected for any depth > slop.  Velocities are only edited for depths > vel_slop

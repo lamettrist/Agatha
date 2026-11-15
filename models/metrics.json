@@ -57,6 +57,641 @@
     "learned_fell_count": 15,
     "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos."
   },
-  "selected_kind": "mlp_multistep",
-  "selection_note": "Selected over the graph candidate by paired development evaluation. Additional toss/noclip suites recorded in ab_results.json."
+  "selected_kind": "contact_gnn",
+  "selection_note": "contact_gnn replaced mlp_multistep as default on 2026-11-15 after passing the ship gate in contact_v2.ship_decision; top-level fields above describe the previous MLP evaluation and are kept for history.",
+  "contact_v2": {
+    "dataset": {
+      "path": "data/v2",
+      "split": "test",
+      "n_episodes": 4998,
+      "rollout_seconds": 4.0,
+      "subset": "live_physics"
+    },
+    "old": {
+      "all": {
+        "n_episodes": 2468,
+        "pos_err_m": {
+          "0.5s": 0.08949730121206748,
+          "1s": 0.17002441487202885,
+          "2s": 0.2763990855805109
+        },
+        "pos_err_active_2s_m": 0.5107816185442113,
+        "out_of_bounds_episodes": 167,
+        "ori_err_deg_2s": 34.91456978870672,
+        "fell_accuracy": 0.8528631020098597,
+        "fell_precision": 0.5076060848678943,
+        "fell_recall": 0.7974842767295598,
+        "mean_penetration_m": 0.047815085042626417,
+        "mean_penetration_capped_50mm_m": 0.0201198586490095,
+        "frac_frames_penetrating_over_5mm": 0.6402576317785362,
+        "rest_drift_mps": 0.12143845649222516,
+        "diverged_episodes": 0
+      },
+      "gentle": {
+        "n_episodes": 1273,
+        "pos_err_m": {
+          "0.5s": 0.031029593997983603,
+          "1s": 0.07165683301414977,
+          "2s": 0.1433671076235786
+        },
+        "pos_err_active_2s_m": 0.14671269877494048,
+        "out_of_bounds_episodes": 8,
+        "ori_err_deg_2s": 17.5275731839473,
+        "fell_accuracy": 0.8832457676590777,
+        "fell_precision": 0.0,
+        "fell_recall": null,
+        "mean_penetration_m": 0.02058968282246642,
+        "mean_penetration_capped_50mm_m": 0.01751977603895892,
+        "frac_frames_penetrating_over_5mm": 0.612003794512551,
+        "rest_drift_mps": 0.07768285635274153,
+        "diverged_episodes": 0
+      },
+      "chaotic": {
+        "n_episodes": 1195,
+        "pos_err_m": {
+          "0.5s": 0.14504648726737843,
+          "1s": 0.26348180129607035,
+          "2s": 0.4027905321918393
+        },
+        "pos_err_active_2s_m": 0.588862980978722,
+        "out_of_bounds_episodes": 159,
+        "ori_err_deg_2s": 51.433663068769334,
+        "fell_accuracy": 0.8239970419670919,
+        "fell_precision": 0.6680716543730242,
+        "fell_recall": 0.7974842767295598,
+        "mean_penetration_m": 0.07368148216028259,
+        "mean_penetration_capped_50mm_m": 0.022590153441586675,
+        "frac_frames_penetrating_over_5mm": 0.6671011277500463,
+        "rest_drift_mps": 0.1689821946658238,
+        "diverged_episodes": 0
+      },
+      "latency_ms_per_step_cpu": 1.660597634812196
+    },
+    "new_raw": {
+      "all": {
+        "n_episodes": 2468,
+        "pos_err_m": {
+          "0.5s": 0.02396914681870767,
+          "1s": 0.043761274942805226,
+          "2s": 0.05966002597177927
+        },
+        "pos_err_active_2s_m": 0.16212528453841296,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 14.336312880752615,
+        "fell_accuracy": 0.9787637466818354,
+        "fell_precision": 0.924223602484472,
+        "fell_recall": 0.9358490566037736,
+        "mean_penetration_m": 0.0003917139964354207,
+        "mean_penetration_capped_50mm_m": 0.00038692295443116685,
+        "frac_frames_penetrating_over_5mm": 0.009406996587030717,
+        "rest_drift_mps": 0.005723925974323025,
+        "diverged_episodes": 0
+      },
+      "gentle": {
+        "n_episodes": 1273,
+        "pos_err_m": {
+          "0.5s": 0.001661702419428448,
+          "1s": 0.0020366955268676574,
+          "2s": 0.0023984447715642157
+        },
+        "pos_err_active_2s_m": 0.012167470260801701,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 0.5871111988540326,
+        "fell_accuracy": 0.9998054096127651,
+        "fell_precision": 0.0,
+        "fell_recall": null,
+        "mean_penetration_m": 0.00024930223913035215,
+        "mean_penetration_capped_50mm_m": 0.0002456570202788329,
+        "frac_frames_penetrating_over_5mm": 0.0013986184082506324,
+        "rest_drift_mps": 0.0006082903615178257,
+        "diverged_episodes": 0
+      },
+      "chaotic": {
+        "n_episodes": 1195,
+        "pos_err_m": {
+          "0.5s": 0.04516307485862187,
+          "1s": 0.0834030966507925,
+          "2s": 0.11406329197065247
+        },
+        "pos_err_active_2s_m": 0.19428653151856645,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 27.39919833892914,
+        "fell_accuracy": 0.9587724163431318,
+        "fell_precision": 0.9247980111870727,
+        "fell_recall": 0.9358490566037736,
+        "mean_penetration_m": 0.000527017013775178,
+        "mean_penetration_capped_50mm_m": 0.0005211373444494407,
+        "frac_frames_penetrating_over_5mm": 0.017015622111295987,
+        "rest_drift_mps": 0.011282447383958004,
+        "diverged_episodes": 0
+      },
+      "latency_ms_per_step_cpu": 4.561886750161648
+    },
+    "new_projected": {
+      "all": {
+        "n_episodes": 2468,
+        "pos_err_m": {
+          "0.5s": 0.025014170712744768,
+          "1s": 0.0466799538077301,
+          "2s": 0.06335941256110643
+        },
+        "pos_err_active_2s_m": 0.17252035290771306,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 14.86979599187825,
+        "fell_accuracy": 0.978194918467956,
+        "fell_precision": 0.9156479217603912,
+        "fell_recall": 0.9421383647798742,
+        "mean_penetration_m": 5.593320860617964e-05,
+        "mean_penetration_capped_50mm_m": 5.240799892593198e-05,
+        "frac_frames_penetrating_over_5mm": 0.0011423966628744786,
+        "rest_drift_mps": 0.005478187731830977,
+        "diverged_episodes": 0
+      },
+      "gentle": {
+        "n_episodes": 1273,
+        "pos_err_m": {
+          "0.5s": 0.0018283718813923674,
+          "1s": 0.0025237303287617783,
+          "2s": 0.002769187230533322
+        },
+        "pos_err_active_2s_m": 0.015150718745269897,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 0.5078808123185494,
+        "fell_accuracy": 0.9994162288382954,
+        "fell_precision": 0.0,
+        "fell_recall": null,
+        "mean_penetration_m": 3.1596355792793516e-05,
+        "mean_penetration_capped_50mm_m": 2.8137191672117602e-05,
+        "frac_frames_penetrating_over_5mm": 0.0006129597197898424,
+        "rest_drift_mps": 0.0002987055813725505,
+        "diverged_episodes": 0
+      },
+      "chaotic": {
+        "n_episodes": 1195,
+        "pos_err_m": {
+          "0.5s": 0.04704260853754048,
+          "1s": 0.08863203967543544,
+          "2s": 0.1209251674092882
+        },
+        "pos_err_active_2s_m": 0.2062712027440885,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 28.51481024733348,
+        "fell_accuracy": 0.9580329081161028,
+        "fell_precision": 0.9173300673606859,
+        "fell_recall": 0.9421383647798742,
+        "mean_penetration_m": 7.905524347546995e-05,
+        "mean_penetration_capped_50mm_m": 7.546728501899021e-05,
+        "frac_frames_penetrating_over_5mm": 0.0016454058051395821,
+        "rest_drift_mps": 0.011106083188669043,
+        "diverged_episodes": 0
+      },
+      "latency_ms_per_step_cpu": 10.768307993809382
+    },
+    "physics_reference": {
+      "all": {
+        "n_episodes": 2468,
+        "pos_err_m": {
+          "0.5s": 0.0,
+          "1s": 0.0,
+          "2s": 0.0
+        },
+        "pos_err_active_2s_m": 0.0,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 5.691018406023614e-07,
+        "fell_accuracy": 1.0,
+        "fell_precision": 1.0,
+        "fell_recall": 1.0,
+        "mean_penetration_m": 0.00011617738236105124,
+        "mean_penetration_capped_50mm_m": 0.00010738999874499018,
+        "frac_frames_penetrating_over_5mm": 0.0028595468335229426,
+        "rest_drift_mps": 0.0002550835992918437,
+        "diverged_episodes": 0
+      },
+      "gentle": {
+        "n_episodes": 1273,
+        "pos_err_m": {
+          "0.5s": 0.0,
+          "1s": 0.0,
+          "2s": 0.0
+        },
+        "pos_err_active_2s_m": 0.0,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 5.658381256659402e-07,
+        "fell_accuracy": 1.0,
+        "fell_precision": null,
+        "fell_recall": null,
+        "mean_penetration_m": 8.77050992692476e-05,
+        "mean_penetration_capped_50mm_m": 7.929844454478451e-05,
+        "frac_frames_penetrating_over_5mm": 0.0011334890056431213,
+        "rest_drift_mps": 0.00018684943736580216,
+        "diverged_episodes": 0
+      },
+      "chaotic": {
+        "n_episodes": 1195,
+        "pos_err_m": {
+          "0.5s": 0.0,
+          "1s": 0.0,
+          "2s": 0.0
+        },
+        "pos_err_active_2s_m": 0.0,
+        "out_of_bounds_episodes": 0,
+        "ori_err_deg_2s": 5.722026413156668e-07,
+        "fell_accuracy": 1.0,
+        "fell_precision": 1.0,
+        "fell_recall": 1.0,
+        "mean_penetration_m": 0.0001432284200406184,
+        "mean_penetration_capped_50mm_m": 0.0001340793123029227,
+        "frac_frames_penetrating_over_5mm": 0.004499445368829728,
+        "rest_drift_mps": 0.00032922512903352523,
+        "diverged_episodes": 0
+      },
+      "latency_ms_per_step_cpu": null
+    },
+    "old_projected": {
+      "all": {
+        "n_episodes": 2468,
+        "pos_err_m": {
+          "0.5s": 0.07727033594597082,
+          "1s": 0.14846634389578506,
+          "2s": 0.2747544922582553
+        },
+        "pos_err_active_2s_m": 0.5740479533610896,
+        "out_of_bounds_episodes": 61,
+        "ori_err_deg_2s": 31.692188200665164,
+        "fell_accuracy": 0.8650929086082669,
+        "fell_precision": 0.5367032967032968,
+        "fell_recall": 0.7679245283018868,
+        "mean_penetration_m": 0.00021735961835512324,
+        "mean_penetration_capped_50mm_m": 0.00020593950864872184,
+        "frac_frames_penetrating_over_5mm": 0.008857129313613956,
+        "rest_drift_mps": 0.12802285745177056,
+        "diverged_episodes": 0
+      },
+      "gentle": {
+        "n_episodes": 1273,
+        "pos_err_m": {
+          "0.5s": 0.02003785961850778,
+          "1s": 0.04572261908798038,
+          "2s": 0.10422484134296871
+        },
+        "pos_err_active_2s_m": 0.11367731931264888,
+        "out_of_bounds_episodes": 2,
+        "ori_err_deg_2s": 13.260741527688431,
+        "fell_accuracy": 0.9048453006421483,
+        "fell_precision": 0.0,
+        "fell_recall": null,
+        "mean_penetration_m": 0.0001175864237925009,
+        "mean_penetration_capped_50mm_m": 0.0001169897209970201,
+        "frac_frames_penetrating_over_5mm": 0.005348803269118505,
+        "rest_drift_mps": 0.06138554823662355,
+        "diverged_episodes": 0
+      },
+      "chaotic": {
+        "n_episodes": 1195,
+        "pos_err_m": {
+          "0.5s": 0.13164594989435918,
+          "1s": 0.24608143019404874,
+          "2s": 0.43677184778675554
+        },
+        "pos_err_active_2s_m": 0.6727830125200062,
+        "out_of_bounds_episodes": 59,
+        "ori_err_deg_2s": 49.20359593821876,
+        "fell_accuracy": 0.8273248289887225,
+        "fell_precision": 0.6836506159014558,
+        "fell_recall": 0.7679245283018868,
+        "mean_penetration_m": 0.0003121524537881638,
+        "mean_penetration_capped_50mm_m": 0.00029044920706656157,
+        "frac_frames_penetrating_over_5mm": 0.012190330929931596,
+        "rest_drift_mps": 0.20042928707034666,
+        "diverged_episodes": 0
+      },
+      "latency_ms_per_step_cpu": 8.224430121481419
+    },
+    "ship_decision": {
+      "subset": "live_physics",
+      "baseline_engine": "old_mlp",
+      "primary_variant": "new_projected",
+      "gentle_tolerance": 1.02,
+      "rule": "ship iff, vs old_mlp: chaotic pos err @2s improves AND mean penetration improves AND gentle pos err @2s <= old * 1.02; AND (when old_mlp_projected was evaluated) vs old_mlp_projected: chaotic pos err @2s improves AND gentle pos err @2s <= old_projected * 1.02 AND capped mean penetration <= old_projected + 1 mm. Gates use point estimates; 'significant' reports whether the paired-bootstrap 95% CI agrees",
+      "bootstrap": {
+        "resamples": 1000,
+        "seed": 0,
+        "unit": "episode",
+        "paired": true,
+        "delta": "new - old (negative = better)"
+      },
+      "variants": {
+        "new_projected": {
+          "description": "ContactGNN + non-learned contact projection after every step (configuration that would ship)",
+          "includes_non_learned_projection": true,
+          "chaotic_pos_err_2s_m": {
+            "old": 0.4027905321918393,
+            "new": 0.1209251674092882,
+            "delta": -0.2818653647825511,
+            "ci95": [
+              -0.3093573091600623,
+              -0.2577650850351617
+            ],
+            "n_episodes": 1195,
+            "improves": true,
+            "significant": true
+          },
+          "mean_penetration_m": {
+            "old": 0.047815085042626417,
+            "new": 5.593320860617964e-05,
+            "delta": -0.047759151834020235,
+            "ci95": [
+              -0.05255328146918337,
+              -0.04297870658435862
+            ],
+            "n_episodes": 2468,
+            "improves": true,
+            "significant": true
+          },
+          "gentle_pos_err_2s_m": {
+            "old": 0.1433671076235786,
+            "new": 0.002769187230533322,
+            "delta": -0.14059792039304528,
+            "ci95": [
+              -0.15133739440363908,
+              -0.1298126723752174
+            ],
+            "n_episodes": 1273,
+            "limit": 0.14623444977605018,
+            "not_worse": true,
+            "significant": true
+          },
+          "mean_penetration_capped_50mm_m": {
+            "old": 0.0201198586490095,
+            "new": 5.240799892593198e-05,
+            "delta": -0.020067450650083567,
+            "ci95": [
+              -0.020445389865735148,
+              -0.019664278467532118
+            ],
+            "n_episodes": 2468,
+            "improves": true,
+            "gating": false,
+            "significant": true
+          },
+          "chaotic_active_pos_err_2s_m": {
+            "old": 0.588862980978722,
+            "new": 0.2062712027440885,
+            "delta": -0.38259177823463353,
+            "ci95": [
+              -0.4230403405757402,
+              -0.3425962861652792
+            ],
+            "n_episodes": 1195,
+            "improves": true,
+            "gating": false,
+            "significant": true
+          },
+          "ship_vs_old_mlp": true,
+          "beats_old_projected": true,
+          "vs_old_projected": {
+            "chaotic_pos_err_2s_m": {
+              "old": 0.43677184778675554,
+              "new": 0.1209251674092882,
+              "delta": -0.3158466803774673,
+              "ci95": [
+                -0.36070022498848053,
+                -0.2736675104134948
+              ],
+              "n_episodes": 1195,
+              "improves": true,
+              "significant": true
+            },
+            "mean_penetration_m": {
+              "old": 0.00021735961835512324,
+              "new": 5.593320860617964e-05,
+              "delta": -0.0001614264097489436,
+              "ci95": [
+                -0.00020188770920067926,
+                -0.00012507547126013271
+              ],
+              "n_episodes": 2468,
+              "significant": true
+            },
+            "gentle_pos_err_2s_m": {
+              "old": 0.10422484134296871,
+              "new": 0.002769187230533322,
+              "delta": -0.10145565411243539,
+              "ci95": [
+                -0.11134165461437617,
+                -0.09166754581106008
+              ],
+              "n_episodes": 1273,
+              "limit": 0.10630933816982809,
+              "not_worse": true,
+              "significant": true
+            },
+            "mean_penetration_capped_50mm_m": {
+              "old": 0.00020593950864872184,
+              "new": 5.240799892593198e-05,
+              "delta": -0.00015353150972278985,
+              "ci95": [
+                -0.00018918606154177877,
+                -0.00012079800453851754
+              ],
+              "n_episodes": 2468,
+              "limit": 0.001205939508648722,
+              "not_worse": true,
+              "significant": true
+            },
+            "chaotic_active_pos_err_2s_m": {
+              "old": 0.6727830125200062,
+              "new": 0.2062712027440885,
+              "delta": -0.46651180977591766,
+              "ci95": [
+                -0.5370887722929042,
+                -0.39780103881345363
+              ],
+              "n_episodes": 1195,
+              "significant": true
+            }
+          },
+          "ship": true
+        },
+        "new_raw": {
+          "description": "ContactGNN alone: learned model only, no projection",
+          "includes_non_learned_projection": false,
+          "chaotic_pos_err_2s_m": {
+            "old": 0.4027905321918393,
+            "new": 0.11406329197065247,
+            "delta": -0.28872724022118684,
+            "ci95": [
+              -0.3172611271195846,
+              -0.2646897128698543
+            ],
+            "n_episodes": 1195,
+            "improves": true,
+            "significant": true
+          },
+          "mean_penetration_m": {
+            "old": 0.047815085042626417,
+            "new": 0.0003917139964354207,
+            "delta": -0.047423371046190994,
+            "ci95": [
+              -0.052225959799482344,
+              -0.042649870341069526
+            ],
+            "n_episodes": 2468,
+            "improves": true,
+            "significant": true
+          },
+          "gentle_pos_err_2s_m": {
+            "old": 0.1433671076235786,
+            "new": 0.0023984447715642157,
+            "delta": -0.14096866285201437,
+            "ci95": [
+              -0.15147376724696854,
+              -0.13021534862309742
+            ],
+            "n_episodes": 1273,
+            "limit": 0.14623444977605018,
+            "not_worse": true,
+            "significant": true
+          },
+          "mean_penetration_capped_50mm_m": {
+            "old": 0.0201198586490095,
+            "new": 0.00038692295443116685,
+            "delta": -0.019732935694578332,
+            "ci95": [
+              -0.02010991312166837,
+              -0.019333924767978797
+            ],
+            "n_episodes": 2468,
+            "improves": true,
+            "gating": false,
+            "significant": true
+          },
+          "chaotic_active_pos_err_2s_m": {
+            "old": 0.588862980978722,
+            "new": 0.19428653151856645,
+            "delta": -0.3945764494601556,
+            "ci95": [
+              -0.4379817286562541,
+              -0.3549137387037127
+            ],
+            "n_episodes": 1195,
+            "improves": true,
+            "gating": false,
+            "significant": true
+          },
+          "ship_vs_old_mlp": true,
+          "beats_old_projected": true,
+          "vs_old_projected": {
+            "chaotic_pos_err_2s_m": {
+              "old": 0.43677184778675554,
+              "new": 0.11406329197065247,
+              "delta": -0.3227085558161031,
+              "ci95": [
+                -0.3696112982311287,
+                -0.2814532846193698
+              ],
+              "n_episodes": 1195,
+              "improves": true,
+              "significant": true
+            },
+            "mean_penetration_m": {
+              "old": 0.00021735961835512324,
+              "new": 0.0003917139964354207,
+              "delta": 0.00017435437808029745,
+              "ci95": [
+                0.0001324826516867177,
+                0.0002162610793735172
+              ],
+              "n_episodes": 2468,
+              "significant": false
+            },
+            "gentle_pos_err_2s_m": {
+              "old": 0.10422484134296871,
+              "new": 0.0023984447715642157,
+              "delta": -0.10182639657140449,
+              "ci95": [
+                -0.11211337754729998,
+                -0.09201715007538548
+              ],
+              "n_episodes": 1273,
+              "limit": 0.10630933816982809,
+              "not_worse": true,
+              "significant": true
+            },
+            "mean_penetration_capped_50mm_m": {
+              "old": 0.00020593950864872184,
+              "new": 0.00038692295443116685,
+              "delta": 0.00018098344578244501,
+              "ci95": [
+                0.0001418005967338132,
+                0.00021951680385003846
+              ],
+              "n_episodes": 2468,
+              "limit": 0.001205939508648722,
+              "not_worse": true,
+              "significant": false
+            },
+            "chaotic_active_pos_err_2s_m": {
+              "old": 0.6727830125200062,
+              "new": 0.19428653151856645,
+              "delta": -0.4784964810014397,
+              "ci95": [
+                -0.5523809667936651,
+                -0.40798617299479384
+              ],
+              "n_episodes": 1195,
+              "significant": true
+            }
+          },
+          "ship": true
+        }
+      },
+      "ship": true,
+      "model_alone_passes": true,
+      "beats_old_projected": true,
+      "statement": "new_projected = learned ContactGNN + NON-LEARNED contact projection (what would ship); new_raw = the learned model ALONE. The penetration gate against raw old_mlp can be passed by the projection alone, so the gain is only attributed to the learned model when beats_old_projected is true (same projection on the old model)."
+    },
+    "live_subset_kinds": {
+      "collision": 135,
+      "desk": 180,
+      "drop": 95,
+      "edge_fall": 109,
+      "gentle_push": 277,
+      "legacy_layout": 600,
+      "noclip": 72,
+      "rest": 337,
+      "slide_stop": 186,
+      "stack_collapse": 126,
+      "tilt_slide": 148,
+      "topple": 122,
+      "toss": 81
+    },
+    "notes": [
+      "Autoregressive rollouts from the true t=0 state over the full episode; never teacher-forced.",
+      "old = previously shipped mlp_multistep; new_raw = learned ContactGNN alone; new_projected = ContactGNN + a NON-LEARNED contact projection applied after every step (the shipped configuration).",
+      "Headline subset is live_physics: episodes whose hidden physics parameters equal the live API defaults; gentle/chaotic is the dataset outcome flag (fell, tipped, >0.30 m displacement or >0.5 m/s object collision).",
+      "The live subset is not a random half of every scenario: legacy_layout (the old model's own training distribution) is always live and so is over-represented in it (see live_subset_kinds), which favours the old model; live and all-physics numbers are not comparable kind by kind.",
+      "pos_err_active = position error over the objects that actually move in the ground truth (> 2 cm, fell or tipped); the plain chaotic mean also averages resting bystanders. The ship gates are point estimates; \"significant\" marks a paired-bootstrap 95% CI that excludes zero.",
+      "out_of_bounds_episodes = rollouts where a dynamic object left the world (y < -0.5 m, |x| or |z| > 10 m); diverged_episodes only counts non-finite / >1e3 states.",
+      "Penetration = mean over dynamic object-frames of the deepest overlap with support, floor or another box (corner-in-box test, so edge-edge overlaps are under-counted); physics_reference is the floor of this metric.",
+      "Rest drift = mean finite-difference speed on object-frames where ground truth is at rest in contact.",
+      "Synthetic PyBullet boxes only; errors grow with horizon and chaotic outcomes remain sensitive to initial conditions."
+    ],
+    "shipped": true,
+    "checkpoint": {
+      "file": "models/contact_gnn.pt (also models/world_model.pt = default)",
+      "sha256_12": "e67e88715283",
+      "kind": "contact_gnn",
+      "parameters": 711692,
+      "training": "90 min on 7 GPUs (data/v2), then 137 min on 4 GPUs with motion-onset loss weighting on data/v3 (data/v2 + 11,969 hard-case episodes); fp16 mixed precision (no native bf16 on Quadro RTX 6000)"
+    },
+    "full_eval": "models/contact_eval.json",
+    "previous_default": "models/mlp_multistep.pt",
+    "notes_extra": [
+      "Held-out synthetic PyBullet box scenes only (4,998 test episodes; headline subset = 2,468 at the live simulator defaults).",
+      "new_projected = learned model + NON-LEARNED contact projection (what ships); new_raw = learned model alone.",
+      "One projection constant (vel_slop 0.001 -> 0.003) was chosen using this test set; effect on chaotic error is 0.003 m.",
+      "External/real-world checks (approximate) are in models/external_eval.json and docs/part-c-external-data.md."
+    ]
+  }
 }

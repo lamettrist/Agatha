@@ -8,8 +8,13 @@ data/v2 layout (see scripts/generate_contact_data.py FORMAT) plus the extra keys
 EXTRA_FORMAT.  Licences are recorded in DATA_LICENSES.md.  The inputs are untrusted downloads:
 they are only parsed with numpy (allow_pickle=False), json and h5py; nothing in them is executed.
 
-EVERY RESULT DERIVED FROM THESE SHARDS IS APPROXIMATE.  None of the three sources is real video:
-all are simulator ground truth (PyBullet / Blender-Bullet / TDW-PhysX) from other generators.
+EVERY RESULT DERIVED FROM THESE SHARDS IS APPROXIMATE.  Kubric / CLEVRER / Physion are simulator
+ground truth (PyBullet / Blender-Bullet / TDW-PhysX) from other generators.  The two `real_*`
+datasets (found with the Exa dataset search, scripts/find_physics_datasets.py) are REAL-WORLD pose
+tracks of one tossed box (motion capture / AprilTags), see R1-R9; they are still only approximate.
+
+    CUDA_VISIBLE_DEVICES="" .venv-train/bin/python -I scripts/prepare_external_data.py \
+        --datasets real_iam_box_toss real_contactnets_cube      # also writes the *_calib variants
 
 APPROXIMATIONS (all of them; keep this list in sync with docs/part-c-external-data.md)
 
@@ -88,6 +93,48 @@ APPROXIMATIONS (all of them; keep this list in sync with docs/part-c-external-da
       clipped to [0.01, 2] (PhysX combines frictions differently from Bullet; the ground friction
       is unknown and left at 0.5), restitution = bounciness.
   P6  Only 10 trials were downloaded (8 Dominoes, 2 Support): numbers are anecdotal.
+
+ REAL-WORLD single-box tosses: I.AM. Box009 archive (OptiTrack, 360 Hz, Z-up, 50 recordings) and
+ ContactNets cube tosses (AprilTags, 148 Hz, Z-up, 570 tosses).  A1 is exact here (true cuboids).
+  R1  Frames: I.AM. box pose relative to the conveyor pose (inv(T_conveyor) @ T_box); ContactNets
+      positions x0.0524 (the file unit is the cube half-width).  Z-up -> Y-up as in K4.
+  R2  Landing plane: the plane y = 0 is moved by ONE constant per dataset, the median height of the
+      lowest box corner at the last frame (measured, see meta.json `plane_offset_m`), so that a
+      resting box touches the surface.  Then A2's +0.75 m shift puts it on the support slab top.
+  R3  Velocities are NOT taken from the data: linear and (world-frame) angular velocity are the
+      slope of a local least-squares line through the source-rate samples (Savitzky-Golay first
+      derivative, order 1-2) over +-4 frames at 360 Hz (25 ms window) / +-2 frames at 148 Hz (34 ms
+      window); the window shrinks at the ends of a track.  Poses are not smoothed.  Positions are
+      then interpolated linearly and orientations by slerp to 20 Hz, velocities linearly.
+  R4  Segmentation.  I.AM.: the recording starts in the thrower's hand.  Free flight = the longest
+      run (>= 50 ms) of frames whose acceleration (quadratic fit over +-8 frames) is within
+      2 m/s^2 of gravity; the episode starts at the first frame of that run that is >= 4 frames
+      after its beginning AND has the lowest box corner >= 5 mm above the landing plane (the box
+      is released beside the conveyor at about belt height; `skipped` lists recordings without
+      such a frame).  It ends 0.5 s after the first frame from which the pose stays within 3 mm and
+      1.5 deg of the final pose of the recording, or at the end of the recording.  A segment containing a
+      single-frame position jump > 3 cm (tracking loss) is dropped.  ContactNets: the authors'
+      tosses already start after release and end near rest; the first / last 2 frames are cut
+      (velocity window) and a toss whose first frame is not clear of the plane is dropped.
+  R5  The episode is rotated about the vertical so that the net displacement points along +x and
+      translated so that the horizontal bounding box of the trajectory is centred on the table.
+  R6  Table: 1.5 x 1.0 m (the largest table of the training distribution) whenever the true
+      trajectory (all box corners) keeps >= 0.25 m from every edge, otherwise enlarged in 0.1 m
+      steps to keep that margin (counted in meta.json `table`).  eval_external.py `floor` mode is
+      the unbounded cross-check.
+  R7  Materials are UNKNOWN.  Default variant: object friction 0.5, support friction 0.5,
+      restitution 0 (Bullet multiplies the pair: effective mu 0.25).  `*_calib` variant: effective
+      mu = median over trajectories of the sliding deceleration / g (frames with the lowest corner
+      < 8 mm above the plane, one face within 5 deg of horizontal and horizontal speed > 0.15 m/s;
+      longest such run >= 80 ms per track; least-squares slope of speed over time),
+      object friction = support friction = sqrt(mu); restitution stays 0 (not identifiable by a
+      comparably simple rule).  The friction x restitution grid search against PyBullet is in
+      scripts/eval_external.py --calibrate.
+  R8  Size and mass from the dataset metadata (I.AM. OBJECT/Box009; ContactNets experiment.json).
+      Inertia is NOT used: Agatha's engine and the models assume a uniform box.
+  R9  `tipped` (A5) compares with the in-flight orientation at release and means little for a toss;
+      `rest_face` (which of the 6 body faces is down at the last frame: 0..2 = +x,+y,+z, 3..5 =
+      -x,-y,-z of the Agatha body frame) is the real 'landed on which side' label.
 """
 import argparse
 import glob
@@ -114,7 +161,8 @@ REST_LIN, REST_ANG = .01, .05
 SETTLED_LIN, SETTLED_ANG = .05, .25   # 'has come to rest by the last frame' (looser: approximate velocities)
 CONTACT_EPS = .005
 PROPS_DIM, CONTEXT_DIM = 9, 10
-NOTE = 'APPROXIMATE external data converted with documented approximations; simulator output, not real-world video.'
+NOTE = ('APPROXIMATE external data converted with documented approximations; simulator output, except the real_* datasets '
+        '(real-world pose tracks of one tossed box with assumed materials). No video.')
 
 EXTRA_FORMAT = dict(
     n_frames='int64 [E] number of valid frames (<= T+1); later frames repeat the last valid one',
@@ -123,6 +171,7 @@ EXTRA_FORMAT = dict(
     rest_pos='float32 [E,N,3] mean position over the last 3 valid frames', source_id='<U80 [E] source episode / file name',
     tipped='bool [E,N] RELATIVE rule: initial up axis rotated > 35 deg (differs from data/v2)',
 )
+REAL_EXTRA_FORMAT = dict(rest_face='int8 [E,N] (-1 for empty slots) body face that is down at the last valid frame: 0..2 = +x,+y,+z, 3..5 = -x,-y,-z (Agatha body axes)')
 
 
 # ----------------------------------------------------------------------------- quaternion / frame helpers (xyzw)
@@ -268,7 +317,7 @@ def slab_side(pos):
 
 # ----------------------------------------------------------------------------- episode assembly
 def make_episode(pos, quat, vel, ang, size, mass, friction, restitution, static, shape, box_like, kind, source_id,
-                 gravity=9.81, support_friction=.5, slots=None, support_restitution=0.):
+                 gravity=9.81, support_friction=.5, slots=None, support_restitution=0., support_size=None):
     """Arrays already at 20 Hz, Y-up metres, ground plane at y = 0. pos/vel/ang [F,N,3], quat [F,N,4] xyzw."""
     pos = np.asarray(pos, np.float64)[:MAX_STEPS + 1]; frames, count = pos.shape[:2]
     quat = sign_continuous(np.asarray(quat)[:frames]); vel = np.asarray(vel, np.float64)[:frames]; ang = np.asarray(ang, np.float64)[:frames]
@@ -282,8 +331,8 @@ def make_episode(pos, quat, vel, ang, size, mass, friction, restitution, static,
     states[frames:] = states[frames - 1]; states[frames:, :, 7:] = states[frames - 1, :, 7:]
     props = np.zeros((slots, PROPS_DIM), np.float32); props[:, 3] = 1
     props[:count, :3] = size; props[:count, 3] = mass; props[:count, 4] = friction; props[:count, 5] = static; props[:count, 6] = restitution
-    side = slab_side(pos)
-    context = np.array([side, side, SUPPORT_HEIGHT, gravity, 0, 0, 0, 1, support_friction, support_restitution], np.float32)
+    width, depth = support_size if support_size is not None else (slab_side(pos),) * 2
+    context = np.array([width, depth, SUPPORT_HEIGHT, gravity, 0, 0, 0, 1, support_friction, support_restitution], np.float32)
     mask = np.zeros(slots, bool); mask[:count] = True
     dyn = mask.copy(); dyn[:count] &= ~static
     pad = lambda a, fill: np.concatenate((np.asarray(a), np.full((slots - count, *np.shape(a)[1:]), fill, np.asarray(a).dtype)))
@@ -297,8 +346,8 @@ def make_episode(pos, quat, vel, ang, size, mass, friction, restitution, static,
     rest = np.zeros_like(contact); rest[:frames, :count] = contact[:frames, :count] & (speed < REST_LIN) & (spin < REST_ANG)
     contact[frames:] = contact[frames - 1]; rest[frames:] = rest[frames - 1]
     contact &= dyn[None]; rest &= dyn[None]
-    half = side / 2; local_y = shifted[..., 1] - (SUPPORT_HEIGHT - SUPPORT_THICKNESS / 2)
-    off = (np.abs(shifted[..., 0]) > half) | (np.abs(shifted[..., 2]) > half)
+    local_y = shifted[..., 1] - (SUPPORT_HEIGHT - SUPPORT_THICKNESS / 2)
+    off = (np.abs(shifted[..., 0]) > width / 2) | (np.abs(shifted[..., 2]) > depth / 2)
     fell = pad((off & (local_y < .01)).any(0), False) & dyn
     rest_pos = np.zeros((slots, 3), np.float32); rest_pos[:count] = shifted[-min(3, frames):].mean(0)
     return dict(states=states, props=props, context=context, mask=mask, contact_support=contact, contact_floor=np.zeros_like(contact),
@@ -351,7 +400,8 @@ def write_dataset(out: Path, name: str, episodes: list[dict], info: dict, shard_
                 mass_kg=dict(min=float(data['props'][..., 3][dyn].min()), max=float(data['props'][..., 3][dyn].max())),
                 init_penetration_m=dict(mean=float(data['init_penetration'].mean()), max=float(data['init_penetration'].max()),
                                         frac_over_5mm=float((data['init_penetration'] > .005).mean())),
-                format_extra=EXTRA_FORMAT, **info)
+                format_extra=EXTRA_FORMAT)
+    meta.update(info)
     (out / name / 'meta.json').write_text(json.dumps(meta, indent=2))
     return meta
 
@@ -495,6 +545,236 @@ def convert_physion(root: Path) -> tuple[list[dict], dict]:
     return episodes, info
 
 
+
+# ----------------------------------------------------------------------------- real-world single-box tosses (R1-R9)
+REAL_TABLE, REAL_TABLE_MARGIN = (1.5, 1.0), .25      # largest training table; clearance kept around the true trajectory
+REAL_FRICTION, REAL_RESTITUTION = .5, 0.             # defaults for unknown materials (object and support)
+REAL_SLOTS = 4                                       # one real box + empty slots (the old MLP needs >= 4 slots)
+REAL_NOTE = 'APPROXIMATE: REAL-WORLD pose tracks converted with documented approximations (R1-R9); materials are assumed.'
+FLIGHT_ACC_TOL, FLIGHT_FIT_HALF, FLIGHT_MIN_FRAMES, FLIGHT_SKIP, FLIGHT_CLEARANCE = 2., 8, 18, 4, .005
+REST_TAIL_S, REST_POS_TOL, REST_ANG_TOL_DEG, JUMP_M = .5, .003, 1.5, .03
+SLIDE_MIN_SPEED, SLIDE_MAX_TILT_DEG, SLIDE_CONTACT, SLIDE_MIN_S = .15, 5., .008, .08
+IAM_FILE, IAM_BOX, IAM_SURFACE, IAM_HZ, IAM_VEL_HALF = '230104_Archive_021_Box009_ParamID_Traj.h5', 'Box009', 'ConveyorPart002', 360., 4
+CN_UNIT, CN_HZ, CN_VEL_HALF = .0524, 148., 2
+
+
+def matrix_to_quat(rot):
+    """Rotation matrices [..., 3, 3] -> xyzw (numerically stable branch per matrix)."""
+    r = np.asarray(rot, np.float64); d = [r[..., i, i] for i in range(3)]
+    four = np.stack((1 + d[0] - d[1] - d[2], 1 - d[0] + d[1] - d[2], 1 - d[0] - d[1] + d[2], 1 + d[0] + d[1] + d[2]), -1)
+    xy, xz, yz = r[..., 1, 0] + r[..., 0, 1], r[..., 2, 0] + r[..., 0, 2], r[..., 2, 1] + r[..., 1, 2]
+    wx, wy, wz = r[..., 2, 1] - r[..., 1, 2], r[..., 0, 2] - r[..., 2, 0], r[..., 1, 0] - r[..., 0, 1]
+    candidates = np.stack((np.stack((four[..., 0], xy, xz, wx), -1), np.stack((xy, four[..., 1], yz, wy), -1),
+                           np.stack((xz, yz, four[..., 2], wz), -1), np.stack((wx, wy, wz, four[..., 3]), -1)), -2)
+    return q_normalize(np.take_along_axis(candidates, four.argmax(-1)[..., None, None], -2)[..., 0, :])
+
+
+def yaw_quat(angle):
+    return np.array([0., math.sin(angle / 2), 0., math.cos(angle / 2)])
+
+
+def smooth_velocities(dt: float, pos, quat, half: int):
+    """R3. pos [T,3], quat [T,4] xyzw at a uniform rate -> linear and world-frame angular velocity [T,3]:
+    slope of the local least-squares line over 2*half+1 frames (shrinking window at the ends)."""
+    pos = np.asarray(pos, np.float64); quat = sign_continuous(quat); count = len(pos)
+    vel = np.zeros((count, 3)); ang = np.zeros((count, 3)); reach = np.minimum(np.arange(count), count - 1 - np.arange(count))
+    for h in range(1, half + 1):
+        index = np.flatnonzero(reach >= h) if h == half else np.flatnonzero(reach == h)
+        if not len(index): continue
+        k = np.arange(-h, h + 1); weight = (k / (dt * (k * k).sum()))[None, :, None]; window = index[:, None] + k[None]
+        vel[index] = (pos[window] * weight).sum(1)
+        ang[index] = (q_to_rotvec(q_mul(quat[window], q_conj(quat[index])[:, None])) * weight).sum(1)
+    if count > 1:
+        for edge, a, b in ((0, 0, 1), (count - 1, count - 2, count - 1)):
+            vel[edge] = (pos[b] - pos[a]) / dt; ang[edge] = q_to_rotvec(q_mul(quat[b], q_conj(quat[a]))) / dt
+    return vel, ang
+
+
+def fit_acceleration(dt: float, pos, half: int):
+    """Second derivative of a local quadratic fit over 2*half+1 frames; NaN where the window does not fit."""
+    pos = np.asarray(pos, np.float64); k = np.arange(-half, half + 1) * dt
+    coeff = np.linalg.pinv(np.stack((np.ones_like(k), k, k * k), 1))[2]
+    out = np.full(pos.shape, np.nan)
+    if len(pos) > 2 * half:
+        out[half:len(pos) - half] = 2 * np.einsum('k,tkc->tc', coeff, np.lib.stride_tricks.sliding_window_view(pos, 2 * half + 1, axis=0).transpose(0, 2, 1))
+    return out
+
+
+def lowest_corner(pos, quat, size):
+    """Height (y) of the lowest box corner. pos [T,3], quat [T,4], size [3]."""
+    return box_corners(pos, quat, np.asarray(size, np.float64))[..., 1].min(-1)
+
+
+def rest_face(quat):
+    """Index of the body face pointing down (0..2 = +x,+y,+z; 3..5 = -x,-y,-z). quat [..., 4] xyzw."""
+    down = -q_to_matrix(quat)[..., 1, :]                       # world -Y expressed on the body axes
+    return np.concatenate((down, -down), -1).argmax(-1)
+
+
+def _runs(flags):
+    index = np.flatnonzero(flags)
+    return [r for r in np.split(index, np.flatnonzero(np.diff(index) > 1) + 1) if len(r)] if len(index) else []
+
+
+def free_flight_start(dt: float, pos, low, gravity: float = 9.81):
+    """R4. First usable frame of the longest free-flight run, or None. pos [T,3] Y-up, low [T] lowest-corner height."""
+    acc = fit_acceleration(dt, pos, FLIGHT_FIT_HALF)
+    flying = np.linalg.norm(acc - np.array([0., -gravity, 0.]), axis=-1) < FLIGHT_ACC_TOL          # NaN compares False
+    runs = [r for r in _runs(flying) if len(r) >= FLIGHT_MIN_FRAMES]
+    if not runs: return None
+    run = max(runs, key=len)[FLIGHT_SKIP:]
+    clear = run[low[run] >= FLIGHT_CLEARANCE]
+    return int(clear[0]) if len(clear) else None
+
+
+def rest_frame(pos, quat, start: int):
+    """First frame >= start from which the pose stays within 3 mm / 1.5 deg of the final pose (robust to velocity noise)."""
+    quat = q_normalize(quat); dot = np.abs((quat * quat[-1]).sum(-1)).clip(0, 1)
+    moving = (np.linalg.norm(pos - pos[-1], axis=-1) > REST_POS_TOL) | (2 * np.degrees(np.arccos(dot)) > REST_ANG_TOL_DEG)
+    index = np.flatnonzero(moving)
+    return max(start, int(index[-1]) + 1 if len(index) else 0)
+
+
+def sliding_mu(dt: float, pos, quat, vel, size, gravity: float = 9.81):
+    """R7. Effective Coulomb friction from the longest flat sliding run of one track (None if there is none)."""
+    speed = np.linalg.norm(vel[:, [0, 2]], axis=-1)
+    flat = np.abs(q_to_matrix(quat)[..., 1, :]).max(-1) > math.cos(math.radians(SLIDE_MAX_TILT_DEG))    # one face within 5 deg of horizontal
+    sliding = flat & (lowest_corner(pos, quat, size) < SLIDE_CONTACT) & (speed > SLIDE_MIN_SPEED)
+    runs = [r for r in _runs(sliding) if len(r) * dt >= SLIDE_MIN_S]
+    if not runs: return None
+    run = max(runs, key=len)
+    return float(-np.polyfit(run * dt, speed[run], 1)[0] / gravity)
+
+
+def real_toss_episode(dt, pos, quat, vel, ang, start, stop, size, mass, kind, source_id, friction=REAL_FRICTION, restitution=REAL_RESTITUTION):
+    """Source-rate Y-up track (landing plane y = 0) -> 20 Hz Agatha episode from frame `start` to at most frame `stop` (R3, R5, R6)."""
+    t_src = np.arange(len(pos)) * dt; steps = min(MAX_STEPS, int((t_src[stop] - t_src[start]) / STEP + 1e-9))
+    t_dst = t_src[start] + np.arange(steps + 1) * STEP
+    p, q = interp_linear(t_src, pos, t_dst), interp_slerp(t_src, quat, t_dst)
+    v, w = interp_linear(t_src, vel, t_dst), interp_linear(t_src, ang, t_dst)
+    move = p[-1] - p[0]; turn = math.atan2(move[2], move[0]) if math.hypot(move[0], move[2]) > 1e-6 else 0.   # R5: rotate by +turn about Y
+    rot = q_to_matrix(yaw_quat(turn)); p, v, w = p @ rot.T, v @ rot.T, w @ rot.T; q = q_mul(yaw_quat(turn), q)
+    corners = box_corners(p, q, np.asarray(size, np.float64)).reshape(-1, 3)
+    centre = (corners.max(0) + corners.min(0)) / 2; centre[1] = 0; p = p - centre
+    reach = (corners.max(0) - corners.min(0)) / 2 + REAL_TABLE_MARGIN
+    table = tuple(max(default, math.ceil(2 * reach[axis] * 10 - 1e-9) / 10) for default, axis in zip(REAL_TABLE, (0, 2)))
+    episode = make_episode(p[:, None], q[:, None], v[:, None], w[:, None], np.asarray(size, np.float64)[None], [mass], [friction], [restitution], [False],
+                           ['cube'], [True], kind, source_id, support_friction=friction, support_restitution=restitution, support_size=table, slots=REAL_SLOTS)
+    episode['rest_face'] = np.full(REAL_SLOTS, -1, np.int8); episode['rest_face'][0] = rest_face(q[-1])
+    return episode
+
+
+def with_materials(episode: dict, friction: float, restitution: float) -> dict:
+    """Copy of an episode with other object + support friction / restitution (Bullet multiplies each pair)."""
+    out = dict(episode); out['props'] = episode['props'].copy(); out['context'] = episode['context'].copy()
+    out['props'][out['mask'], 4] = friction; out['props'][out['mask'], 6] = restitution; out['context'][8] = friction; out['context'][9] = restitution
+    return out
+
+
+def _real_info(episodes, tracks, mus, plane, skipped, extra):
+    table = np.array([e['context'][:2] for e in episodes]); frames = np.array([e['n_frames'] for e in episodes])
+    speed = np.array([np.linalg.norm(e['states'][0, 0, 7:10]) for e in episodes]); spin = np.array([np.linalg.norm(e['states'][0, 0, 10:13]) for e in episodes])
+    slide = np.array([np.linalg.norm((e['states'][e['n_frames'] - 1, 0, :3] - e['states'][0, 0, :3])[[0, 2]]) for e in episodes])
+    faces = np.array([int(e['rest_face'][0]) for e in episodes]); start_faces = np.array([int(rest_face(e['states'][0, 0, 3:7])) for e in episodes])
+    stat = lambda a: dict(min=float(np.min(a)), median=float(np.median(a)), max=float(np.max(a)))
+    mu = np.array([m for m in mus if m is not None and m > 0])
+    return dict(real_world=True, note=REAL_NOTE, format_extra={**EXTRA_FORMAT, **REAL_EXTRA_FORMAT}, tracks=tracks, skipped=skipped, plane_offset_m=float(plane),
+                transitions_20hz=int((frames - 1).sum()), duration_s=stat((frames - 1) * STEP),
+                initial_speed_m_s=stat(speed), initial_spin_rad_s=stat(spin), horizontal_travel_m=stat(slide),
+                table=dict(default=list(REAL_TABLE), margin_m=REAL_TABLE_MARGIN, larger_than_training=int(((table[:, 0] > REAL_TABLE[0] + 1e-6) | (table[:, 1] > REAL_TABLE[1] + 1e-6)).sum()),
+                           width_m=stat(table[:, 0]), depth_m=stat(table[:, 1])),
+                rest_face_counts={str(k): int((faces == k).sum()) for k in range(6)}, rest_face_equals_face_down_at_release=float((faces == start_faces).mean()),
+                sliding_friction=dict(rule='median over tracks of (sliding deceleration / g), longest clean sliding run per track', tracks_used=int(len(mu)),
+                                      mu_eff_median=float(np.median(mu)) if len(mu) else None,
+                                      mu_eff_iqr=[float(np.percentile(mu, 25)), float(np.percentile(mu, 75))] if len(mu) else None),
+                velocities='local least-squares slope at the source rate (R3), interpolated to 20 Hz', **extra)
+
+
+def _real_variants(episodes, info):
+    """default + calibrated-friction variant (R7)."""
+    out = {'': (episodes, dict(info, materials=dict(variant='default', object_friction=REAL_FRICTION, support_friction=REAL_FRICTION, mu_eff=REAL_FRICTION ** 2, restitution=REAL_RESTITUTION)))}
+    mu = info['sliding_friction']['mu_eff_median']
+    if mu:
+        each = float(np.clip(math.sqrt(mu), .1, 1.))
+        out['_calib'] = ([with_materials(e, each, REAL_RESTITUTION) for e in episodes],
+                         dict(info, materials=dict(variant='calibrated from sliding deceleration', object_friction=each, support_friction=each, mu_eff=each * each, restitution=REAL_RESTITUTION)))
+    return out
+
+
+def load_iam(root: Path):
+    """-> list of (name, pos [T,3], quat [T,4]) in the conveyor frame mapped to Y-up (R1), size (Agatha body axes), mass."""
+    import h5py
+    tracks = []; size = mass = None
+    with h5py.File(root / 'iam-box-impact' / IAM_FILE, 'r') as h:
+        for name in sorted(k for k in h if k.startswith('Rec_')):
+            post = h[name]['SENSOR_MEASUREMENT/Mocap/POSTPROCESSING']
+            box = np.moveaxis(np.asarray(post[IAM_BOX]['transforms'][()], np.float64), 2, 0)
+            surface = np.moveaxis(np.asarray(post[IAM_SURFACE]['transforms'][()], np.float64), 2, 0)
+            rel = np.linalg.inv(surface) @ box
+            if not np.isfinite(rel).all(): continue
+            tracks.append((name, zup_to_yup_vec(rel[:, :3, 3]), sign_continuous(zup_to_yup_quat(matrix_to_quat(rel[:, :3, :3])))))
+            if size is None:
+                size = zup_to_yup_size(np.asarray(h[name]['OBJECT'][IAM_BOX]['dimensions'][()], np.float64).reshape(3))
+                mass = float(np.asarray(h[name]['OBJECT'][IAM_BOX]['mass'][()]).reshape(-1)[0])
+    return tracks, size, mass
+
+
+def convert_iam(root: Path) -> dict:
+    tracks, size, mass = load_iam(root); dt = 1 / IAM_HZ
+    plane = float(np.median([lowest_corner(p[-1], q[-1], size) for _, p, q in tracks]))                 # R2
+    episodes, mus, skipped = [], [], []
+    for name, pos, quat in tracks:
+        pos = pos - np.array([0., plane, 0.]); vel, ang = smooth_velocities(dt, pos, quat, IAM_VEL_HALF)
+        low = lowest_corner(pos, quat, size); start = free_flight_start(dt, pos, low)
+        if start is None: skipped.append(f'{name}: no free-flight frame clear of the landing plane'); continue
+        stop = min(len(pos) - 1 - IAM_VEL_HALF, rest_frame(pos, quat, start) + round(REST_TAIL_S / dt))
+        if np.linalg.norm(np.diff(pos[start:stop + 1], axis=0), axis=-1).max() > JUMP_M: skipped.append(f'{name}: tracking jump inside the segment'); continue
+        if (stop - start) * dt < 5 * STEP: skipped.append(f'{name}: segment shorter than 0.25 s'); continue
+        mus.append(sliding_mu(dt, pos[start:stop + 1], quat[start:stop + 1], vel[start:stop + 1], size))
+        episodes.append(real_toss_episode(dt, pos, quat, vel, ang, start, stop, size, mass, 'real_iam_box_toss', f'iam/archive021/{name}'[:80]))
+    info = _real_info(episodes, len(tracks), mus, plane, skipped, dict(
+        source=str(root / 'iam-box-impact' / IAM_FILE), sensor='OptiTrack motion capture, 360 Hz', source_hz=IAM_HZ, velocity_window_frames=2 * IAM_VEL_HALF + 1,
+        object=dict(name='Box009 (foam-filled carton)', size_m=[float(x) for x in size], mass_kg=mass), surface='idle rubber-belt conveyor'))
+    return _real_variants(episodes, info)
+
+
+def load_contactnets(root: Path, limit: int | None = None):
+    import torch
+    folder = root / 'contactnets-cube-toss' / 'data'
+    params = json.loads((folder / 'params_processed' / 'experiment.json').read_text())
+    files = sorted(glob.glob(str(folder / 'tosses_processed' / '*.pt')), key=lambda f: int(Path(f).stem))[:limit]
+    tracks = []
+    for name in files:
+        a = torch.load(name, map_location='cpu', weights_only=True).double().numpy().reshape(-1, 19)
+        if not np.isfinite(a).all(): continue
+        tracks.append((Path(name).stem, zup_to_yup_vec(a[:, :3] * CN_UNIT), sign_continuous(zup_to_yup_quat(wxyz_to_xyzw(a[:, 3:7]))),
+                       zup_to_yup_vec(a[:, 7:10] * CN_UNIT)))
+    return tracks, np.full(3, 2 * CN_UNIT), float(params['mass']), params
+
+
+def convert_contactnets(root: Path, limit: int | None = None) -> dict:
+    tracks, size, mass, params = load_contactnets(root, limit); dt = 1 / CN_HZ
+    plane = float(np.median([lowest_corner(p[-1], q[-1], size) for _, p, q, _ in tracks]))              # R2
+    episodes, mus, skipped, check = [], [], [], []
+    for name, pos, quat, dataset_vel in tracks:
+        pos = pos - np.array([0., plane, 0.]); vel, ang = smooth_velocities(dt, pos, quat, CN_VEL_HALF)
+        start, stop = CN_VEL_HALF, len(pos) - 1 - CN_VEL_HALF
+        if lowest_corner(pos[start], quat[start], size) < FLIGHT_CLEARANCE: skipped.append(f'{name}: first frame not clear of the landing plane'); continue
+        if (stop - start) * dt < 5 * STEP: skipped.append(f'{name}: shorter than 0.25 s'); continue
+        check.append(np.linalg.norm(vel[start] - dataset_vel[start]))
+        mus.append(sliding_mu(dt, pos, quat, vel, size))
+        episodes.append(real_toss_episode(dt, pos, quat, vel, ang, start, stop, size, mass, 'real_contactnets_cube', f'contactnets/tosses_processed/{name}'))
+    info = _real_info(episodes, len(tracks), mus, plane, skipped, dict(
+        source=str(root / 'contactnets-cube-toss' / 'data' / 'tosses_processed'), sensor='AprilTag pose tracking, 148 Hz', source_hz=CN_HZ, velocity_window_frames=2 * CN_VEL_HALF + 1,
+        object=dict(name='acrylic cube', size_m=[float(x) for x in size], mass_kg=mass), surface='flat wooden surface',
+        authors_simulation_parameters=dict(mu=params.get('mu'), restitution=params.get('restitution'), note='fitted by the dataset authors for their simulator; not used here'),
+        initial_velocity_vs_dataset_m_s=dict(mean_abs_difference=float(np.mean(check)), note='our smoothed estimate vs the linvel column (a backward difference) at the first kept frame')))
+    return _real_variants(episodes, info)
+
+
+REAL_CONVERTERS = dict(real_iam_box_toss=convert_iam, real_contactnets_cube=convert_contactnets)
+
+
 # ----------------------------------------------------------------------------- main
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
@@ -512,6 +792,13 @@ def main(argv=None):
         if name == 'kubric_movi_a': episodes, info = convert_kubric(args.external, args.kubric_fd, args.kubric_max)
         elif name == 'clevrer': episodes, info = convert_clevrer(args.external, args.clevrer_max, min(args.workers, 24))
         elif name == 'physion': episodes, info = convert_physion(args.external)
+        elif name in REAL_CONVERTERS:
+            for suffix, (episodes, info) in REAL_CONVERTERS[name](args.external).items():
+                if not episodes: print(f'{name}{suffix}: no episodes converted'); continue
+                meta = write_dataset(args.out, name + suffix, episodes, info); summary[name + suffix] = meta
+                print(f"{name}{suffix}: {meta['episodes']} episodes of {info['tracks']} tracks ({len(info['skipped'])} skipped), {info['transitions_20hz']} transitions, "
+                      f"duration {info['duration_s']}, materials {info['materials']}, sliding friction {info['sliding_friction']}, table {info['table']} [{time.time() - began:.1f}s]")
+            continue
         else: raise SystemExit(f'unknown dataset {name}')
         if not episodes: print(f'{name}: no episodes converted'); continue
         meta = write_dataset(args.out, name, episodes, info)
@@ -520,7 +807,8 @@ def main(argv=None):
               f"tipped {meta['tipped_fraction']}, settled {meta['settled_fraction']}, init penetration {meta['init_penetration_m']} "
               f"[{time.time() - began:.1f}s]")
     existing = json.loads((args.out / 'meta.json').read_text()) if (args.out / 'meta.json').exists() else {}
-    datasets = {**existing.get('datasets', {}), **{k: dict(episodes=v['episodes'], path=str(args.out / k / 'test')) for k, v in summary.items()}}
+    datasets = {**existing.get('datasets', {}), **{k: dict(episodes=v['episodes'], path=str(args.out / k / 'test'), **({'real_world': True} if v.get('real_world') else {}))
+                                                    for k, v in summary.items()}}
     (args.out / 'meta.json').write_text(json.dumps(dict(note=NOTE, step_s=STEP, datasets=datasets), indent=2))
 
 

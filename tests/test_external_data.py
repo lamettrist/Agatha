@@ -183,3 +183,100 @@ def test_video_tracker_and_fell_rule():
     plane = dict(normal=np.array([0., -1., 0.]), center=np.array([0., 1., 2.]), x=np.array([1., 0., 0.]), z=np.array([0., 0., 1.]))
     centre = tv.ray_plane(np.array([[320., 240. + 640 / (2 * math.tan(math.radians(30))) * .5]]), plane, 640, 480)
     assert np.allclose(centre, [[0., 0.]], atol=1e-9)                                            # the ray through (0, 1, 2) hits the plane centre
+
+
+# ----------------------------------------------------------------------------- real-world toss converters (synthetic tracks only)
+def test_matrix_to_quat_round_trip_and_rest_face():
+    quat = random_quats(200, 7)
+    back = pe.matrix_to_quat(pe.q_to_matrix(quat))
+    assert np.allclose(np.abs((back * quat).sum(-1)), 1, atol=1e-12)
+    assert np.allclose(pe.matrix_to_quat(np.diag([1., -1., -1.])), [1, 0, 0, 0])                 # 180 deg: the w ~ 0 branch
+    assert pe.rest_face(np.array([0., 0., 0., 1.])) == 4                                         # identity: -y face is down
+    assert pe.rest_face(axis_quat([0, 0, 1], math.pi / 2)) == 3                                  # +x now points up, -x is down
+    assert pe.rest_face(axis_quat([1, 0, 0], math.pi / 2)) == 2                                  # body +z now points along world -y
+    assert pe.rest_face(axis_quat([0, 1, 0], 1.3)) == 4                                          # yaw does not change the face
+
+
+def test_smooth_velocities_are_exact_for_ballistic_motion_with_constant_spin():
+    dt = 1 / 148.; t = np.arange(60) * dt; omega = np.array([2., -5., 1.])
+    pos = np.stack((1.2 * t, .3 + .8 * t - 9.81 / 2 * t * t, -.4 * t), -1)
+    quat = np.stack([axis_quat(omega, np.linalg.norm(omega) * s) for s in t])
+    vel, ang = pe.smooth_velocities(dt, pos, quat, 2)
+    assert np.allclose(vel[1:-1], np.stack((np.full(60, 1.2), .8 - 9.81 * t, np.full(60, -.4)), -1)[1:-1], atol=1e-9)
+    assert np.allclose(ang[1:-1], omega, atol=2e-3) and vel.shape == ang.shape == (60, 3)
+    assert np.allclose(pe.fit_acceleration(dt, pos, 8)[8:-8], [0, -9.81, 0], atol=1e-6) and np.isnan(pe.fit_acceleration(dt, pos, 8)[:8]).all()
+
+
+def synthetic_toss(hz=360., mu=.3, release=.3, total=2.5):
+    """Y-up track of a 0.2 x 0.1 x 0.2 box: carried in the hand, released, ballistic flight, flat slide with Coulomb friction, rest."""
+    dt = 1 / hz; t = np.arange(round(total * hz)) * dt; g = 9.81
+    p0 = np.array([0., .25, 0.]); v0 = np.array([1.2, .5, .9]); horiz = np.array([v0[0], 0., v0[2]]); speed = np.linalg.norm(horiz)
+    flight = (v0[1] + math.sqrt(v0[1] ** 2 + 2 * g * (p0[1] - .05))) / g; slide = speed / (mu * g)
+    pos = np.zeros((len(t), 3))
+    for i, s in enumerate(t):
+        if s < release: pos[i] = p0 + np.array([.3, 1., -.2]) * (s - release)                    # hand: constant velocity, not ballistic
+        elif s < release + flight: u = s - release; pos[i] = p0 + v0 * u - np.array([0, g / 2 * u * u, 0])
+        else:
+            u = min(s - release - flight, slide)
+            pos[i] = p0 + horiz * flight + horiz / speed * (speed * u - mu * g / 2 * u * u); pos[i, 1] = .05
+    return dt, t, pos, np.tile([0., 0., 0., 1.], (len(t), 1)), dict(release=release, flight=flight, slide=slide, speed=speed, v0=v0)
+
+
+def test_real_toss_segmentation_friction_and_episode():
+    size = np.array([.2, .1, .2]); dt, t, pos, quat, info = synthetic_toss()
+    vel, ang = pe.smooth_velocities(dt, pos, quat, pe.IAM_VEL_HALF); low = pe.lowest_corner(pos, quat, size)
+    start = pe.free_flight_start(dt, pos, low)
+    assert info['release'] <= t[start] <= info['release'] + 14 * dt                              # after the hand, at the start of the flight
+    rest = pe.rest_frame(pos, quat, start)
+    assert abs(t[rest] - (info['release'] + info['flight'] + info['slide'])) < .06
+    assert pe.sliding_mu(dt, pos, quat, vel, size) == pytest.approx(.3, abs=.01)
+    assert pe.free_flight_start(dt, pos - np.array([0, 1., 0]), low - 1.) is None                # never clear of the plane -> skipped
+    episode = pe.real_toss_episode(dt, pos, quat, vel, ang, start, rest + round(.5 / dt), size, .4, 'real_unit', 'synthetic/toss')
+    n = int(episode['n_frames']); states = episode['states']
+    assert n == int((t[rest + round(.5 / dt)] - t[start]) / pe.STEP + 1e-9) + 1 and states.shape == (pe.MAX_STEPS + 1, pe.REAL_SLOTS, 13)
+    assert episode['mask'].tolist() == [True, False, False, False] and episode['box_like'][0] and episode['kind'] == 'real_unit'
+    u = t[start] - info['release']
+    assert states[0, 0, 1] == pytest.approx(pe.SUPPORT_HEIGHT + .25 + .5 * u - 9.81 / 2 * u * u, abs=1e-5)       # landing plane -> slab top
+    assert states[0, 0, 8] == pytest.approx(.5 - 9.81 * u, abs=1e-4) and np.linalg.norm(states[0, 0, [7, 9]]) == pytest.approx(info['speed'], abs=1e-4)
+    assert states[0, 0, 9] == pytest.approx(0, abs=1e-4) and states[0, 0, 7] > 0                 # R5: travel along +x
+    assert states[n - 1, 0, 1] == pytest.approx(pe.SUPPORT_HEIGHT + .05, abs=1e-5) and states[n - 1, 0, 2] == pytest.approx(states[0, 0, 2], abs=1e-5)
+    assert states[n - 1, 0, 0] == pytest.approx(-states[0, 0, 0], abs=1e-5)                      # R5: trajectory centred on the table
+    assert np.allclose(np.linalg.norm(states[..., 3:7], axis=-1), 1) and episode['rest_face'].tolist() == [4, -1, -1, -1]
+    assert episode['context'][0] >= pe.REAL_TABLE[0] and episode['context'][1] == pe.REAL_TABLE[1] and episode['context'][2] == pe.SUPPORT_HEIGHT
+    assert episode['context'][0] / 2 - abs(states[:n, 0, 0]).max() >= pe.REAL_TABLE_MARGIN and not episode['fell'].any() and episode['settled'][0]
+    assert episode['props'][0, :7].tolist() == pytest.approx([.2, .1, .2, .4, .5, 0, 0]) and episode['context'][8:].tolist() == [.5, 0]
+    other = pe.with_materials(episode, .6, .2)
+    assert other['props'][0, 4] == pytest.approx(.6) and other['props'][0, 6] == pytest.approx(.2) and other['context'][8:].tolist() == pytest.approx([.6, .2])
+    assert episode['props'][0, 4] == .5 and other['props'][1, 4] == 0                            # the original and the empty slots are untouched
+    variants = pe._real_variants([episode], pe._real_info([episode], 1, [.3], 0., [], {}))
+    assert set(variants) == {'', '_calib'} and variants['_calib'][1]['materials']['mu_eff'] == pytest.approx(.3)
+    assert variants['_calib'][0][0]['props'][0, 4] == pytest.approx(math.sqrt(.3))
+
+
+def test_real_world_eval_helpers(tmp_path):
+    torch = pytest.importorskip('torch')
+    import eval_external as ee
+    size = np.array([.2, .1, .2]); dt, t, pos, quat, info = synthetic_toss()
+    vel, ang = pe.smooth_velocities(dt, pos, quat, 4); start = pe.free_flight_start(dt, pos, pe.lowest_corner(pos, quat, size))
+    episode = pe.real_toss_episode(dt, pos, quat, vel, ang, start, len(pos) - 5, size, .4, 'real_unit', 'synthetic/toss')
+    data = pe.stack_episodes([episode, episode])
+    assert ee.is_real(data) and not ee.is_real(pe.stack_episodes([synthetic_episode()]))
+    quats = torch.from_numpy(np.stack([random_quats(50, 9)]))
+    assert ee.face_down(quats).numpy().tolist() == pe.rest_face(quats.numpy()).tolist()          # torch and numpy rules agree
+    varied = ee.set_materials(data, .36, .04)
+    assert np.allclose(varied['props'][:, 0, 4], .6) and np.allclose(varied['props'][:, 0, 6], .2) and np.allclose(varied['context'][:, 8:], [.6, .2])
+    assert np.allclose(data['props'][:, 0, 4], .5) and (varied['props'][:, 1:, 4] == 0).all()
+    floor = ee.to_floor_mode(varied, keep_pair_friction=True)
+    assert np.allclose(floor['props'][:, 0, 4], .36 / .5) and (floor['context'][:, 7] == 0).all()   # floor friction is 0.5: keep the pair product
+    assert np.allclose(ee.to_floor_mode(varied)['props'][:, 0, 4], .6)
+    stats = ee.evaluate(dict(reference=None, hold_initial=ee.hold_step), data, None, True)
+    masks = ee.subset_masks(data)
+    reference = ee.summarize(stats['reference'], data, masks['all_objects'], True); hold = ee.summarize(stats['hold_initial'], data, masks['all_objects'], True)
+    assert reference['rest_face'] == dict(accuracy=1., n=2, majority_class_accuracy=1.) and reference['pos_err_0.25s_m'] == 0
+    assert hold['rest_face']['accuracy'] == 1. and hold['pos_err_0.25s_m'] > .1 and hold['n_objects_0.25s'] == 2      # flat throw: same face down
+    boot = ee.paired_bootstrap(stats['reference'], stats['hold_initial'], masks['all_objects'], 'face_wrong')
+    assert boot['delta'] == 0 and boot['n_episodes'] == 2
+    block = dict(data=dict(n_episodes=2, horizon_s=[1., 1.], object=dict(name='box', size_m=[.2, .1, .2], mass_kg=.4), materials=dict(variant='default')),
+                 floor_modes=dict(slab=dict(reference=dict(all_objects=reference), hold_initial=dict(all_objects=hold))), paired_bootstrap=[])
+    text = '\n'.join(ee.real_markdown('real_unit', block, {}))
+    assert 'REAL WORLD' in text and '| hold_initial |' in text and 'rest-face acc' in text

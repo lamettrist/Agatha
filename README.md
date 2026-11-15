@@ -56,7 +56,70 @@ Optional `table_width_m` anchors the scale. Otherwise a detected phone (~0.15 m 
 
 If depth or plane fitting fails, the report says **`flat_table_fallback`** and uses bbox-only placement. If YOLO itself is unavailable, it returns zero fabricated objects and an explicit warning; load the offline demo instead. Network weights are optional, not bundled. `VISION_OFFLINE=1` forces this unavailable-model path.
 
-## Learned model: actual training and A/B results
+## Contact GNN world model (v2, current default)
+
+The default learned model is now a **contact graph network** (`models/contact_gnn.pt`, also `models/world_model.pt`; 712k parameters). Objects, the table and the floor are nodes; nearby pairs are edges carrying explicit box-contact geometry. It predicts velocity and pose changes in a normalised space at 20 Hz and integrates them. It was trained with multi-step rollouts, input noise, and penalties for penetration, motion at rest, and sliding at rest. A **non-learned projection** runs after each step at inference (push boxes out along the minimum-overlap axis, clamp to the support, put slow supported objects to sleep); set `AGATHA_CONTACT_PROJECTION=0` to turn it off. The previous MLP stays available as `models/mlp_multistep.pt` ("A / Multi-step MLP" in the UI).
+
+### Measured results
+
+Held-out **synthetic PyBullet box scenes**: 4,998 test episodes, 4 s autoregressive rollouts. The table uses the 2,468 episodes at the live simulator's default physics. "Model only" is the network alone; "+ projection" is what ships. Full tables, per-scenario breakdowns and bootstrap intervals are in [models/contact_eval.md](models/contact_eval.md); the UI shows the same numbers from `/api/metrics`.
+
+| Metric | Old MLP | New, model only | New + projection |
+|---|---|---|---|
+| Gentle position error at 0.5 s | 0.031 m | 0.002 m | 0.002 m |
+| Gentle position error at 1 s | 0.072 m | 0.002 m | 0.003 m |
+| Gentle position error at 2 s | 0.143 m | 0.002 m | 0.003 m |
+| Chaotic position error at 0.5 s | 0.145 m | 0.045 m | 0.047 m |
+| Chaotic position error at 1 s | 0.263 m | 0.083 m | 0.089 m |
+| Chaotic position error at 2 s | 0.403 m | 0.114 m | 0.121 m |
+| Orientation error at 2 s (all) | 34.9° | 14.3° | 14.9° |
+| Fell / didn't-fall accuracy | 0.853 | 0.979 | 0.978 |
+| Fall precision | 0.508 | 0.924 | 0.916 |
+| Fall recall | 0.797 | 0.936 | 0.942 |
+| Mean penetration depth | 47.82 mm | 0.39 mm | 0.06 mm |
+| Rest drift, all scenes | 121.4 mm/s | 5.7 mm/s | 5.5 mm/s |
+| Rest drift, gentle scenes | 77.7 mm/s | 0.6 mm/s | 0.3 mm/s |
+
+Ship rule (all met): chaotic error and penetration improve and gentle error is not worse, both against the old model and against the old model with the same projection added. PyBullet itself scores 0.12 mm penetration and 0.26 mm/s rest drift on these metrics.
+
+### What improved, what did not, known limits
+
+- **Improved:** clipping (48 mm to under 0.1 mm), drift at rest, chaotic-case error (about 70% lower at 2 s), and fall recall (0.80 to 0.94).
+- **Fall precision is lower than an earlier checkpoint** (0.92 versus 0.94): the changes that raised recall cost about two points of precision.
+- **The projection slightly hurts chaotic position error** (0.114 m without, 0.121 m with) while removing the remaining penetration. One projection constant was chosen using the test set; its effect is 0.003 m.
+- **Still wrong in places:** orientation in chaotic scenes (about 28° at 2 s), pushing the base of a stack, objects larger than 0.5 m, gravity above 15 m/s², and scenes far from the training range. Non-box shapes are approximated by their bounding box.
+- **Latency:** about 0.9 s for a 3 s rollout of the demo desk on CPU with projection (the MLP took 0.14 s).
+- **Hardware note:** training used fp16 mixed precision; the Quadro RTX 6000 cards have no native bf16.
+- **External checks (approximate):** on two real motion-capture box-toss datasets the model matches PyBullet's rest-position error and is well ahead of the old MLP; results depend strongly on the assumed friction. See [docs/part-c-external-data.md](docs/part-c-external-data.md) and [DATA_LICENSES.md](DATA_LICENSES.md). No external data was used to train this model.
+
+### Reproduce
+
+Training needs a CUDA build that matches the driver; here that is a separate env (`.venv-train`, torch 2.14.1+cu126).
+
+```bash
+# 1. Data: 31k episodes (2.48M transitions), then 13.9k hard-case episodes; data/v3 = both for training, data/v2/test for testing
+.venv/bin/python scripts/generate_contact_data.py --out data/v2 --train-episodes 25000 --val-episodes 1000 --test-episodes 5000 --workers 56
+.venv/bin/python scripts/generate_contact_data.py --out data/v2_hard --train-episodes 12000 --val-episodes 400 --test-episodes 1500 --workers 40 --seed 7331 --mix hard
+# data/v3: symlink data/v2 and data/v2_hard train/val shards together (hard shards renamed shard_hNNNNN.npz); test = data/v2/test only
+
+# 2. Stage 1, 7 GPUs, 90 minutes
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 .venv-train/bin/torchrun --nproc_per_node=7 scripts/train_contact_ddp.py \
+  --data data/v2 --out models/runs/main_a --epochs 400 --batch 4096 --max-minutes 90
+
+# 3. Stage 2, 4 GPUs, motion-onset fixes for fall recall (stopped after 137 of 165 minutes)
+CUDA_VISIBLE_DEVICES=0,1,2,3 .venv-train/bin/torchrun --nproc_per_node=4 scripts/train_contact_ddp.py \
+  --data data/v3 --init models/runs/main_a/best.pt --start-horizon 8 --horizon 8 --epochs 2000 --lr 5e-4 \
+  --w-move 3 --w-impulse 3 --w-speed 1 --event-frac 0.3 --score-fall-weight 0.3 --val-rollout-episodes 1000 \
+  --batch 4096 --max-minutes 165 --out models/runs/final_pen1
+
+# 4. Evaluate old versus new, with and without projection
+CUDA_VISIBLE_DEVICES=0 .venv-train/bin/python scripts/eval_contact.py --data data/v2 --split test \
+  --old models/mlp_multistep.pt --old-graph models/graph_impulse.pt --new models/contact_gnn.pt --out models/contact_eval.json
+```
+
+The trainer checkpoints every epoch (`last.pt`, `best.pt`, `epoch_NNN.pt`), resumes with `--resume`, and logs GPU utilisation to `gpu_util.jsonl` (about 78-88% during these runs). Restart the API after changing checkpoints; loaded models are cached.
+
+## Learned model: earlier MLP and graph experiments (history): actual training and A/B results
 
 The selected [checkpoint](models/world_model.pt) is our **79,373-parameter PyTorch MLP**, trained from scratch. It sees object state, mass/friction/size, support geometry/gravity, three nearby objects, and an explicit table-collision bit. It predicts pose corrections and next velocities at **20 Hz**, autoregressing on its own states without stepping PyBullet. Position/orientation use a free-flight residual baseline; output at 10/30 fps is interpolated.
 
