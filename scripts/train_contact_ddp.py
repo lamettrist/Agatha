@@ -38,6 +38,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from agatha import contact_gnn as cg
+from agatha.dynamics import euler_quaternion, rotation
 
 TERMS = ('loss', 'one', 'pos', 'vel', 'ang', 'rot', 'pen', 'rest', 'slide')
 
@@ -48,7 +49,11 @@ def parse_args():
     p.add_argument('--data', type=Path, required=True)
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--resume', action='store_true', help='continue from <out>/last.pt if present')
-    p.add_argument('--init', type=Path, default=None, help='warm-start weights from a shipped-format checkpoint')
+    p.add_argument('--init', type=Path, default=None,
+                   help='warm-start model + EMA weights, normalizer and model config from a shipped-format checkpoint '
+                        '(fresh optimizer and schedule); ignored when --resume finds <out>/last.pt')
+    p.add_argument('--start-horizon', type=int, default=0,
+                   help='lower bound on the curriculum horizon k (0 = normal 1/2/4/H curriculum); set to --horizon when warm-starting')
     # model
     p.add_argument('--width', type=int, default=128)
     p.add_argument('--rounds', type=int, default=4)
@@ -82,6 +87,25 @@ def parse_args():
     p.add_argument('--w-rest', type=float, default=1.0)
     p.add_argument('--w-slide', type=float, default=1.0)
     p.add_argument('--one-steps', type=int, default=0, help='apply the one-step raw-target term only to the first n unroll steps (0 = all steps)')
+    # fall-recall fixes; every default reproduces the original objective/sampling exactly. Loss changes are TRAIN-ONLY
+    # (the val_* loss terms always use the original objective, so they stay comparable across runs).
+    p.add_argument('--w-move', type=float, default=1.0,
+                   help='per-object loss weight for objects that are not at rest on every frame of the window (1 = off)')
+    p.add_argument('--w-impulse', type=float, default=0.0,
+                   help='extra per-object-step loss weight w*min(1, max(|dv_true|/0.25 m/s, |dw_true|/2.5 rad/s)) (0 = off)')
+    p.add_argument('--w-speed', type=float, default=0.0,
+                   help='weight of a speed term on objects truly moving > 0.03 m/s: huber((v_pred . dir_true - |v_true|)/--speed-scale) (0 = off)')
+    p.add_argument('--speed-scale', type=float, default=0.05)
+    p.add_argument('--speed-asym', type=float, default=1.0, help='multiplier on the UNDER-shoot side of the --w-speed term')
+    p.add_argument('--vel-scale', type=float, default=0.2, help='scale (m/s) of the velocity Huber term')
+    p.add_argument('--one-delta', type=float, default=1.0, help='Huber delta (in target sigmas) of the one-step term')
+    p.add_argument('--rest-lookahead', type=int, default=0,
+                   help='apply the rest/slide penalties only where the object is truly at rest for this many FURTHER frames (0 = off)')
+    p.add_argument('--event-frac', type=float, default=0.0,
+                   help='fraction of every batch drawn from windows containing a motion onset or the 1 s approach of a true fall '
+                        '(0 = off; the remainder stays half uniform / half active)')
+    p.add_argument('--score-fall-weight', type=float, default=0.0,
+                   help='selection score += w*((1 - fall recall) + 0.5*(1 - fall precision)), 4 s val rollout, collisions-enabled episodes (0 = unchanged)')
     # system
     p.add_argument('--amp', choices=('auto', 'bf16', 'fp16', 'off'), default='auto')
     p.add_argument('--compile', type=int, default=0)
@@ -153,8 +177,11 @@ def to_device(data, device):
 class WindowSampler:
     """Disjoint per-rank slices of a shared (seed, epoch, k) permutation; half uniform, half active."""
 
-    def __init__(self, active_frames: torch.Tensor, seed: int, rank: int, world: int):
+    def __init__(self, active_frames: torch.Tensor, seed: int, rank: int, world: int, event_frames=None, event_frac: float = 0.):
         self.frames = active_frames                       # [E,T+1] bool on the data device
+        self.event_frac = float(event_frac) if event_frames is not None else 0.
+        self.event_cs = F.pad(event_frames.long().cumsum(1), (1, 0)) if self.event_frac > 0 else None
+        self.event = None
         self.E, self.T = active_frames.shape[0], active_frames.shape[1] - 1
         self.cs = F.pad(active_frames.long().cumsum(1), (1, 0))  # [E,T+2]
         self.seed, self.rank, self.world = seed, rank, world
@@ -180,23 +207,33 @@ class WindowSampler:
         if len(self.uniform) == 0:                        # fewer windows than ranks (tiny smoke data)
             self.uniform = torch.randperm(n, generator=g).to(device)
         self.cu = self.ca = 0
+        if self.event_cs is not None:                     # drawn AFTER the original pools: their permutations are unchanged
+            idx = ((self.event_cs[:, t0 + k + 1] - self.event_cs[:, t0]) > 0).reshape(-1).nonzero().squeeze(1)
+            self.event_fraction = float(len(idx)) / max(n, 1)
+            self.event = idx[torch.randperm(len(idx), generator=g)[self.rank::self.world].to(device)] if len(idx) >= self.world else self.active
+            self.ce = 0
 
     def next(self, batch: int):
         device = self.frames.device
-        nu = batch // 2
-        na = batch - nu
+        ne = int(round(batch * self.event_frac)) if self.event is not None else 0
+        nu = (batch - ne) // 2
+        na = batch - ne - nu
         u = self.uniform[(self.cu + torch.arange(nu, device=device)) % len(self.uniform)]
         a = self.active[(self.ca + torch.arange(na, device=device)) % len(self.active)]
         self.cu += nu
         self.ca += na
         flat = torch.cat((u, a))
+        if ne:
+            flat = torch.cat((flat, self.event[(self.ce + torch.arange(ne, device=device)) % len(self.event)]))
+            self.ce += ne
         return flat // self.per, flat % self.per
 
 
-def gather(data, e, t0, k, device):
-    """Windows [B,k+1,...] for episodes e starting at t0."""
+def gather(data, e, t0, k, device, lookahead=0):
+    """Windows [B,k+1,...] for episodes e starting at t0 (rest gets `lookahead` extra frames, clipped at the episode end)."""
     t = t0[:, None] + torch.arange(k + 1, device=t0.device)
-    out = (data['states'][e[:, None], t], data['rest'][e[:, None], t], data['props'][e], data['context'][e], data['mask'][e])
+    tr = t if not lookahead else (t0[:, None] + torch.arange(k + 1 + lookahead, device=t0.device)).clamp(max=data['rest'].shape[1] - 1)
+    out = (data['states'][e[:, None], t], data['rest'][e[:, None], tr], data['props'][e], data['context'][e], data['mask'][e])
     return tuple(x.to(device, non_blocking=True) for x in out)
 
 
@@ -239,8 +276,45 @@ def add_noise(state, rest0, dyn, args, gen):
     return torch.where(on > 0, noisy, state)
 
 
-def huber(x):
-    return F.huber_loss(x, torch.zeros_like(x), reduction='none')
+def huber(x, delta=1.0):
+    return F.huber_loss(x, torch.zeros_like(x), reduction='none', delta=delta)
+
+
+def support_local(pos, context):
+    """Positions [B,...,3] in the tilted support frame centred at (0, height-.04, 0) (same as scripts/eval_contact.py)."""
+    rot = rotation(euler_quaternion(context[:, 4:7]))
+    center = torch.zeros(context.shape[0], 3, dtype=pos.dtype, device=pos.device)
+    center[:, 1] = context[:, 2] - .04
+    return torch.einsum('bji,b...j->b...i', rot, pos - center.view(-1, *((1,) * (pos.dim() - 2)), 3))
+
+
+def fell_frames(traj, props, context, mask):
+    """scripts/eval_contact.fell_tipped rule per frame. traj [B,F,N,13] -> (off footprint [B,F,N], fell frame [B,F,N], dyn [B,N])."""
+    local = support_local(traj[..., :3].float(), context.float())
+    half_w, half_d = (context[:, 0] / 2).view(-1, 1, 1), (context[:, 1] / 2).view(-1, 1, 1)
+    off = (context[:, 7] < .5).view(-1, 1, 1) | (local[..., 0].abs() > half_w) | (local[..., 2].abs() > half_d)
+    return off, off & (local[..., 1] < .01), mask & (props[..., 5] < .5)
+
+
+@torch.no_grad()
+def event_frames(data, lead=20, chunk=2048):
+    """[E,T+1] bool: frames with a motion onset (dynamic object slower than 0.05 m/s that reaches 0.1 m/s within 4 frames)
+    or inside the `lead` frames before (to 2 after) a true faller first leaves the footprint (collisions-enabled supports)."""
+    out = []
+    for i in range(0, data['states'].shape[0], chunk):
+        sl = slice(i, i + chunk)
+        states, props, context, mask = data['states'][sl], data['props'][sl], data['context'][sl], data['mask'][sl]
+        off, fell, dyn = fell_frames(states, props, context, mask)
+        faller = fell.any(1) & dyn & (context[:, 7] > .5)[:, None]                       # [e,N]
+        frames = states.shape[1]
+        tc = off.float().argmax(1)                                                       # first off-footprint frame [e,N]
+        t = torch.arange(frames, device=states.device).view(1, -1, 1)
+        approach = (faller[:, None] & (t >= tc[:, None] - lead) & (t <= tc[:, None] + 2)).any(-1)
+        speed = states[..., 7:10].norm(dim=-1).transpose(1, 2)                           # [e,N,T+1]
+        ahead = F.max_pool1d(F.pad(speed[..., 1:], (0, 4)), 4, 1)                        # max speed over t+1..t+4
+        onset = ((speed < .05) & (ahead >= .1) & dyn[..., None]).any(1)
+        out.append(approach | onset)
+    return torch.cat(out)
 
 
 def unroll(model, states, rest, props, context, mask, k, args, amp_dtype, gen=None):
@@ -248,8 +322,18 @@ def unroll(model, states, rest, props, context, mask, k, args, amp_dtype, gen=No
     dyn = dynamic_mask(props, context, mask)
     count = dyn.sum().clamp_min(1)
 
-    def avg(x):
-        return (x * dyn).sum() / count
+    def avg(x, w=None):
+        if w is None:
+            return (x * dyn).sum() / count
+        return (x * w).sum() / w.sum().clamp_min(1e-6)
+    train = gen is not None                               # the fall-recall loss options never touch validation
+    rest_all, rest = rest, rest[:, :k + 1]                # training windows may carry --rest-lookahead extra rest frames
+    lookahead = rest_all.shape[1] - (k + 1) if train else 0
+    base = None
+    if train and (args.w_move != 1 or args.w_impulse > 0):
+        mover = (~rest).any(1) & dyn
+        base = 1 + (args.w_move - 1) * mover.float()
+    delta = args.one_delta if train else 1.0
     cur = states[:, 0]
     if gen is not None:
         cur = add_noise(cur, rest[:, 0], dyn, args, gen)
@@ -268,22 +352,37 @@ def unroll(model, states, rest, props, context, mask, k, args, amp_dtype, gen=No
             # pushforward-style target: from the model's CURRENT (possibly drifted) input to the TRUE next state
             target = (model.raw_targets(cur.detach(), true, props, context, mask).float() - mean) / std
         nxt = model.integrate(cur, raw * std + mean, props, context, mask)
+        wj = None
+        if base is not None:
+            wj = base
+            if args.w_impulse > 0:
+                jump = torch.maximum((true[..., 7:10] - states[:, j, :, 7:10]).norm(dim=-1) / .25,
+                                     (true[..., 10:13] - states[:, j, :, 10:13]).norm(dim=-1) / 2.5).clamp(max=1)
+                wj = wj + args.w_impulse * jump
+            wj = wj * dyn
         terms = dict(
-            one=avg(huber(raw - target).mean(-1)),
-            pos=avg(huber((nxt[..., :3] - true[..., :3]) / .02).mean(-1)),
-            vel=avg(huber((nxt[..., 7:10] - true[..., 7:10]) / .2).mean(-1)),
-            ang=avg(huber((nxt[..., 10:13] - true[..., 10:13]) / 2).mean(-1)),
-            rot=avg(huber(geodesic(nxt[..., 3:7], true[..., 3:7]) / .1)))
+            one=avg(huber(raw - target, delta).mean(-1), wj),
+            pos=avg(huber((nxt[..., :3] - true[..., :3]) / .02).mean(-1), wj),
+            vel=avg(huber((nxt[..., 7:10] - true[..., 7:10]) / (args.vel_scale if train else .2)).mean(-1), wj),
+            ang=avg(huber((nxt[..., 10:13] - true[..., 10:13]) / 2).mean(-1), wj),
+            rot=avg(huber(geodesic(nxt[..., 3:7], true[..., 3:7]) / .1), wj))
         # Slide anchor for objects truly at rest: while the input is within 1 cm of the truth (always the
         # case for the noised j=0 input) the object must end on the TRUE resting pose, so the ground truth
         # scores zero and correcting noise/drift is never punished; a further-drifted object is only asked
         # not to move relative to its own previous pose (bounded, as before).
         near = (cur.detach()[..., :3] - states[:, j, :, :3]).norm(dim=-1, keepdim=True) < .01
-        phys = cg.physics_losses(nxt, true, torch.where(near, true, cur), props, context, mask, rest[:, j + 1])
+        rest_next = rest_all[:, j + 1:j + 2 + lookahead].all(1) if lookahead > 0 else rest[:, j + 1]
+        phys = cg.physics_losses(nxt, true, torch.where(near, true, cur), props, context, mask, rest_next)
         terms.update(pen=phys['penetration'], rest=phys['rest'], slide=phys['slide'])
         w_one = args.w_one if not args.one_steps or j < args.one_steps else 0.
         step = (w_one * terms['one'] + args.w_pos * terms['pos'] + args.w_vel * terms['vel'] + args.w_ang * terms['ang']
                 + args.w_rot * terms['rot'] + args.w_pen * terms['pen'] + args.w_rest * terms['rest'] + args.w_slide * terms['slide'])
+        if train and args.w_speed > 0:
+            v_true = true[..., 7:10]
+            s_true = v_true.norm(dim=-1)
+            err = ((nxt[..., 7:10] * v_true).sum(-1) / s_true.clamp_min(1e-6) - s_true) / args.speed_scale
+            speed = huber(err) * torch.where(err < 0, args.speed_asym, 1.) * (s_true > .03)
+            step = step + args.w_speed * avg(speed, wj)   # reported inside 'loss' only (TERMS is unchanged)
         total = total + weights[j] * step
         stats = stats + weights[j] * torch.stack([step.detach()] + [terms[n].detach().float() for n in TERMS[1:]])
         bad = bad | ~torch.isfinite(nxt).all() | (nxt[..., :3].abs() > 100).any()
@@ -304,10 +403,10 @@ class Trainee(nn.Module):
 
 
 # ----------------------------------------------------------------------------- schedule
-def horizon_at(step, total, horizon, progress=0.):
+def horizon_at(step, total, horizon, progress=0., start=0):
     f = max(step / max(total, 1), progress)
     k = 1 if f < .05 else 2 if f < .15 else 4 if f < .35 else horizon
-    return min(k, horizon)
+    return min(max(k, start), horizon)
 
 
 def lr_at(step, total, args, progress=0.):
@@ -389,10 +488,15 @@ def validate(model, val, device, args, amp_dtype):
     cur = states[:, 0]
     pen_sum = drift_sum = drift_n = 0.
     errors = {}
-    for j in range(1, steps + 1):
+    fall_steps = min(80, T)                               # the 4 s rollout continues past `steps` for the fall metrics only
+    traj = [cur]
+    for j in range(1, fall_steps + 1):
         with torch.autocast('cuda', dtype=amp_dtype or torch.float16, enabled=amp_dtype is not None and device.type == 'cuda'):
             cur = model(cur, props, context, mask)
         cur = torch.nan_to_num(cur.float(), nan=1e3, posinf=1e3, neginf=-1e3).clamp(-1e3, 1e3)
+        traj.append(cur)
+        if j > steps:
+            continue
         depth = cg.penetration_depths(cur, props, context, mask)
         worst = torch.maximum(torch.maximum(depth['support'], depth['floor']), depth['objects'])
         pen_sum += float((torch.nan_to_num(worst, nan=1.) * dyn).sum())
@@ -413,6 +517,18 @@ def validate(model, val, device, args, amp_dtype):
         v = out.get(key, float('nan'))
         return 0. if v != v else v
     out['score'] = z('pos_err_2s_chaotic') + z('pos_err_2s_gentle') + 10 * out['mean_penetration'] + .5 * out['rest_drift']
+    # fall precision / recall with the scripts/eval_contact.py rule on every frame of the 4 s rollout (object level)
+    _, pred_fell, fdyn = fell_frames(torch.stack(traj, 1), props, context, mask)
+    _, true_fell, _ = fell_frames(states[:, :fall_steps + 1], props, context, mask)
+    pred_fell, true_fell = pred_fell.any(1) & fdyn, true_fell.any(1) & fdyn
+    for tag, sel in (('', fdyn), ('_on', fdyn & (context[:, 7] > .5)[:, None])):   # _on: collisions-enabled supports only
+        tp, fp, fn = (float((a & sel).sum()) for a in (pred_fell & true_fell, pred_fell & ~true_fell, ~pred_fell & true_fell))
+        out[f'fall_precision{tag}'] = tp / (tp + fp) if tp + fp else float('nan')
+        out[f'fall_recall{tag}'] = tp / (tp + fn) if tp + fn else float('nan')
+        out[f'fall_true{tag}'] = int(tp + fn)
+    if args.score_fall_weight > 0:
+        r, q = out['fall_recall_on'], out['fall_precision_on']
+        out['score'] += args.score_fall_weight * ((1 - (0. if r != r else r)) + .5 * (1 - (0. if q != q else q)))
     return out
 
 
@@ -526,24 +642,35 @@ def main():
             f'loaded in {time.time() - t:.1f}s; active frames {float(train["active"].float().mean()):.3f}')
         val = to_device(load_split(args.data, 'val', args.max_val_episodes, args.load_threads, need_meta=True), device)
         log(f'[data] val episodes={val["states"].shape[0]} chaotic={int(val["chaotic"].sum())}')
-    sampler = WindowSampler(train.pop('active'), args.seed, rank, world)
+    events = event_frames(train) if args.event_frac > 0 else None
+    sampler = WindowSampler(train.pop('active'), args.seed, rank, world, events, args.event_frac)
+    if main_rank and events is not None:
+        log(f'[data] event frames (motion onset / fall approach) {float(events.float().mean()):.3f}; --event-frac {args.event_frac}')
 
     # ---- model
+    last_path = args.out / 'last.pt'
+    init = None
+    if args.init is not None and not (args.resume and last_path.exists()):
+        init = torch.load(args.init, map_location='cpu', weights_only=True)
+        for key, value in (init.get('config') or {}).items():      # architecture follows the checkpoint
+            if key in ('width', 'rounds', 'edge_radius'):
+                setattr(args, key, value)
     model = cg.ContactGNN(width=args.width, rounds=args.rounds, edge_radius=args.edge_radius).to(device)
     config = dict(getattr(model, 'config', None) or dict(width=args.width, rounds=args.rounds, edge_radius=args.edge_radius))
     updates_per_epoch = max(1, args.windows_per_epoch // (args.batch * world))
     total_updates = updates_per_epoch * args.epochs
     requested_warmup = args.warmup
     args.warmup = max(1, min(args.warmup, int(.05 * total_updates)))
-    last_path = args.out / 'last.pt'
     resume = None
     if args.resume and last_path.exists():
         resume = torch.load(last_path, map_location='cpu', weights_only=False)
         model.load_state_dict(resume['model'])
-    elif args.init is not None:
-        model.load_state_dict(torch.load(args.init, map_location='cpu', weights_only=True)['state_dict'])
+    elif init is not None:
+        model.load_state_dict(init['state_dict'])   # includes the normalizer buffers; the EMA copy starts from the same weights
         if main_rank:
-            log(f'[init] warm start from {args.init}')
+            log(f'[init] warm start from {args.init} (epoch {init.get("epoch")}, config {init.get("config")}); normalizer from the checkpoint; '
+                f'fresh optimizer/schedule; start horizon {max(args.start_horizon, 1) if args.start_horizon else "curriculum"}')
+        del init
     elif main_rank:
         mean, std, n = fit_normalizer(model, train, device, args.seed)
         log(f'[normalizer] {n} dynamic transitions\n  mean={[round(float(x), 4) for x in mean]}\n  std ={[round(float(x), 4) for x in std]}')
@@ -617,15 +744,15 @@ def main():
         epoch_logs = 0
         epoch_start = interval_start = time.time()
         interval_updates = 0
-        k = horizon_at(global_step, total_updates, horizon, progress)
+        k = horizon_at(global_step, total_updates, horizon, progress, args.start_horizon)
         for update in range(updates_per_epoch):
-            k = horizon_at(global_step, total_updates, horizon, progress)
+            k = horizon_at(global_step, total_updates, horizon, progress, args.start_horizon)
             sampler.set(epoch, k)
             lr = lr_at(global_step, total_updates, args, progress)
             for group in optimizer.param_groups:
                 group['lr'] = lr
             e, t0 = sampler.next(args.batch)
-            batch = gather(train, e, t0, k, device)
+            batch = gather(train, e, t0, k, device, args.rest_lookahead)
             loss, stats, bad = net(*batch, k, gen)
             optimizer.zero_grad(set_to_none=True)
             if bool(bad):
@@ -708,7 +835,9 @@ def main():
             log(f'[epoch {epoch + 1}/{args.epochs}] k={k} train={metrics["train_loss"]:.4f} val_k{horizon}={metrics["val_loss"]:.4f} '
                 f'pos1s c/g={metrics.get("pos_err_1s_chaotic", float("nan")):.4f}/{metrics.get("pos_err_1s_gentle", float("nan")):.4f} '
                 f'pos2s c/g={metrics.get("pos_err_2s_chaotic", float("nan")):.4f}/{metrics.get("pos_err_2s_gentle", float("nan")):.4f} '
-                f'pen={metrics["mean_penetration"] * 1000:.2f}mm drift={metrics["rest_drift"]:.4f} score={metrics["score"]:.4f}'
+                f'pen={metrics["mean_penetration"] * 1000:.2f}mm drift={metrics["rest_drift"]:.4f} '
+                f'fall P/R={metrics["fall_precision"]:.3f}/{metrics["fall_recall"]:.3f} (on {metrics["fall_precision_on"]:.3f}/{metrics["fall_recall_on"]:.3f}) '
+                f'score={metrics["score"]:.4f}'
                 f'{" *best*" if improved else ""} train {train_time:.0f}s val {metrics["val_seconds"]:.0f}s')
             if monitor:
                 log(f'[epoch {epoch + 1}] {monitor.summary()}')
