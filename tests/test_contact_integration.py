@@ -164,3 +164,71 @@ def test_api_contact_gnn(monkeypatch, no_physics_step):
         assert only.status_code == 503
         with pytest.raises(FileNotFoundError): load_model('contact_gnn')
     assert client.post('/api/simulate', json=dict(body, learned_architecture='nope')).status_code == 422
+
+# ---- review fixes: tunnelling, sleep stability, trained-range notes (project() tests need no checkpoint)
+def _box_state(size, position, euler=(0, 0, 0), velocity=(0, 0, 0)):
+    import torch
+    from agatha.dynamics import euler_quaternion
+    quat = euler_quaternion(torch.tensor([euler], dtype=torch.float32))[0]
+    state = torch.cat((torch.tensor(position, dtype=torch.float32), quat, torch.tensor(velocity, dtype=torch.float32), torch.zeros(3)))[None, None]
+    props = torch.tensor([[[*size, .5, .5, 0., 0., 0., 0.]]])
+    context = torch.tensor([[1.2, .8, .75, 9.81, 0., 0., 0., 1., .5, 0.]])
+    return state, props, context, torch.ones(1, 1, dtype=torch.bool)
+
+def test_projection_catches_a_step_through_the_whole_slab():
+    prev, props, context, mask = _box_state((.1, .1, .1), (0, .8, 0), velocity=(0, -10, 0))
+    pred = prev.clone(); pred[..., 1] = .3                      # one step later: far below the 0.08 m slab
+    out = contact_gnn.project(prev, pred, props, context, mask)
+    assert abs(float(out[0, 0, 1])-.8) < 1e-4 and float(out[0, 0, 8]) >= 0
+    # a box that was already under the table is left there (it did not come through the top)
+    under = prev.clone(); under[..., 1] = .4
+    assert abs(float(contact_gnn.project(under, pred, props, context, mask)[0, 0, 1])-.3) < 1e-4
+    # noclip: no support, nothing to catch
+    context[0, 7] = 0
+    assert abs(float(contact_gnn.project(prev, pred, props, context, mask)[0, 0, 1])-.3) < 1e-4
+
+def test_sleep_needs_a_stable_contact_patch():
+    import math
+    slow = (.01, 0, 0)
+    flat, props, context, mask = _box_state((.1, .2, .1), (0, .85, 0), velocity=slow)
+    assert float(contact_gnn.project(flat, flat, props, context, mask)[0, 0, 7:10].abs().max()) == 0     # resting on a face: sleeps
+    t = math.radians(20)
+    lean = _box_state((.1, .2, .1), (0, .75+(.1*math.sin(t)+.2*math.cos(t))/2, 0), euler=(0, 0, t), velocity=slow)[0]
+    assert float(contact_gnn.project(lean, lean, props, context, mask)[0, 0, 7]) == pytest.approx(.01)   # on an edge: must keep falling
+    over = flat.clone(); over[..., 0] = .6+.03                                                         # COM past the table edge
+    assert float(contact_gnn.project(over, over, props, context, mask)[0, 0, 7]) == pytest.approx(.01)
+    edge = flat.clone(); edge[..., 0] = .6-.02                                                         # overhanging, COM still on the table
+    assert float(contact_gnn.project(edge, edge, props, context, mask)[0, 0, 7:10].abs().max()) == 0
+
+def test_projection_broad_phase_matches_isolated_pairs():
+    import torch
+    torch.manual_seed(0)
+    a, props, context, mask = _box_state((.1, .1, .1), (-.3, .8, 0))
+    b = a.clone(); b[..., 0] = -.3+.08; b[..., 7] = -.5        # overlaps a by 2 cm
+    c = a.clone(); c[..., 0] = .3                              # far away, isolated
+    pair_state = torch.cat((a, b), 1); all_state = torch.cat((a, b, c), 1)
+    two = contact_gnn.project(pair_state, pair_state, props.expand(1, 2, -1), context, mask.expand(1, 2))
+    three = contact_gnn.project(all_state, all_state, props.expand(1, 3, -1), context, mask.expand(1, 3))
+    assert torch.allclose(two, three[:, :2], atol=1e-6) and torch.allclose(three[:, 2], c[:, 0], atol=1e-6)
+    assert float(two[0, 1, 0]-two[0, 0, 0]) >= .1-1e-4         # pushed apart
+
+def test_out_of_range_inputs_are_noted():
+    from agatha.world_model import contact_approximations
+    scene = demo_scene()
+    assert contact_approximations(scene, 9.81) == [] and contact_approximations(scene) == []
+    assert any('gravity 30' in n for n in contact_approximations(scene, 30.))
+    data = scene.model_dump(mode='json')
+    data['objects'][2].update(friction=2., size=[2, 2, 2])
+    notes = ' '.join(contact_approximations(Scene.model_validate(data), 9.81))
+    assert 'friction outside' in notes and 'larger than 0.5 m' in notes
+
+@needs_checkpoint
+def test_downward_push_does_not_tunnel_through_the_table(projected):
+    scene = demo_scene()
+    for target, impulse in (('mug', 5), ('laptop', 20)):
+        actions = ACTIONS.validate_python([dict(type='push', id=target, direction=[0, -1, 0], impulse_Ns=impulse)])
+        result = rollout(scene, actions, steps=40, fps=20, model=projected)
+        assert finite(result)
+        lowest = min(next(o for o in f['objects'] if o['id'] == target)['position'][1] for f in result['frames'])
+        assert lowest > scene.support.height, (target, lowest)
+        assert result['events']['fell'] == []

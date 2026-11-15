@@ -40,8 +40,8 @@ APPROXIMATIONS (all of them; keep this list in sync with docs/part-c-external-da
       rest = contact_support and |v| < 0.01 and |w| < 0.05 on the approximate velocities.
   A8  chaotic = any dynamic object tipped (A5) or displaced by more than 0.30 m (the collision
       speed criterion of data/v2 is not evaluated).  live_physics = False everywhere.
-  A9  rolling/spinning friction 0, support restitution 0, tilt 0 (not given by any source).
-      support friction 0.5 unless stated below.
+  A9  rolling/spinning friction 0, tilt 0 (not given by any source).  Support friction 0.5 and
+      support restitution 0 unless stated below (K3, C3).
 
  Kubric MOVi-A (PyBullet, Z-up, 12 fps, 24 frames)
   K1  Similarity rescale: length x0.36, time x0.6.  Gravity stays 10 m/s^2 (measured in the source),
@@ -51,14 +51,19 @@ APPROXIMATIONS (all of them; keep this list in sync with docs/part-c-external-da
       (12 fps finite differences across bounces are much worse).  --kubric-fd switches.
   K3  Masses x0.36 (a global factor, which rigid-body dynamics is invariant to) so that they fall
       inside the 0.05-3 kg training range; friction/restitution straight from the metadata
-      (restitution 0.7 for rubber exceeds the 0-0.6 training range).
+      (restitution 0.7 for rubber exceeds the 0-0.6 training range).  Ground: friction 0.3 and
+      restitution 0.5, the defaults of the generator (challenges/movi/movi_ab_worker.py), checked
+      against the data: sliding cubes decelerate at 0.123 g / 0.245 g (= 0.4 x 0.3 / 0.8 x 0.3) and
+      the few clean first sphere bounces return 0.13 / 0.34 of the impact speed (n = 4 / 3).
+      They only apply in `slab` mode: Agatha's y = 0 floor is fixed at friction 0.5, restitution 0.
   K4  Z-up -> Y-up by the proper rotation (x, y, z) -> (x, z, -y); quaternion wxyz -> xyzw.
   K5  Objects are still in flight / tumbling at the last frame for most slots (`settled` marks
       the others), so the 'rest position' is mostly the position at 1.15 s, not a resting pose.
 
  CLEVRER (Blender/Bullet, Z-up, 128 annotated frames)
-  C1  Units, object sizes, masses, friction and the time base are NOT documented.  Assumed: video
-      time base 25 fps (the annotated velocities imply ~36 Hz and are ignored), every object is a
+  C1  Units, object sizes, masses and friction are NOT documented; the README only says 128 frames
+      in 5 s (25.6 fps nominal).  Assumed: video time base 25 fps (the annotated velocities are
+      35.7 x the per-frame displacement and are ignored), every object is a
       0.4 unit bounding cube (centres sit at z = 0.2), length x0.5 so cubes are 0.2 m.
   C2  Velocities are central finite differences of the 25 fps annotations.
   C3  Friction is CALIBRATED, not read: the median deceleration of freely sliding cubes in the
@@ -263,7 +268,7 @@ def slab_side(pos):
 
 # ----------------------------------------------------------------------------- episode assembly
 def make_episode(pos, quat, vel, ang, size, mass, friction, restitution, static, shape, box_like, kind, source_id,
-                 gravity=9.81, support_friction=.5, slots=None):
+                 gravity=9.81, support_friction=.5, slots=None, support_restitution=0.):
     """Arrays already at 20 Hz, Y-up metres, ground plane at y = 0. pos/vel/ang [F,N,3], quat [F,N,4] xyzw."""
     pos = np.asarray(pos, np.float64)[:MAX_STEPS + 1]; frames, count = pos.shape[:2]
     quat = sign_continuous(np.asarray(quat)[:frames]); vel = np.asarray(vel, np.float64)[:frames]; ang = np.asarray(ang, np.float64)[:frames]
@@ -278,7 +283,7 @@ def make_episode(pos, quat, vel, ang, size, mass, friction, restitution, static,
     props = np.zeros((slots, PROPS_DIM), np.float32); props[:, 3] = 1
     props[:count, :3] = size; props[:count, 3] = mass; props[:count, 4] = friction; props[:count, 5] = static; props[:count, 6] = restitution
     side = slab_side(pos)
-    context = np.array([side, side, SUPPORT_HEIGHT, gravity, 0, 0, 0, 1, support_friction, 0], np.float32)
+    context = np.array([side, side, SUPPORT_HEIGHT, gravity, 0, 0, 0, 1, support_friction, support_restitution], np.float32)
     mask = np.zeros(slots, bool); mask[:count] = True
     dyn = mask.copy(); dyn[:count] &= ~static
     pad = lambda a, fill: np.concatenate((np.asarray(a), np.full((slots - count, *np.shape(a)[1:]), fill, np.asarray(a).dtype)))
@@ -353,6 +358,7 @@ def write_dataset(out: Path, name: str, episodes: list[dict], info: dict, shard_
 
 # ----------------------------------------------------------------------------- Kubric MOVi-A
 KUBRIC_LENGTH, KUBRIC_TIME, KUBRIC_FPS, KUBRIC_MASS = .36, .6, 12., .36
+KUBRIC_FLOOR_FRICTION, KUBRIC_FLOOR_RESTITUTION = .3, .5      # movi_ab_worker.py defaults (K3)
 KUBRIC_SHAPES = {0: 'cube', 1: 'cylinder', 2: 'sphere'}
 
 
@@ -380,9 +386,11 @@ def convert_kubric(root: Path, use_fd: bool = False, limit: int | None = None) -
         shape = [KUBRIC_SHAPES.get(int(s), 'unknown') for s in a['shape_label'][e, keep]]
         episodes.append(make_episode(pos_r, quat_r, vel, ang, size, a['mass'][e, keep] * KUBRIC_MASS, a['friction'][e, keep],
                                      a['restitution'][e, keep], np.zeros(len(keep), bool), shape, [s == 'cube' for s in shape],
-                                     'movi_a_toss', f"movi_a/train/shard{int(a['shard'][e]):05d}/{a['video_name'][e]}", gravity=10., slots=slots))
+                                     'movi_a_toss', f"movi_a/train/shard{int(a['shard'][e]):05d}/{a['video_name'][e]}", gravity=10., slots=slots,
+                                     support_friction=KUBRIC_FLOOR_FRICTION, support_restitution=KUBRIC_FLOOR_RESTITUTION))
     info = dict(source=str(path), simulator='PyBullet (Kubric)', velocities='finite difference' if use_fd else 'dataset (rescaled)',
-                rescale=dict(length=KUBRIC_LENGTH, time=KUBRIC_TIME, mass=KUBRIC_MASS), gravity=10., source_fps=KUBRIC_FPS)
+                rescale=dict(length=KUBRIC_LENGTH, time=KUBRIC_TIME, mass=KUBRIC_MASS), gravity=10., source_fps=KUBRIC_FPS,
+                ground=dict(friction=KUBRIC_FLOOR_FRICTION, restitution=KUBRIC_FLOOR_RESTITUTION, source='generator defaults, checked against the data'))
     return episodes, info
 
 

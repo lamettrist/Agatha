@@ -60,6 +60,29 @@ KIND_WEIGHTS = dict(
 HARD_KINDS = ("topple", "edge_fall", "stack_collapse", "collision", "drop", "toss", "tilt_slide", "noclip")
 LIVE_FRACTION_NON_LEGACY = .43  # + always-live legacy_layout (12%) -> ~50% of all episodes
 
+# Supplementary scenario kinds (data/v2_hard). They are NOT part of KIND_WEIGHTS, i.e. they have zero weight in
+# the default mix and the default output stays bit-identical; select them with --mix hard / --kind-weights.
+EXTRA_KINDS = ("domino_chain", "hard_push", "edge_marginal", "stack_push", "tilt_api", "bouncy_toss")
+HARD_MIX = dict(domino_chain=.155, hard_push=.19, edge_marginal=.19, stack_push=.155, tilt_api=.155, bouncy_toss=.155)
+MIXES = dict(default=KIND_WEIGHTS, hard=HARD_MIX)
+LIVE_FRACTION_EXTRA = .6        # bouncy_toss is never live (it needs restitution)
+DESK_TABLE_KINDS = ("hard_push", "tilt_api")
+EXTRA_RANGES = dict(
+    domino_chain="3-8 dominoes 0.02-0.04 x 0.10-0.25 x 0.04-0.10 in a row or arc (<=0.3 rad/step); gap 0.3-0.75 x height "
+                 "(70%), 1.05-1.6 x height everywhere (15%) or at one link (15%); first pushed 0.6-2.5 m/s or tipped 2-6 rad/s",
+    hard_push="desk layouts (demo desk 60%); 1.5-8 Ns on one object (speed capped at 1.5-5.5 m/s), laptops/books preferred, "
+              "axis-aligned / aimed at another object / random; static desk alias 25%",
+    edge_marginal="1-3 objects 0.08-0.5 m from an edge pushed at the edge so the friction stopping distance is the edge "
+                  "distance + U(-0.06,0.045) m (70%), or resting with the COM at -0.3..0.4 x half-extent inside the edge (30%)",
+    stack_push="stable (80%) or misaligned stack of 2-5; base (60%) or middle box pushed at 0.8-4.5 m/s x its mass, "
+               "scaled to the whole stack mass in 40% (speed <= 6 m/s)",
+    tilt_api="desk or box layouts placed for a flat table, tilt_support +-8-30 deg about x or z at t=0 (no co-rotation); "
+             "object friction 0.5 or uniform 0.2-1.0",
+    bouncy_toss="object restitution 0.3-0.7, support restitution 0.3-0.7; upward tosses 1.5-4.5 m/s from the table or "
+                "airborne starts 0.05-0.45 m above it with 0.3-2.5 m/s lateral velocity",
+)
+_ACTIVE_WEIGHTS = None          # set by generate() before the worker pool forks
+
 RANGES = dict(
     mass_kg="log-uniform 0.05-3 (half of objects: density 150-2500 kg/m3 clipped to that range)",
     size_m="0.02-0.35 per axis (desk items use demo_desk sizes x0.85-1.15, phone 0.009 thick)",
@@ -127,6 +150,7 @@ class Builder:
         self.actions: list = []
         self.corotate = False
         self.alias = None
+        self.restitution_range = None  # bouncy_toss: per-object restitution range instead of 0-0.6
 
     # -- object factories (positions relative to the table top: y=0 is the surface, x/z cluster-local)
     def size(self, style="any"):
@@ -457,9 +481,170 @@ def s_noclip(b: Builder):
     SCENARIOS[str(b.rng.choice(NOCLIP_BASES))](b)
     b.actions.append(("noclip",))
 
+# ----------------------------------------------------------------------------- supplementary (hard) scenarios
+def _desk_item(b: Builder, name, size=None, mass=None, yaw=None, loose_friction=.2):
+    rng = b.rng; base, m = DESK_ITEMS[name]
+    size = np.asarray(base)*rng.uniform(.85, 1.15, 3) if size is None else np.asarray(size, float)
+    o = b.box(size, mass=(m*float(rng.uniform(.7, 1.4)) if mass is None else mass),
+              friction=.5 if rng.random() >= loose_friction else float(rng.uniform(.2, 1.)), yaw=yaw)
+    o["item"] = name; return o
+
+def _desk_layout(b: Builder, lo=2, hi=7, loose_friction=.2, generic=.2):
+    """Desk-like layout: the shipped demo desk (optionally jittered / thinned) or random desk items and boxes."""
+    rng = b.rng; demo = abs(b.w-1.2) < 1e-9 and abs(b.d-.8) < 1e-9
+    if demo and rng.random() < .4:
+        jitter = .012 if rng.random() < .6 else 0.
+        keep = rng.random(len(DEMO_LAYOUT)) < (1. if rng.random() < .6 else .75)
+        for use, (name, size, x, z, bottom, mass) in zip(keep, DEMO_LAYOUT):
+            if not use and name != "book": continue
+            o = _desk_item(b, name, size, mass, yaw=0., loose_friction=loose_friction)
+            shift = rng.normal(0, jitter, 2) if jitter and bottom == 0 else np.zeros(2)
+            o["pos"] = np.array([x+shift[0], b.h+bottom+size[1]/2, z+shift[1]])
+            if bottom > 0 and b.objs: o["pos"][[0, 2]] = b.objs[-1]["pos"][[0, 2]]; b.objs[-1]["supports"] = True
+            if b.free([o]): b.commit([o])
+    else:
+        total = count(rng, lo, hi); attempts = 0
+        if rng.random() < .3:
+            lower = _desk_item(b, "book", yaw=float(rng.uniform(-math.pi, math.pi)) if rng.random() < .5 else 0., loose_friction=loose_friction)
+            upper = _desk_item(b, "book", loose_friction=loose_friction); upper["q"] = lower["q"]
+            upper["size"][[0, 2]] = np.minimum(upper["size"][[0, 2]], lower["size"][[0, 2]])
+            upper["ext"] = np.abs(rotmat(upper["q"]))@upper["size"]/2
+            upper["pos"] = np.array([rng.uniform(-.01, .01), lower["size"][1]+upper["size"][1]/2, rng.uniform(-.01, .01)])
+            lower["supports"] = True; b.place([lower, upper])
+        while len(b.objs) < total and attempts < 30:
+            attempts += 1
+            if rng.random() < generic: b.place([b.box()])
+            else: b.place([_desk_item(b, str(rng.choice(list(DESK_ITEMS))), yaw=0. if rng.random() < .5 else None, loose_friction=loose_friction)])
+
+def s_domino_chain(b: Builder):
+    rng = b.rng; n = count(rng, 3, 8); r = rng.random()
+    size = np.array([rng.uniform(.02, .04), rng.uniform(.1, .25), rng.uniform(.04, .1)])
+    bend = float(rng.uniform(-.3, .3)) if rng.random() < .4 else 0.
+    friction = float(rng.uniform(.4, 1.))
+    mass = float(np.clip(float(np.prod(size))*loguniform(rng, 300, 2500), .05, 3.))   # one material for the whole chain
+    for m in range(n, 2, -1):
+        theta = float(rng.uniform(-math.pi, math.pi)); pos = np.zeros(2); cluster = []
+        gaps = rng.uniform(.3, .75, m)*size[1]
+        if r > .85: gaps = rng.uniform(1.05, 1.6, m)*size[1]                      # every domino out of reach
+        elif r > .7: gaps[int(rng.integers(1, m))] = float(rng.uniform(1.05, 1.6))*size[1]   # the chain stops midway
+        gaps = np.maximum(gaps, size[0]*1.6)
+        for i in range(m):
+            o = b.box(size*rng.uniform(.95, 1.05, 3), yaw=-theta, mass=mass*float(rng.uniform(.9, 1.1)),
+                      friction=friction if rng.random() < .8 else float(rng.uniform(.4, 1.)))
+            o["pos"] = np.array([pos[0], o["size"][1]/2, pos[1]]); cluster.append(o)
+            if i == 0: theta0 = theta
+            pos = pos+gaps[min(i+1, m-1)]*np.array([math.cos(theta), math.sin(theta)]); theta += bend
+        if any(Builder.overlap(x, y) for i, x in enumerate(cluster) for y in cluster[:i]): continue
+        if b.place(cluster, inset=.02):
+            first = cluster[0]
+            if rng.random() < .65: b.push(first, (math.cos(theta0), math.sin(theta0)), speed=float(rng.uniform(.6, 2.5)))
+            else:   # tipped about its bottom edge: angular velocity + the matching COM velocity
+                omega = float(rng.uniform(2., 6.))
+                first["ang"] = np.array([-math.sin(theta0), 0, math.cos(theta0)])*-omega
+                first["lin"] = np.array([math.cos(theta0), 0, math.sin(theta0)])*omega*first["size"][1]/2
+            break
+    if b.objs and len(b.objs) < 8 and rng.random() < .5: b.fill(min(8, len(b.objs)+int(rng.integers(1, 3))), stacks=0., static=0.)
+
+def s_hard_push(b: Builder):
+    rng = b.rng; _desk_layout(b)
+    if not b.objs: return
+    if rng.random() < .25 and len(b.objs) < 8:  # static desk duplicating the support, as in scenes/demo_desk.json
+        o = b.box(np.array([b.w, .078, b.d]), mass=20., friction=.5, static=True, yaw=0.)
+        o["pos"] = np.array([0., b.h-.04, 0.]); b.alias = o
+    pool = b.dynamic(); flat = [o for o in pool if o.get("item") in ("laptop", "book")]
+    for k in range(1 if rng.random() < .85 else 2):
+        o = (b.pick(1, flat) if flat and rng.random() < .6 else b.pick(1, [x for x in pool if not x["pushed"]]) or [None])[0]
+        if o is None or o["pushed"]: continue
+        r = rng.random(); others = [x for x in b.objs if x is not o]
+        if r < .45: direction = [(1., 0.), (-1., 0.), (0., 1.), (0., -1.)][int(rng.integers(4))]
+        elif r < .8 and others:
+            t = others[int(rng.integers(len(others)))]; d = t["pos"][[0, 2]]-o["pos"][[0, 2]]
+            direction = (float(d[0]), float(d[1])) if np.linalg.norm(d) > 1e-3 else (1., 0.)
+        else: direction = b.direction(three_d=.1, up=(-.1, .3))
+        b.push(o, direction, impulse=min(float(rng.uniform(1.5, 8.)), o["mass"]*float(rng.uniform(1.5, 5.5))))
+
+def s_edge_marginal(b: Builder):
+    rng = b.rng; total = count(rng, 1, 5); g = 9.81
+    for _ in range(min(total, int(rng.integers(1, 4)))):
+        r = rng.random()
+        if r < .45: o = _desk_item(b, str(rng.choice(list(DESK_ITEMS))), yaw=None if rng.random() < .5 else 0., loose_friction=.5)
+        else: o = b.box(style=str(rng.choice(["flat", "cube", "any", "legacy"])), friction=.5 if rng.random() < .4 else float(rng.uniform(.2, 1.)))
+        axis = int(rng.choice([0, 2])); sign = float(rng.choice([-1., 1.]))
+        half = (b.w if axis == 0 else b.d)/2; other = 2-axis; other_half = (b.d if axis == 0 else b.w)/2
+        mode = "slide" if rng.random() < .7 else "overhang"
+        if mode == "slide": inside = float(rng.uniform(.08, min(.5, 2*half-o["ext"][axis]-.02)))
+        else: inside = o["ext"][axis]*float(rng.uniform(-.3, .4))   # negative: centre of mass beyond the edge -> slow tip
+        for _ in range(12):
+            pos = np.zeros(3); pos[axis] = sign*(half-inside)
+            pos[other] = float(rng.uniform(-1, 1))*max(other_half-o["ext"][other]-.03, .01); pos[1] = b.h+o["ext"][1]
+            o["pos"] = pos
+            if b.free([o]): b.commit([o]); break
+        else: continue
+        if mode == "slide":
+            jitter = float(rng.uniform(-.3, .3)) if rng.random() < .5 else 0.
+            theta = math.atan2(sign if axis == 2 else 0., sign if axis == 0 else 0.)+jitter
+            mu = o["friction"]*b.support_friction   # Bullet multiplies the two lateral frictions
+            travel = max(.02, inside/math.cos(jitter)+float(rng.uniform(-.06, .045)))
+            b.push(o, (math.cos(theta), math.sin(theta)), speed=float(np.clip(math.sqrt(2*mu*g*travel), .1, 4.)))
+        elif rng.random() < .3:
+            theta = math.atan2(sign if axis == 2 else 0., sign if axis == 0 else 0.)+float(rng.uniform(-.5, .5))
+            b.push(o, (math.cos(theta), math.sin(theta)), speed=float(rng.uniform(.03, .3)))
+    if b.objs: b.fill(max(total, len(b.objs)), stacks=.1, static=0.)
+
+def s_stack_push(b: Builder):
+    rng = b.rng; total = count(rng, 2); n = int(rng.integers(2, min(total, 5)+1))
+    cluster = b.place(b.stack(n, collapse=rng.random() < .2), inset=.04)
+    if not cluster: return
+    index = 0 if n == 2 or rng.random() < .6 else int(rng.integers(1, n-1)) if n > 2 else 0
+    o = cluster[index]; above = sum(x["mass"] for x in cluster[index:])
+    impulse = o["mass"]*float(rng.uniform(.8, 4.5))*(above/o["mass"] if rng.random() < .4 else 1.)
+    if rng.random() < .4: direction = [(1., 0.), (-1., 0.), (0., 1.), (0., -1.)][int(rng.integers(4))]
+    else: direction = b.direction(three_d=.1, up=(-.1, .3))
+    b.push(o, direction, impulse=min(impulse, o["mass"]*6.))
+    b.fill(total, stacks=.2)
+
+def s_tilt_api(b: Builder):
+    rng = b.rng
+    if rng.random() < .75: _desk_layout(b, loose_friction=.5)
+    else: b.fill(count(rng), stacks=.2, static=0.)
+    if not b.objs: return
+    b.tilt(float(rng.uniform(8, 30))*float(rng.choice([-1., 1.])), str(rng.choice(["x", "z"])))
+    if rng.random() < .12:
+        for o in b.pick(1): b.push(o, b.direction(three_d=0.), impulse=loguniform(rng, .05, 1.))
+
+def s_bouncy_toss(b: Builder):
+    rng = b.rng; total = count(rng, 1, 6)
+    b.randomized["restitution"] = True; b.randomized["support_restitution"] = True
+    b.restitution_range = (.3, .7); b.support_restitution = float(rng.uniform(.3, .7))
+    b.fill(total-1 if rng.random() < .6 else total, stacks=.15, static=0.)
+    if len(b.objs) < total:   # airborne object coming down on the table with lateral velocity
+        for _ in range(25):
+            if rng.random() < .5: q = q_yaw(float(rng.uniform(-math.pi, math.pi)))
+            else:
+                phi = float(rng.uniform(-math.pi, math.pi))
+                q = qmul(q_axis((math.cos(phi), 0, math.sin(phi)), math.radians(float(rng.uniform(2, 30)))), q_yaw(float(rng.uniform(-math.pi, math.pi))))
+            o = b.box(style=str(rng.choice(["cube", "any", "legacy"])), q=q)
+            x = float(rng.uniform(-1, 1))*(b.w/2-.03); z = float(rng.uniform(-1, 1))*(b.d/2-.03); bottom = b.h
+            for other in b.objs:
+                if abs(x-other["pos"][0]) < o["ext"][0]+other["ext"][0]+.004 and abs(z-other["pos"][2]) < o["ext"][2]+other["ext"][2]+.004:
+                    bottom = max(bottom, other["pos"][1]+other["ext"][1])
+            o["pos"] = np.array([x, bottom+float(rng.uniform(.05, .45))+o["ext"][1], z])
+            if not b.free([o]): continue
+            theta = float(rng.uniform(-math.pi, math.pi)); v = float(rng.uniform(.3, 2.5))
+            o["lin"] = np.array([math.cos(theta)*v, float(rng.uniform(-1., 1.5)), math.sin(theta)*v])
+            if rng.random() < .3:
+                axis = rng.normal(size=3); o["ang"] = axis/np.linalg.norm(axis)*float(rng.uniform(0, 6.))
+            b.commit([o]); break
+    else:
+        for o in b.pick(1 if rng.random() < .75 else 2):
+            lateral = float(rng.uniform(.1, .9)); theta = float(rng.uniform(-math.pi, math.pi))
+            b.push(o, (math.cos(theta)*lateral, 1., math.sin(theta)*lateral), speed=float(rng.uniform(1.5, 4.5)))
+
 SCENARIOS = dict(rest=s_rest, gentle_push=s_gentle_push, slide_stop=s_slide_stop, desk=s_desk, topple=s_topple,
                  edge_fall=s_edge_fall, stack_collapse=s_stack_collapse, collision=s_collision, drop=s_drop,
-                 toss=s_toss, tilt_slide=s_tilt_slide, noclip=s_noclip)
+                 toss=s_toss, tilt_slide=s_tilt_slide, noclip=s_noclip,
+                 domino_chain=s_domino_chain, hard_push=s_hard_push, edge_marginal=s_edge_marginal,
+                 stack_push=s_stack_push, tilt_api=s_tilt_api, bouncy_toss=s_bouncy_toss)
 
 
 def sprinkle(b: Builder, kind: str):
@@ -502,7 +687,8 @@ def finalize(b: Builder, kind: str) -> dict:
         per_object = {}
         for o in objs:
             values = {}
-            if b.randomized["restitution"]: values["restitution"] = float(rng.uniform(0, .6))
+            if b.randomized["restitution"]:
+                values["restitution"] = float(rng.uniform(0, .6)) if b.restitution_range is None else float(rng.uniform(*b.restitution_range))
             if b.randomized["rolling_friction"]: values["rolling_friction"] = float(rng.uniform(0, .02))
             if b.randomized["spinning_friction"]: values["spinning_friction"] = float(rng.uniform(0, .02))
             per_object[o["id"]] = values
@@ -514,17 +700,21 @@ def finalize(b: Builder, kind: str) -> dict:
                 support_restitution=b.support_restitution if not b.live else 0., live=b.live)
 
 
-def make_case(rng: np.random.Generator, max_objects: int = 8, kind: str | None = None) -> dict:
+def make_case(rng: np.random.Generator, max_objects: int = 8, kind: str | None = None,
+              kind_weights: dict | None = None) -> dict:
     """One randomized recipe: scene, API actions, unobservable dynamics, extra initial velocities."""
-    kinds = list(KIND_WEIGHTS); weights = np.asarray([KIND_WEIGHTS[k] for k in kinds])
+    kind_weights = KIND_WEIGHTS if kind_weights is None else kind_weights
+    kinds = list(kind_weights); weights = np.asarray([kind_weights[k] for k in kinds])
     if kind is None: kind = kinds[int(rng.choice(len(kinds), p=weights/weights.sum()))]
     if kind == "legacy_layout":
         scene, actions = random_case(rng)
         return dict(kind=kind, scene=scene, actions=actions, dynamics=None, extra={o.id: (0., 0., 0.) for o in scene.objects},
                     velocities={}, corotate=False, support_friction=.5, support_restitution=0., live=True)
-    live = rng.random() < LIVE_FRACTION_NON_LEGACY
-    for _ in range(20):
+    live = rng.random() < (LIVE_FRACTION_EXTRA if kind in EXTRA_KINDS else LIVE_FRACTION_NON_LEGACY)
+    if kind == "bouncy_toss": live = False
+    for _ in range(40 if kind in EXTRA_KINDS else 20):
         table = (1.2, .8, .75) if kind == "desk" and rng.random() < .7 else None
+        if kind in DESK_TABLE_KINDS and rng.random() < .6: table = (1.2, .8, .75)
         b = Builder(rng, live, table)
         SCENARIOS[kind](b)
         if b.objs and len(b.objs)+(b.alias is not None) <= max_objects:
@@ -639,7 +829,8 @@ def episode_rng(base_seed: int, split: str, index: int) -> np.random.Generator:
 
 
 def generate_episode(base_seed: int, split: str, index: int, steps: int = 80, max_objects: int = 8) -> dict | None:
-    return simulate_case(make_case(episode_rng(base_seed, split, index), max_objects), steps, max_objects)
+    return simulate_case(make_case(episode_rng(base_seed, split, index), max_objects, kind_weights=_ACTIVE_WEIGHTS),
+                         steps, max_objects)
 
 
 def _chunk(task):
@@ -694,7 +885,14 @@ def _stats(episodes: list[dict], steps: int) -> dict:
 
 def generate(out: Path, train_episodes: int = 25000, val_episodes: int = 1000, test_episodes: int = 2500,
              steps: int = 80, max_objects: int = 8, workers: int = 56, shard_size: int = 500, seed: int = 2027,
-             chunk: int = 10, quiet: bool = False) -> dict:
+             chunk: int = 10, quiet: bool = False, kind_weights: dict | None = None) -> dict:
+    global _ACTIVE_WEIGHTS
+    if kind_weights is not None:
+        unknown = set(kind_weights)-set(SCENARIOS)-{"legacy_layout"}
+        if unknown or not kind_weights or min(kind_weights.values()) < 0 or sum(kind_weights.values()) <= 0:
+            raise ValueError(f"bad kind weights {kind_weights}")
+        kind_weights = {k: float(v) for k, v in kind_weights.items()}
+    _ACTIVE_WEIGHTS = kind_weights   # inherited by the forked workers; None = the default KIND_WEIGHTS mix
     out = Path(out); start = time.perf_counter()
     counts = dict(train=train_episodes, val=val_episodes, test=test_episodes)
     tasks = []; pending = {}; buffers = {}
@@ -731,6 +929,7 @@ def generate(out: Path, train_episodes: int = 25000, val_episodes: int = 1000, t
                     print(f"{done}/{total} episodes; {done/(last-start):.1f} episodes/s", flush=True)
         finally:
             if pool: pool.close(); pool.join()
+            _ACTIVE_WEIGHTS = None
         simulated = time.perf_counter()-start
         for w in writes: w.result()
     seconds = time.perf_counter()-start
@@ -742,7 +941,8 @@ def generate(out: Path, train_episodes: int = 25000, val_episodes: int = 1000, t
         requested=counts, counts={s: len(kept[s]) for s in SPLITS}, dropped=dropped, shard_size=shard_size,
         episodes=len(everything), transitions=len(everything)*steps,
         seconds=seconds, simulation_seconds=simulated, workers=workers, episodes_per_second=total/max(simulated, 1e-9),
-        kind_weights=KIND_WEIGHTS, hard_kinds=list(HARD_KINDS), ranges=RANGES,
+        kind_weights=KIND_WEIGHTS if kind_weights is None else kind_weights, hard_kinds=list(HARD_KINDS),
+        ranges=RANGES if kind_weights is None else dict(RANGES, **EXTRA_RANGES),
         rest_definition=f"in contact and |v|<{REST_LIN} m/s and |w|<{REST_ANG} rad/s",
         contact_definition=f"Bullet contact point with distance <= {CONTACT_DISTANCE} m in the last substep (frame 0: closest-point query); a static desk duplicating the support counts as support",
         chaotic_definition="any dynamic object fell or tipped (summarize semantics), or moved > 0.30 m from its start at any frame, or a contact between two dynamic objects began after t=0 with relative COM speed > 0.5 m/s",
@@ -764,9 +964,14 @@ def main():
     parser.add_argument("--workers", type=int, default=56)
     parser.add_argument("--shard-size", type=int, default=500)
     parser.add_argument("--seed", type=int, default=2027)
+    parser.add_argument("--mix", choices=sorted(MIXES), default="default",
+                        help="'hard' = only the supplementary kinds " + ", ".join(EXTRA_KINDS))
+    parser.add_argument("--kind-weights", type=json.loads, default=None,
+                        help='JSON {kind: weight} overriding --mix, e.g. \'{"hard_push": 1, "edge_marginal": 1}\'')
     args = parser.parse_args()
+    weights = args.kind_weights if args.kind_weights is not None else (None if args.mix == "default" else MIXES[args.mix])
     meta = generate(args.out, args.train_episodes, args.val_episodes, args.test_episodes, args.steps,
-                    args.max_objects, args.workers, args.shard_size, args.seed)
+                    args.max_objects, args.workers, args.shard_size, args.seed, kind_weights=weights)
     brief = {k: meta[k] for k in ("counts", "dropped", "transitions", "seconds", "workers", "episodes_per_second")}
     brief["overall"] = meta["overall"]
     brief["chaotic_fraction"] = {s: meta["splits"][s].get("chaotic_fraction") for s in SPLITS}

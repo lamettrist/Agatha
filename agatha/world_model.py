@@ -103,7 +103,7 @@ def contact_projection_default() -> bool:
     """Projection is on unless AGATHA_CONTACT_PROJECTION is 0/false/off/no (read at call time)."""
     return os.environ.get(CONTACT_PROJECTION_ENV,'1').strip().lower() not in ('0','false','off','no')
 
-def contact_approximations(scene: Scene) -> list[str]:
+def contact_approximations(scene: Scene, gravity: float | None = None) -> list[str]:
     """Where a valid Scene leaves what contact_gnn was trained on (boxes, 0.08 m slab, default damping)."""
     from .contact_gnn import SUPPORT_THICKNESS
     notes=[]; objects=scene.objects
@@ -115,6 +115,13 @@ def contact_approximations(scene: Scene) -> list[str]:
         notes.append('custom damping is ignored (trained with 0.04)')
     if any(o.soft_approx for o in objects): notes.append('soft objects are treated as rigid boxes')
     if any(o.restitution>.6 for o in objects): notes.append('restitution above the trained range is clamped to 0.6')
+    # Trained ranges (scripts/generate_contact_data.py): box sides 0.02-0.35 m, friction 0.1-1.0, gravity 9.81 or 2-15 m/s2.
+    moving=[o for o in objects if not o.is_static]
+    if any(max(o.size)>.5 for o in moving):
+        notes.append('objects larger than 0.5 m are outside the trained size range (0.02-0.35 m); expect drift')
+    if any(not .1<=o.friction<=1 for o in moving): notes.append('friction outside the trained range is clamped to 0.1-1.0')
+    if gravity is not None and not 2<=gravity<=15:
+        notes.append(f'gravity {gravity:g} m/s2 is outside the trained range (2-15); resting objects are held by the non-learned sleep rule only')
     return notes
 
 class ContactGNNAdapter:
@@ -130,6 +137,7 @@ class ContactGNNAdapter:
         # Per-object restitution is a trained input (0-0.6); everything else uses the bounding box.
         for i,o in enumerate(scene.objects[:n]):
             if o.restitution: props[0,i,6]=min(o.restitution,.6)
+            props[0,i,4]=min(max(o.friction,.1),1.)  # trained friction range; outside it resting objects creep
         with torch.inference_mode():
             output=self.model(state,props,context,mask)
             if projection: output=self.module.project(state,output,props,context,mask)
@@ -217,7 +225,7 @@ def rollout(scene: Scene, actions: list[Action], steps: int = 60, fps: int = 20,
         frames.append(frame(s,prepared,i/fps))
     if model.kind=='contact_gnn':
         applied=model.projection_applied
-        notes=contact_approximations(prepared)
+        notes=contact_approximations(prepared,g)
         disclaimer=('Learned contact graph network trained on synthetic PyBullet boxes; '+
                     ('a non-learned contact projection (push-out along the minimum-overlap axis, clamp to the support plane, sleep of tiny velocities) is applied after each step.'
                      if applied else 'no projection applied, so objects may interpenetrate or drift.')+

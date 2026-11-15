@@ -18,3 +18,10 @@ def test_metrics_missing_is_a_clear_404(tmp_path,monkeypatch):
 
 def test_metrics_default_path_is_the_shipped_metrics_file():
     assert main.METRICS_PATH==main.ROOT/'models/metrics.json'
+
+def test_metrics_non_finite_values_become_null(tmp_path,monkeypatch):
+    path=tmp_path/'metrics.json';path.write_text('{"contact_v2":{"old":{"all":{"rest_drift_mps":NaN,"mean_penetration_m":Infinity,"n_episodes":3}}}}')
+    monkeypatch.setattr(main,'METRICS_PATH',path)
+    response=TestClient(app).get('/api/metrics')
+    assert response.status_code==200
+    assert response.json()['contact_v2']['old']['all']=={'rest_drift_mps':None,'mean_penetration_m':None,'n_episodes':3}

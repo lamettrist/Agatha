@@ -103,3 +103,31 @@ def test_contact_flags():
         assert flags['a'] == (True, False, True) and flags['b'] == (False, False, True)
         assert flags['c'] == (True, False, False)
         assert ('a', 'support') in w.contact_pairs()
+
+def test_supplementary_kinds_build_and_leave_the_default_mix_alone(tmp_path):
+    assert not set(g.EXTRA_KINDS) & set(g.KIND_WEIGHTS) and set(g.HARD_MIX) == set(g.EXTRA_KINDS)
+    for kind in g.EXTRA_KINDS:
+        for i in range(3):
+            case = g.make_case(np.random.default_rng([4, i]), N, kind)
+            episode = g.simulate_case(case, steps=12, max_objects=N)
+            assert episode is not None and episode['kind'] == kind and episode['mask'].any()
+            real = episode['mask']
+            if kind == 'bouncy_toss':
+                assert not episode['live_physics']
+                assert np.all((episode['props'][real, 6] >= .3) & (episode['props'][real, 6] <= .7))
+                assert .3 <= episode['context'][9] <= .7
+            if kind == 'tilt_api':
+                assert 8 <= np.degrees(np.abs(episode['context'][[4, 6]]).max()) <= 30.001
+            if kind == 'domino_chain': assert real.sum() >= 3
+            if kind == 'hard_push':
+                assert any(a.type == 'push' and a.impulse_Ns >= .07 for a in case['actions'])
+    # the default mix never draws a supplementary kind and ignores the override machinery
+    a = g.make_case(np.random.default_rng(9), N); b = g.make_case(np.random.default_rng(9), N, kind_weights=g.KIND_WEIGHTS)
+    assert a['kind'] == b['kind'] and a['scene'] == b['scene'] and a['kind'] in g.KIND_WEIGHTS
+    kwargs = dict(train_episodes=12, val_episodes=2, test_episodes=2, steps=T, max_objects=N, workers=2, shard_size=12,
+                  seed=5, chunk=4, quiet=True)
+    meta = g.generate(tmp_path/'hard', kind_weights=g.HARD_MIX, **kwargs)
+    assert meta['kind_weights'] == g.HARD_MIX and set(load(tmp_path/'hard', 'train')['kind']) <= set(g.EXTRA_KINDS)
+    assert g._ACTIVE_WEIGHTS is None
+    default = g.generate(tmp_path/'default', **kwargs)
+    assert default['kind_weights'] == g.KIND_WEIGHTS and set(load(tmp_path/'default', 'train')['kind']) <= set(g.KIND_WEIGHTS)

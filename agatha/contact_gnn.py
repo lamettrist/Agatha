@@ -134,14 +134,14 @@ def _support_frame(context: torch.Tensor):
     centre[:, 1] = context[:, 2]-SUPPORT_THICKNESS/2
     return rot, centre, context[:, 0]/2, context[:, 1]/2, context[:, 7] > .5
 
-def _support_corner_depth(corners: torch.Tensor, context: torch.Tensor):
+def _support_corner_depth(corners: torch.Tensor, context: torch.Tensor, frame=None):
     """Per-corner depth below the support top [B,N,8], split into top-exit and side-exit corners.
 
     A corner counts when it is inside the footprint, below the top surface and above the
     slab bottom (a box standing under the table does not penetrate it).  When the corner is clearly below the surface (> 1 cm) and the
     sideways way out is shorter, the sideways distance is the penetration (side contact).
     """
-    rot, centre, hw, hd, enabled = _support_frame(context)
+    rot, centre, hw, hd, enabled = _support_frame(context) if frame is None else frame
     local = _mm(corners-centre[:, None, None, :], rot[:, None])
     top = SUPPORT_THICKNESS/2-local[..., 1]
     lateral = torch.minimum(hw[:, None, None]-local[..., 0].abs(), hd[:, None, None]-local[..., 2].abs())
@@ -379,14 +379,16 @@ def _combine(contributions: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_lin: float = .03, sleep_ang: float = .25,
-            slop: float = 0., vel_slop: float = .001) -> torch.Tensor:
+            slop: float = 0., vel_slop: float = .001, stable_margin: float = .003) -> torch.Tensor:
     """Non-learned clean-up of a predicted state: remove penetrations, then put slow supported objects to sleep.
 
     Positions are corrected for any depth > slop.  Velocities are only edited for depths > vel_slop
     (Bullet's own resting states sit a fraction of a mm deep), and never gain energy: support/floor
     contacts get an inelastic rigid-body impulse at the contact patch (linear + angular), pair
     contacts lose at most the centre-of-mass closing speed.  Objects on a slope steeper than
-    their friction angle are never put to sleep (they must be able to start sliding from rest).
+    their friction angle are never put to sleep (they must be able to start sliding from rest), and
+    neither are objects whose centre of mass is more than stable_margin outside their contact patch.
+    A swept test keeps an object that was above the support from ending below its top in one step.
     """
     with _no_autocast(pred_state):
         props, context = _pad_inputs(props, context)
@@ -409,7 +411,8 @@ def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_
         weight = inverse[:, :, None]+inverse[:, None, :]
         share_a = (inverse[:, :, None]/weight.clamp_min(1e-12))[..., None]
         share_b = (inverse[:, None, :]/weight.clamp_min(1e-12))[..., None]
-        support_rot = _support_frame(context)[0]
+        frame = _support_frame(context)          # built once: every support query below reuses it
+        support_rot = frame[0]
         support_normal = support_rot[:, None, :, 1]
         enabled = (context[:, 7] > .5)[:, None, None]
         fixed = valid & ~dynamic
@@ -417,6 +420,21 @@ def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_
         size2 = props[..., :3].square()
         inertia = 12/(size2.sum(-1, keepdim=True)-size2).clamp_min(1e-8)     # inverse box inertia per unit mass (box frame)
         up = pos.new_tensor([0., 1., 0.]).expand(batch, count, 3)
+        # Swept support test (anti-tunnelling): an object whose centre was above the support top and inside
+        # its footprint one step ago cannot legitimately have a corner under the top inside the footprint,
+        # however deep the predicted step went (a fast downward push moves > the slab thickness per step).
+        _, prev_top, prev_lateral, _, _ = _support_corner_depth(prev[..., None, :3], context, frame)
+        was_over = (dynamic & (context[:, 7] > .5)[:, None] & (prev_top[..., 0] < 0) & (prev_lateral[..., 0] > 0))[..., None]
+        radius = half.norm(dim=-1)
+        ring = torch.arange(16, device=device)*(torch.pi/8)
+        ring = torch.stack((ring.cos(), ring.sin()), -1)                      # [16,2] horizontal directions
+
+        def balanced(points, active, margin: float = stable_margin):
+            """[B,N]: the centre of mass lies (within margin) over the convex hull of the active contact
+            points [B,N,K,3] (relative to the COM), i.e. gravity cannot topple the object."""
+            reach = points[..., 0:1]*ring[:, 0]+points[..., 2:3]*ring[:, 1]    # [B,N,K,16]
+            nearest = torch.where(active[..., None], reach, torch.full_like(reach, float('inf'))).amin(2)
+            return active.any(-1) & (nearest.amax(-1) < margin)
 
         def patch(depth):
             """Centre [B,N,3] (relative to the COM) of the corners within 2 mm of the deepest one."""
@@ -432,14 +450,25 @@ def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_
             impulse = (-approach/(1+(torch.cross(spin, arm, dim=-1)*normal).sum(-1).clamp_min(0))*active)[..., None]
             return vel+normal*impulse, ang+spin*impulse
 
+        def close(pos):
+            """[B,N,N] pairs whose bounding spheres are within 1 cm (superset of every pair that can touch)."""
+            return pair & ((pos[:, :, None]-pos[:, None]).norm(dim=-1) <= radius[:, :, None]+radius[:, None, :]+.01)
+
+        def selectors(idx):
+            """take / take2 / put helpers restricting [B,N,...] and [B,N,N,...] tensors to the slots in idx."""
+            if len(idx) == count: return (lambda t: t), (lambda t: t), (lambda full, part: part)
+            return ((lambda t: t.index_select(1, idx)), (lambda t: t.index_select(1, idx).index_select(2, idx)),
+                    (lambda full, part: full.index_copy(1, idx, part)))
+
         def ground(pos, vel, ang):
             """Lift out of support top / floor; returns which objects now rest on them."""
             corners = pos[:, :, None]+offsets
-            _, top, lateral, top_exit, _ = _support_corner_depth(corners, context)
-            depth = (top-slop).clamp_min(0)*(top_exit & (top < .06))
+            _, top, lateral, top_exit, _ = _support_corner_depth(corners, context, frame)
+            depth = (top-slop).clamp_min(0)*((top_exit & (top < .06)) | (was_over & (lateral > 0) & (top > 0)))
             lift = depth.max(-1).values*dynamic
             pos = pos+support_normal*lift[..., None]
-            vel, ang = halt(vel, ang, patch(depth), support_normal, lift > vel_slop)
+            # A swept (tunnelling) catch is a hard landing, not a resting corner: stop it at the COM, without spin.
+            vel, ang = halt(vel, ang, patch(depth)*(lift < .06)[..., None], support_normal, lift > vel_slop)
             low = (corners+(support_normal*lift[..., None])[:, :, None])[..., 1]
             depth = (-low-slop).clamp_min(0)
             sunk = depth.max(-1).values*dynamic
@@ -449,51 +478,79 @@ def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_
             return pos, vel, ang, valid & (on_support | (low < .003).any(-1))
 
         for _ in range(iters):
+            before = pos
             pos, vel, ang, resting = ground(pos, vel, ang)
             grounded = grounded | resting
-            if count > 1:
-                points = pos[:, :, None]+samples
-                local = torch.matmul(points[:, :, None]-pos[:, None, :, None, :], rot[:, None])   # [B,a,b,26,3]
-                excess = local.abs()-half[:, None, :, None, :]
+            overlapping = False
+            # Broad phase: only objects whose bounding spheres (almost) touch another one enter the dense
+            # pair block; everything else contributes exactly zero there.
+            idx = close(pos).any(0).any(-1).nonzero().squeeze(-1) if count > 1 else ()
+            if len(idx) > 1:
+                take, take2, put = selectors(idx)
+                p_, v_, w_, g_ = take(pos), take(vel), take(ang), take(grounded)
+                rot_, half_, samples_, dyn_ = take(rot), take(half), take(samples), take(dynamic)
+                pair_, share_a_, share_b_, first_ = take2(pair), take2(share_a), take2(share_b), first[idx][:, idx]
+                points = p_[:, :, None]+samples_
+                local = torch.matmul(points[:, :, None]-p_[:, None, :, None, :], rot_[:, None])   # [B,a,b,26,3]
+                excess = local.abs()-half_[:, None, :, None, :]
                 inside, corner = (-excess.max(-1).values).max(-1)
-                depth = (inside-slop).clamp_min(0)*pair
+                depth = (inside-slop).clamp_min(0)*pair_
                 index = corner[..., None, None].expand(-1, -1, -1, 1, 3)
                 deepest_excess = excess.gather(3, index).squeeze(3); deepest_local = local.gather(3, index).squeeze(3)
                 face = F.one_hot(deepest_excess.argmax(-1), 3).float()*torch.where(deepest_local >= 0, 1., -1.)
-                normal = torch.matmul(rot[:, None], face[..., None]).squeeze(-1)                # out of b, toward a
+                normal = torch.matmul(rot_[:, None], face[..., None]).squeeze(-1)                # out of b, toward a
                 # Shock propagation: a body resting (transitively) on the support/floor is not pushed down.
-                near = pair & (inside > -.003)
+                near = pair_ & (inside > -.003)
                 above = (near & (normal[..., 1] > .7)) | (near & (normal[..., 1] < -.7)).transpose(1, 2)   # a sits on b
-                for _ in range(4): grounded = grounded | (above & grounded[:, None, :]).any(2)
-                a_on_b = ((normal[..., 1] > .7) & grounded[:, None, :] & dynamic[:, :, None])[..., None]
-                b_on_a = ((normal[..., 1] < -.7) & grounded[:, :, None] & dynamic[:, None, :])[..., None]
-                part_a = torch.where(a_on_b, 1., torch.where(b_on_a, 0., share_a))
-                part_b = torch.where(b_on_a, 1., torch.where(a_on_b, 0., share_b))
+                for _ in range(4): g_ = g_ | (above & g_[:, None, :]).any(2)
+                a_on_b = ((normal[..., 1] > .7) & g_[:, None, :] & dyn_[:, :, None])[..., None]
+                b_on_a = ((normal[..., 1] < -.7) & g_[:, :, None] & dyn_[:, None, :])[..., None]
+                part_a = torch.where(a_on_b, 1., torch.where(b_on_a, 0., share_a_))
+                part_b = torch.where(b_on_a, 1., torch.where(a_on_b, 0., share_b_))
                 other = depth.transpose(1, 2)
-                chosen = (depth > 0) & ((depth > other) | ((depth == other) & first))
+                chosen = (depth > 0) & ((depth > other) | ((depth == other) & first_))
                 push = normal*(depth*chosen)[..., None]
-                pos = pos+_combine(torch.cat((push*part_a, -(push*part_b).transpose(1, 2)), 2))
-                contact = torch.gather(points[:, :, None].expand(-1, -1, count, -1, -1), 3, index).squeeze(3)
-                speed_a = vel[:, :, None]+torch.cross(ang[:, :, None].expand_as(contact), contact-pos[:, :, None], dim=-1)
-                speed_b = vel[:, None, :]+torch.cross(ang[:, None, :].expand_as(contact), contact-pos[:, None, :], dim=-1)
+                p_ = p_+_combine(torch.cat((push*part_a, -(push*part_b).transpose(1, 2)), 2))
+                contact = torch.gather(points[:, :, None].expand(-1, -1, len(idx), -1, -1), 3, index).squeeze(3)
+                speed_a = v_[:, :, None]+torch.cross(w_[:, :, None].expand_as(contact), contact-p_[:, :, None], dim=-1)
+                speed_b = v_[:, None, :]+torch.cross(w_[:, None, :].expand_as(contact), contact-p_[:, None, :], dim=-1)
                 # Never remove more than the centres' own closing speed (a spinning box's corner is much faster).
-                closing = torch.maximum(((speed_a-speed_b)*normal).sum(-1), ((vel[:, :, None]-vel[:, None, :])*normal).sum(-1))
+                closing = torch.maximum(((speed_a-speed_b)*normal).sum(-1), ((v_[:, :, None]-v_[:, None, :])*normal).sum(-1))
                 stop = normal*(closing.clamp_max(0)*(chosen & (depth > vel_slop)))[..., None]
-                vel = vel+_combine(torch.cat((-stop*part_a, (stop*part_b).transpose(1, 2)), 2))
+                v_ = v_+_combine(torch.cat((-stop*part_a, (stop*part_b).transpose(1, 2)), 2))
+                pos, vel, grounded = put(pos, p_), put(vel, v_), put(grounded, g_)
+                overlapping = bool((depth > 1e-6).any())
+            # Nothing was lifted and nothing overlaps (beyond float noise, < 1 um): further iterations change nothing.
+            if not overlapping and float((pos-before).abs().max()) <= 1e-6: break
         pos, vel, ang, _ = ground(pos, vel, ang)
         # Sleep: slow + supported -> zero velocity; pose snaps back if it barely changed.
         corners = pos[:, :, None]+offsets
-        _, top, lateral, _, _ = _support_corner_depth(corners, context)
+        _, top, lateral, _, _ = _support_corner_depth(corners, context, frame)
         on_floor = (corners[..., 1].abs() < .003).any(-1)
         supported = (enabled & (lateral > 0) & (top.abs() < .003)).any(-1) | on_floor
         # Rest must not be a fixed point where physics says the object slides: on an enabled support
         # tilted beyond the friction angle (Bullet multiplies the two coefficients) nothing sleeps.
         slope = (1-support_normal[..., 1].square()).clamp_min(0).sqrt()/support_normal[..., 1].clamp_min(1e-3)   # [B,1] tan(tilt)
         slipping = enabled[:, :, 0] & (slope > .9*props[..., 4]*context[:, 8, None]) & ~on_floor
-        if count > 1:
-            near = (_pair_corner_sdf(pos[:, :, None]+samples, pos, rot, half).abs() < .003).any(-1) & pair
-            supported = supported | near.any(2) | near.any(1)
-        asleep = dynamic & supported & ~slipping & (vel.norm(dim=-1) < sleep_lin) & (ang.norm(dim=-1) < sleep_ang)
+        # Sleep only what gravity cannot topple: the COM must be over the contact patch (a box leaning on
+        # an edge or balanced on a corner starts slowly and must be left to fall).  On the support the patch
+        # is hull(corners on the top plane) ∩ footprint, on the floor the hull of the corners on it; an
+        # object resting on another object keeps the old rule (26 sample points cannot resolve that patch).
+        tol = .005
+        _, com_top, _, _, _ = _support_corner_depth(pos[..., None, :], context, frame)
+        foot = pos+up*(com_top/support_normal[..., 1:2].clamp_min(.1))           # vertically below the COM, on the top plane
+        over = _support_corner_depth(foot[..., None, :], context, frame)[2][..., 0] > -.003
+        stable = (balanced(offsets, enabled & (top.abs() < tol)) & over & supported) | balanced(offsets, corners[..., 1].abs() < tol)
+        idx = close(pos).any(0).any(-1).nonzero().squeeze(-1) if count > 1 else ()
+        if len(idx) > 1:
+            take, take2, put = selectors(idx)
+            p_ = take(pos)
+            near = (_pair_corner_sdf(p_[:, :, None]+take(samples), p_, take(rot), take(half)).abs() < .003).any(-1) & take2(pair)
+            near = near.any(2) | near.any(1)
+            supported = put(supported, take(supported) | near); stable = put(stable, take(stable) | near)
+        # Outside the trained gravity range (2-15 m/s2) the residual velocity error grows with g: widen the sleep band.
+        heavy = (context[:, 3]/15).clamp_min(1)[:, None]
+        asleep = dynamic & supported & stable & ~slipping & (vel.norm(dim=-1) < sleep_lin*heavy) & (ang.norm(dim=-1) < sleep_ang*heavy)
         vel = torch.where(asleep[..., None], torch.zeros_like(vel), vel)
         ang = torch.where(asleep[..., None], torch.zeros_like(ang), ang)
         previous_quat = normalize_q(prev[..., 3:7])

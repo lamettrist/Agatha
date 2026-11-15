@@ -31,15 +31,21 @@ import argparse
 import glob
 import hashlib
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-for _p in (str(ROOT), str(Path(__file__).resolve().parent)):
-    if _p not in sys.path: sys.path.insert(0, _p)
+# AGATHA_CODE_ROOT=<dir containing an `agatha` package> pins the model / projection code to another checkout
+# (e.g. `git archive HEAD agatha | tar -x -C <dir>`) while the working tree is being edited.
+CODE_ROOT = Path(os.environ.get('AGATHA_CODE_ROOT') or ROOT).resolve()
+for _p in (str(Path(__file__).resolve().parent), str(CODE_ROOT)):
+    if _p in sys.path: sys.path.remove(_p)
+    sys.path.insert(0, _p)
 import numpy as np
 import torch
+import agatha.contact_gnn, agatha.dynamics    # noqa: E401  bind the package from CODE_ROOT before eval_contact re-inserts the repo root
 import eval_contact as ev                       # metric primitives are reused, the file is not modified
 from prepare_external_data import MOVED_FAR_M, NOTE, STEP, TIP_COS
 
@@ -261,6 +267,8 @@ def markdown(result: dict) -> str:
     lines = ['# External-data evaluation (APPROXIMATE)', '', f'> **{BANNER}**', '',
              f"New model: `{result['checkpoints']['new']}` (epoch {result['new_model'].get('epoch')}, file written {result['checkpoints']['new_mtime']}, sha256 {result['checkpoints']['new_sha256'][:12]}); old model: `{result['checkpoints']['old']}`. "
              'Autoregressive rollouts from the first converted frame, never teacher-forced. Licences: `DATA_LICENSES.md`.', '',
+             f"Model / projection code: `{result['code']['agatha_package']}/contact_gnn.py` sha256 {result['code']['contact_gnn_py_sha256'][:12]} "
+             '(the `*_projected` rows depend on `contact_gnn.project` in exactly this version).', '',
              'Engines:'] + [f'- `{k}`: {v}' for k, v in ENGINE_INFO.items()] + ['', 'Subsets:'] + [f'- `{k}`: {v}' for k, v in SUBSETS.items()] + ['',
              'Columns: position error (m) at 0.5 s / 1 s / the last frame ("rest pos", all objects) and at the last frame for the objects that are '
              'at rest in the ground truth ("settled"); tipped / moved-far accuracy with (TP/FP/FN/TN), `maj` = accuracy of always predicting the majority class; '
@@ -339,6 +347,9 @@ def main(argv=None):
     result = dict(approximate=True, note=BANNER, conversion_note=NOTE, generated=time.strftime('%Y-%m-%d %H:%M:%S'),
                   checkpoints=dict(new=str(new_path), old=str(args.old), new_sha256=hashlib.sha256(Path(new_path).read_bytes()).hexdigest(),
                                    new_mtime=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(Path(new_path).stat().st_mtime))),
+                  code=dict(agatha_package=str(Path(contact_gnn.__file__).resolve().parent),
+                            contact_gnn_py_sha256=hashlib.sha256(Path(contact_gnn.__file__).read_bytes()).hexdigest(),
+                            note='new_projected / old_mlp_projected depend on contact_gnn.project in exactly this file version'),
                   new_model=dict(config=checkpoint.get('config'), epoch=checkpoint.get('epoch')),
                   engines=ENGINE_INFO, subsets=SUBSETS, datasets={}, notes=NOTES)
     for name in names:

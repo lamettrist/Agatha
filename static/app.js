@@ -119,15 +119,15 @@ function renderMetrics(metrics){
   const v2=metrics?.contact_v2;
   if(v2&&typeof v2==='object'){
     const engines=['old','new_raw','new_projected'],get=(...path)=>engines.map(e=>pick(v2,e,...path));
-    const rows=[];
+    const rows=[],capped=get('all','mean_penetration_capped_50mm_m').some(v=>typeof v==='number'&&Number.isFinite(v));
     for(const [key,label] of [['0.5s','0.5 s'],['1s','1 s'],['2s','2 s']])for(const regime of ['gentle','chaotic'])rows.push([`Position error @ ${label} · ${regime}`,'m',get(regime,'pos_err_m',key)]);
     rows.push(['Orientation error @ 2 s · gentle','deg',get('gentle','ori_err_deg_2s')],['Orientation error @ 2 s · chaotic','deg',get('chaotic','ori_err_deg_2s')],
-      ['Fell / didn’t-fall accuracy','%',get('all','fell_accuracy'),100,true],['Mean penetration depth','mm',get('all','mean_penetration_m'),1000],['Rest drift','mm/s',get('all','rest_drift_mps'),1000]);
+      ['Fell / didn’t-fall accuracy','%',get('all','fell_accuracy'),100,true],capped?['Mean penetration depth (capped at 50 mm)','mm',get('all','mean_penetration_capped_50mm_m'),1000]:['Mean penetration depth','mm',get('all','mean_penetration_m'),1000],['Rest drift','mm/s',get('all','rest_drift_mps'),1000]);
     body.replaceChildren(metricsTable(['Old MLP','New (model only)','New + projection'],rows));
     const decision=v2.ship_decision||{},n=pick(v2,'old','all','n_episodes')??pick(v2,'new_projected','all','n_episodes'),total=pick(v2,'dataset','n_episodes'),gentle=pick(v2,'old','gentle','n_episodes'),chaotic=pick(v2,'old','chaotic','n_episodes'),seconds=pick(v2,'dataset','rollout_seconds');
     const shipped=typeof v2.shipped==='boolean'?(v2.shipped?`Shipped as default: ${decision.primary_variant==='new_raw'?'new Contact GNN (model only)':'new Contact GNN + projection'}.`:'Shipped as default: old MLP (Contact GNN is selectable as option C).'):typeof decision.ship==='boolean'?`Ship gate ${decision.ship?'passed':'not passed'}.`:'';
     const alone=typeof decision.model_alone_passes==='boolean'?` The learned model alone ${decision.model_alone_passes?'also passes':'does not pass'} the ship gate.`:'';
-    caption.textContent=`${shipped?shipped+' ':''}“Projection” is a non-learned contact fix applied after every step; “model only” is the learned network alone.${alone} Held-out synthetic PyBullet scenes, n = ${n??DASH} episodes${total&&total!==n?` (default-physics subset of ${total} test episodes)`:''}${gentle!=null&&chaotic!=null?`: ${gentle} gentle / ${chaotic} chaotic`:''}; autoregressive${seconds?` ${seconds} s`:''} rollouts, never teacher-forced. Lower is better except accuracy; best per row highlighted. Not a guarantee on real photos.`;
+    caption.textContent=`${shipped?shipped+' ':''}“Projection” is a non-learned contact fix applied after every step; “model only” is the learned network alone.${alone} Held-out synthetic PyBullet scenes, n = ${n??DASH} episodes${total&&total!==n?` (${pick(v2,'dataset','subset')==='live_physics'?'default-physics ':''}subset of ${total} test episodes)`:''}${gentle!=null&&chaotic!=null?`: ${gentle} gentle / ${chaotic} chaotic`:''}; autoregressive${seconds?` ${seconds} s`:''} rollouts, never teacher-forced. Lower is better except accuracy; best per row highlighted. Not a guarantee on real photos.`;
     $('model-metrics-tag').textContent='HELD-OUT · SYNTHETIC';card.hidden=false;return;
   }
   const legacy=metrics?.mean_position_error_m;

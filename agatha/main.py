@@ -120,7 +120,7 @@ METRICS_PATH=ROOT/'models/metrics.json'
 def metrics():
     """Held-out evaluation numbers written by the training/eval scripts (read-only)."""
     import json
-    try: return json.loads(METRICS_PATH.read_text())
+    try: return json.loads(METRICS_PATH.read_text(),parse_constant=lambda _: None)  # NaN/Infinity -> null (JSONResponse rejects them)
     except FileNotFoundError: raise HTTPException(404,'models/metrics.json not found: train or evaluate a world model first')
     except ValueError as exc: raise HTTPException(500,f'models/metrics.json is not valid JSON: {exc}')
 
