@@ -36,3 +36,24 @@ async def from_image(image: UploadFile = File(...), table_width_m: float | None 
     try: scene,report=await run_in_threadpool(reconstruct,im,table_width_m)
     except ValueError as exc: raise HTTPException(422,str(exc))
     return store.add(scene,report)
+
+from .schema import Scene, SimulationRequest
+from .physics import simulate
+from .world_model import rollout, compare
+
+@app.post('/api/simulate')
+def run_simulation(request: SimulationRequest):
+    scene=Scene.model_validate(get_record(request.scene_id)['scene'])
+    result={'scene_id':request.scene_id,'physics':None,'learned':None,'error':None,'warnings':[]}
+    try:
+        if request.engine in ('physics','both'):
+            result['physics']=simulate(scene,request.actions,request.duration,request.fps)
+        if request.engine in ('learned','both'):
+            try: result['learned']=rollout(scene,request.actions,round(request.duration*request.fps),request.fps)
+            except (FileNotFoundError,RuntimeError) as exc:
+                if request.engine=='learned': raise HTTPException(503,str(exc))
+                result['warnings'].append(f'Learned model unavailable: {exc}')
+        if result['physics'] and result['learned']:
+            result['error']=compare(result['physics'],result['learned'])
+    except ValueError as exc: raise HTTPException(422,str(exc))
+    return result

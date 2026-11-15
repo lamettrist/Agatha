@@ -1,0 +1,30 @@
+{
+  "evaluation_seed": 90731,
+  "held_out_scenes": 50,
+  "mean_position_error_m": {
+    "0.5": 0.0714421367986619,
+    "1.0": 0.12062019978529237,
+    "2.0": 0.23266332819719315
+  },
+  "fell_agreement": 0.9336734693877551,
+  "evaluated_objects": 196,
+  "physics_fell_count": 18,
+  "learned_fell_count": 21,
+  "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos.",
+  "training_seconds": 17.647673970088363,
+  "epochs": 40,
+  "best_epoch": 26,
+  "validation_loss": 0.0295743215829134,
+  "parameters": 79181,
+  "training_seed": 42,
+  "dataset": {
+    "seed": 2026,
+    "scenes": 500,
+    "scene_transitions": 30000,
+    "object_transitions": 114840,
+    "seconds": 39.55812717229128,
+    "step_s": 0.05,
+    "action_encoding": "Actions at t=0 encoded in post-action velocities, masses, membership, support tilt and gravity. groups index complete scene/action recipes in transitions_cases.json."
+  },
+  "architecture": "81 -> 192 -> 192 -> 128 -> 13 SiLU MLP; free-flight residual, 3 nearest neighbors"
+}

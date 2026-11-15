@@ -6,5 +6,6 @@ __pycache__/
 data/*
 !data/.gitkeep
 models/transitions.npz
+models/transitions_cases.json
 models/vision/
 *.log
