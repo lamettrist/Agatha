@@ -131,3 +131,38 @@ def test_supplementary_kinds_build_and_leave_the_default_mix_alone(tmp_path):
     assert g._ACTIVE_WEIGHTS is None
     default = g.generate(tmp_path/'default', **kwargs)
     assert default['kind_weights'] == g.KIND_WEIGHTS and set(load(tmp_path/'default', 'train')['kind']) <= set(g.KIND_WEIGHTS)
+
+def test_tilt_kinds_land_flat_or_stay_leaned_and_leave_the_other_mixes_alone(tmp_path):
+    assert set(g.TILT_MIX) == set(g.TILT_KINDS) and g.MIXES['tilt'] is g.TILT_MIX
+    assert not set(g.TILT_KINDS) & (set(g.KIND_WEIGHTS) | set(g.HARD_MIX) | set(g.EXTRA_KINDS))
+    assert np.allclose(g.tilt_from_flat_deg([[0, 0, 0, 1], g.q_axis((1, 0, 0), np.radians(30)), g.q_axis((0, 0, 1), np.radians(100))]),
+                       [0, 30, 10], atol=1e-6)
+    flat = {k: [] for k in g.TILT_KINDS}
+    for kind in g.TILT_KINDS:
+        for i in range(6):
+            case = g.make_case(np.random.default_rng([6, i]), N, kind)
+            episode = g.simulate_case(case, steps=80, max_objects=N)
+            assert episode is not None and episode['kind'] == kind and episode['mask'].any()
+            assert not case['actions'] and episode['init_penetration'] < 1e-3
+            assert np.all(episode['context'][4:7] == 0) and abs(episode['context'][3]-9.81) < 1e-4
+            dynamic = episode['mask'] & (episode['props'][:, 5] < .5)
+            tilt = g.tilt_from_flat_deg(episode['states'][:, :, 3:7])
+            flat[kind].append(bool((tilt[-1][dynamic] < 1).all()))
+            if kind == 'tilt_release': assert tilt[0][dynamic].max() > .2
+            if kind == 'settle_wobble':
+                assert .9 < tilt[0][dynamic].max() < 15.01                       # starts 1-15 deg from flat ...
+                first = np.flatnonzero(dynamic)[0]
+                assert tilt[-1][first] < 1 and episode['rest'][-1][first]        # ... and rocks back onto its face
+            if kind == 'lean_stable':
+                assert g.stays_leaned(episode) and tilt[-1][1] > 10 and episode['rest'][-1][1]
+                assert episode['props'][0, 3] >= 1.5 and episode['props'][1, 3] <= .5   # heavy block, light plank
+    assert np.mean(flat['tilt_release']) >= .8 and np.mean(flat['settle_wobble']) >= .8 and not any(flat['lean_stable'])
+    # the default and hard mixes never draw a tilt kind, and the same seed still gives the same default recipe
+    for weights in (None, g.HARD_MIX):
+        for i in range(40):
+            assert g.make_case(np.random.default_rng([8, i]), N, kind_weights=weights)['kind'] not in g.TILT_KINDS
+    kwargs = dict(train_episodes=12, val_episodes=2, test_episodes=2, steps=T, max_objects=N, workers=2, shard_size=12,
+                  seed=5, chunk=4, quiet=True)
+    meta = g.generate(tmp_path/'tilt', kind_weights=g.TILT_MIX, **kwargs)
+    assert meta['kind_weights'] == g.TILT_MIX and set(load(tmp_path/'tilt', 'train')['kind']) <= set(g.TILT_KINDS)
+    assert 'tilt_release' in meta['ranges'] and g._ACTIVE_WEIGHTS is None

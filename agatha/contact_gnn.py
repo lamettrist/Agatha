@@ -23,6 +23,8 @@ CONTEXT_DIM = 10
 SUPPORT_THICKNESS = .08
 MAX_LIN, MAX_ANG = 20., 40.
 NODE_DIM = 29
+# project() landing rules (non-learned): defaults chosen with scripts/eval_landing.py, see docs/landing-fix.md
+SETTLE_DEG, TIP_GAIN = 6., 1.
 EDGE_DIM = 91
 
 _SIGNS: dict[Any, torch.Tensor] = {}
@@ -379,7 +381,8 @@ def _combine(contributions: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_lin: float = .03, sleep_ang: float = .25,
-            slop: float = 0., vel_slop: float = .003, stable_margin: float = .003) -> torch.Tensor:
+            slop: float = 0., vel_slop: float = .003, landing: bool = True, settle_deg: float = SETTLE_DEG,
+            tip: float = TIP_GAIN, tip_ang: float | None = None, flat_deg: float = .1, stable_margin: float = .003) -> torch.Tensor:
     """Non-learned clean-up of a predicted state: remove penetrations, then put slow supported objects to sleep.
 
     Positions are corrected for any depth > slop.  Velocities are only edited for depths > vel_slop
@@ -389,6 +392,25 @@ def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_
     their friction angle are never put to sleep (they must be able to start sliding from rest), and
     neither are objects whose centre of mass is more than stable_margin outside their contact patch.
     A swept test keeps an object that was above the support from ending below its top in one step.
+
+    Landing rules (``landing=True``; ``landing=False`` is the projection exactly as it was before them).
+    They only concern a box that touches one surface (the support top or the floor), no other box, and
+    whose nearest face is more than ``flat_deg`` away from parallel to that surface ("tilted"):
+      * it is never put to sleep and its pose is never frozen: a convex box on one plane is only at
+        rest with a face flat on it;
+      * tip (``tip`` > 0): if it turns slower than ``tip_ang`` (default: ``sleep_ang``) and its centre of mass is over the
+        surface, its angular velocity about the contact gains at least ``tip`` x one step of the
+        rigid-body tipping acceleration g*lever/(I+r^2) in the direction gravity turns it (towards the
+        nearest face within 5 mm of balance), and its pose turns about the contact by half of that
+        gain x the step (stopping where its next corner meets the surface), so it cannot hang frozen
+        on an edge or corner;
+      * settle (``settle_deg`` > 0): if gravity turns it towards its nearest face (rotating flat lowers
+        its centre of mass), the flat pose is stable, and it is either slow (the sleep thresholds) and
+        tilted by less than ``settle_deg`` or this step's tip rotation reaches the face, it is rotated
+        flat about its contact edge/corner and put to sleep there (no energy gain; it moves by the
+        lever arm about the contact only).
+    Boxes that are flat, stacked, leaning on another box, static or on a slope they slide on are
+    handled exactly as before.
     """
     with _no_autocast(pred_state):
         props, context = _pad_inputs(props, context)
@@ -542,18 +564,114 @@ def project(prev_state, pred_state, props, context, mask, iters: int = 4, sleep_
         over = _support_corner_depth(foot[..., None, :], context, frame)[2][..., 0] > -.003
         stable = (balanced(offsets, enabled & (top.abs() < tol)) & over & supported) | balanced(offsets, corners[..., 1].abs() < tol)
         idx = close(pos).any(0).any(-1).nonzero().squeeze(-1) if count > 1 else ()
+        touching = torch.zeros_like(supported)                                   # within 1 cm of another box (landing rules)
         if len(idx) > 1:
             take, take2, put = selectors(idx)
             p_ = take(pos)
-            near = (_pair_corner_sdf(p_[:, :, None]+take(samples), p_, take(rot), take(half)).abs() < .003).any(-1) & take2(pair)
+            gap = _pair_corner_sdf(p_[:, :, None]+take(samples), p_, take(rot), take(half))
+            near = (gap.abs() < .003).any(-1) & take2(pair)
             near = near.any(2) | near.any(1)
             supported = put(supported, take(supported) | near); stable = put(stable, take(stable) | near)
+            beside = (gap < .01).any(-1) & take2(pair)
+            touching = put(touching, beside.any(2) | beside.any(1))
         # Outside the trained gravity range (2-15 m/s2) the residual velocity error grows with g: widen the sleep band.
         heavy = (context[:, 3]/15).clamp_min(1)[:, None]
-        asleep = dynamic & supported & stable & ~slipping & (vel.norm(dim=-1) < sleep_lin*heavy) & (ang.norm(dim=-1) < sleep_ang*heavy)
+        slow = (vel.norm(dim=-1) < sleep_lin*heavy) & (ang.norm(dim=-1) < sleep_ang*heavy)
+        asleep = dynamic & supported & stable & ~slipping & slow
+        previous_quat = normalize_q(prev[..., 3:7])
+        if tip_ang is None: tip_ang = sleep_ang          # tip only what is slow enough to be a sleep candidate
+        if landing:
+            # ---- landing rules: a box alone on one surface whose nearest face is not flat on it (see the docstring)
+            on_top = enabled & (lateral > 0) & (top.abs() < .003)                           # corners on the support top
+            below = (enabled & (lateral > 0) & (top >= .003) & (top < SUPPORT_THICKNESS)).any(-1)   # side contact with the slab
+            floor_corner = corners[..., 1].abs() < .003
+            # the contact polygon is spanned by box corners only while the whole box is over the support (an
+            # overhanging box also bears on the table edge: old rules)
+            inboard = (lateral > 0).all(-1)
+            alone = dynamic & ~touching & ~below & ((on_top.any(-1) & inboard & ~on_floor) | (on_floor & ~on_top.any(-1)))
+            normal = torch.where(on_floor[..., None], up, support_normal.expand(-1, count, -1))
+            align = (rot*normal[..., :, None]).sum(-2)                                      # normal . each body axis
+            axis = F.one_hot(align.abs().argmax(-1), 3).to(align.dtype)
+            face = (rot*axis[..., None, :]).sum(-1)*(align*axis).sum(-1, keepdim=True).sign()   # nearest face normal (world)
+            lean = torch.cross(face, normal, dim=-1)
+            sine = lean.norm(dim=-1)
+            # joint_gnn re-compiles this function from source with extra keywords (see joint_gnn._contact_functions;
+            # the signature must keep ending in stable_margin).  A jointed body is held by its joint as well as by
+            # the surface, so the single-surface landing rules never apply to it.
+            jointed_pairs, articulation = locals().get('_exclude'), locals().get('_articulation')
+            if jointed_pairs is not None: alone = alone & ~(jointed_pairs.any(-1) | jointed_pairs.any(-2))
+            if articulation is not None: alone = alone & (articulation < 0)
+            tilted = alone & (sine > float(np.sin(np.radians(flat_deg))))
+            if bool(tilted.any()):
+                contact = torch.where(on_floor[..., None], floor_corner, on_top)
+                height = torch.where(on_floor[..., None], corners[..., 1], -top)            # of each corner above its surface
+                seat = torch.where(contact, height, torch.full_like(height, float('inf'))).amin(-1)
+                # contact corners: the lowest ones, in a band well below the rise of the tilted face (so a slightly
+                # tilted box pivots on its low edge/corner, never on the middle of its face)
+                band = (.25*sine*props[..., :3].amin(-1)).clamp(1e-5, 1e-3)
+                lowest = (contact & (height <= (seat+band)[..., None])).float()
+                pivot = (lowest[..., None]*offsets).sum(2)/lowest.sum(-1, keepdim=True).clamp_min(1)   # contact point - COM
+                arm = -pivot                                                                # COM relative to the contact
+                turn = lean/sine.clamp_min(1e-9)[..., None]                                 # axis that turns the face flat
+                returning = (torch.cross(turn, arm, dim=-1)*up).sum(-1) < 0                 # turning flat lowers the COM
+                # Tipping: one step of rigid-body rotation about the contact under gravity, as a lower bound.
+                kick = torch.zeros_like(tilted); extra = torch.zeros_like(ang); angle = torch.asin(sine.clamp_max(1.))
+                if tip > 0:
+                    lever_vec = torch.cross(up, arm, dim=-1)                                # gravity torque = g * (up x arm)
+                    lever = lever_vec.norm(dim=-1)
+                    # within 5 mm of balance the direction is noise: fall towards the nearest face
+                    about = torch.where((lever > .005)[..., None], lever_vec/lever.clamp_min(1e-9)[..., None], turn)
+                    local = _mm(about[..., None, :], rot).squeeze(-2)                       # tipping axis in the box frame
+                    gyration = (local.square()*(size2.sum(-1, keepdim=True)-size2)).sum(-1)/12
+                    radial = (arm.square().sum(-1)-(arm*about).sum(-1).square()).clamp_min(0)
+                    gain = tip*context[:, 3, None]*lever.clamp_min(.005)/(gyration+radial).clamp_min(1e-6)*STEP
+                    kick = (tilted & ~slipping & (over | on_floor) & (ang.norm(dim=-1) < tip_ang*heavy)
+                            & (vel.norm(dim=-1) < sleep_lin*heavy+tip_ang*heavy*arm.norm(dim=-1)))
+                    target = (prev[..., 10:13]*about).sum(-1).clamp_min(0)+gain
+                    extra = ((target-(ang*about).sum(-1)).clamp_min(0)*kick)[..., None]*about
+                    # the turn ends (inelastically) where the next corner meets the surface
+                    drop = -(torch.cross(about[..., None, :].expand_as(offsets), offsets+arm[..., None, :], dim=-1)*normal[..., None, :]).sum(-1)
+                    room = torch.where((drop > 1e-9) & (lowest < .5), height.clamp_min(0)/drop.clamp_min(1e-9), torch.full_like(drop, float('inf'))).amin(-1)
+                    extra = extra*(room/(extra.norm(dim=-1)*(STEP/2)).clamp_min(1e-12)).clamp_max(1.)[..., None]
+                    kick = kick & (extra.norm(dim=-1) > 0)
+                # Settle: slow and nearly flat, or this step's tipping reaches the face -> land flat on it, at rest.
+                snap = torch.zeros_like(tilted)
+                reaches = kick & ((extra*turn).sum(-1)*STEP/2 >= angle)
+                candidate = tilted & ~slipping & returning & (((slow | kick) & (sine < float(np.sin(np.radians(settle_deg))))) | reaches)
+                if bool(candidate.any()):
+                    spin_quat = rotvec_to_quat(turn*angle[..., None])
+                    spin = rotation(spin_quat)
+                    flat_offsets = _mm(offsets, spin.transpose(-1, -2))
+                    flat_pos = pos+pivot-_mm(pivot[..., None, :], spin.transpose(-1, -2)).squeeze(-2)
+                    flat_corners = flat_pos[:, :, None]+flat_offsets
+                    flat_top = _support_corner_depth(flat_corners, context, frame)[1]
+                    flat_height = torch.where(on_floor[..., None], flat_corners[..., 1], -flat_top)
+                    flat_pos = flat_pos+normal*(seat-flat_height.amin(-1)).nan_to_num(0., 0., 0.)[..., None]   # re-seat
+                    foot_top = _support_corner_depth(flat_pos[..., None, :], context, frame)[1]
+                    flat_foot = flat_pos+up*(foot_top/support_normal[..., 1:2].clamp_min(.1))
+                    flat_over = _support_corner_depth(flat_foot[..., None, :], context, frame)[2][..., 0] > -.003
+                    steady = balanced(flat_offsets, flat_height <= flat_height.amin(-1, keepdim=True)+.001) & (flat_over | on_floor)
+                    snap = candidate & steady & ((flat_pos-pos)[..., 1] <= 1e-5)
+                    pos = torch.where(snap[..., None], flat_pos, pos)
+                    quat = torch.where(snap[..., None], normalize_q(quat_mul(spin_quat, quat)), quat)
+                    vel = torch.where(snap[..., None], torch.zeros_like(vel), vel)
+                    ang = torch.where(snap[..., None], torch.zeros_like(ang), ang)
+                asleep = asleep & ~(tilted & ~snap)
+                kick = kick & ~snap
+                if bool(kick.any()):
+                    # the gained angular velocity acts over the step: turn the pose about the contact by half of it
+                    step_quat = rotvec_to_quat(extra*(STEP/2))
+                    moved = pos+pivot-_mm(pivot[..., None, :], rotation(step_quat).transpose(-1, -2)).squeeze(-2)
+                    pos = torch.where(kick[..., None], moved, pos)
+                    quat = torch.where(kick[..., None], normalize_q(quat_mul(step_quat, quat)), quat)
+                    turned = _mm(offsets, rotation(step_quat).transpose(-1, -2))+moved[:, :, None]   # corners after the turn
+                    _, turned_top, turned_lateral, turned_exit, _ = _support_corner_depth(turned, context, frame)
+                    sunk = torch.where(on_floor[..., None], -turned[..., 1], turned_top*(turned_exit & (turned_top < .06)))
+                    pos = torch.where(kick[..., None], pos+normal*sunk.amax(-1).clamp_min(0)[..., None], pos)   # never turned into the surface
+                    ang = torch.where(kick[..., None], ang+extra, ang)
+                    vel = torch.where(kick[..., None], vel+torch.cross(extra, arm, dim=-1), vel)
         vel = torch.where(asleep[..., None], torch.zeros_like(vel), vel)
         ang = torch.where(asleep[..., None], torch.zeros_like(ang), ang)
-        previous_quat = normalize_q(prev[..., 3:7])
         still = asleep & ((pos-prev[..., :3]).norm(dim=-1) < .002) & ((quat*previous_quat).sum(-1).abs() > float(np.cos(np.radians(.5))))
         pos = torch.where(still[..., None], prev[..., :3], pos)
         quat = torch.where(still[..., None], previous_quat, quat)

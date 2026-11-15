@@ -400,3 +400,103 @@ def test_project_review_regressions():
     # a tall box standing under the table (2 cm below the slab) does not penetrate the support
     state, props, context, mask = make([dict(size=(.1, .65, .1), pos=(0, .325, 0))])
     assert penetration_depths(state, props, context, mask)['support'].item() == 0
+
+
+# ---- landing rules of project(): settle / tip of a box alone on one surface (docs/landing-fix.md)
+def _euler_quat(*deg):
+    from agatha.dynamics import euler_quaternion
+    return euler_quaternion(torch.tensor([[math.radians(v) for v in deg]]))[0]
+
+def _face_tilt_deg(quat, normal=(0., 1., 0.)):
+    from agatha.dynamics import rotation
+    return math.degrees(math.acos(min(1., float((rotation(quat[None])[0].T@torch.tensor(normal)).abs().max()))))
+
+def _resting(size, quat, x=0., z=0., h=.75):
+    """Position of a box with this orientation whose lowest corner is on the (level) support."""
+    from agatha.dynamics import rotation
+    return (x, h+float((rotation(quat[None])[0, 1].abs()*torch.tensor(size)/2).sum()), z)
+
+def test_landing_settles_a_slightly_tilted_box_flat():
+    size = (.1, .06, .14); quat = _euler_quat(3, 20, 2)
+    state, props, context, mask = make([dict(size=size, pos=_resting(size, quat), quat=quat)])
+    old = project(state, state, props, context, mask, landing=False)
+    assert torch.equal(old, state) and _face_tilt_deg(old[0, 0, 3:7]) > 2.5            # the bug: slept and frozen crooked
+    out = project(state, state, props, context, mask)
+    assert _face_tilt_deg(out[0, 0, 3:7]) < .01 and out[0, 0, 7:].abs().max() == 0
+    low = box_corners(out, props)[0, 0, :, 1]
+    assert low.min().item() == pytest.approx(.75, abs=1e-5) and (low < .7501).sum() == 4   # seated on its face
+    assert out[0, 0, 1] <= state[0, 0, 1]+1e-6                                              # no potential energy gained
+    assert (out[0, 0, [0, 2]]-state[0, 0, [0, 2]]).norm() < .5*max(size)*math.sin(math.radians(4))   # moved by the lever arm only
+    assert torch.equal(project(out, out, props, context, mask), out)                        # and now it is an ordinary resting box
+    # switched off: never slept while tilted, but not moved either
+    kept = project(state, state, props, context, mask, settle_deg=0., tip=0.)
+    assert torch.equal(kept, state)
+    # fast (a real rocking motion): left to the model
+    fast = state.clone(); fast[0, 0, 10] = 2.
+    assert torch.equal(project(fast, fast, props, context, mask)[..., 3:7], fast[..., 3:7])
+
+@pytest.mark.parametrize('size,degrees,face_axis', [((.1, .2, .1), 20, 1), ((.06, .25, .06), 40, 0), ((.2, .04, .15), 55, 1), ((.03, .2, .15), 30, 0), ((.1, .1, .1), 44, None)])
+def test_landing_tips_a_box_frozen_on_an_edge(size, degrees, face_axis):
+    """A box at rest on an edge cannot stay there: even if the model predicts no motion at all (the worst case of
+    its motion-onset weakness), the non-learned tip alone lands it on the face gravity picks."""
+    quat = _euler_quat(0, 30, degrees)
+    state, props, context, mask = make([dict(size=size, pos=_resting(size, quat), quat=quat)])
+    assert torch.allclose(project(state, state, props, context, mask, tip=0., settle_deg=0.), state, atol=1e-6)   # not slept, not moved
+    first = project(state, state, props, context, mask)
+    assert first[0, 0, 10:].norm() > 0 and first[0, 0, 1] <= state[0, 0, 1]+1e-6                       # tipping, COM going down
+    for _ in range(150):
+        frozen = state.clone(); frozen[..., 7:] = 0                                                    # "model": stay exactly here
+        nxt = project(frozen, frozen, props, context, mask)
+        assert max(v.max().item() for v in penetration_depths(nxt, props, context, mask).values()) < 1e-4
+        assert nxt[0, 0, 1] <= state[0, 0, 1]+1e-5
+        state = nxt
+    assert _face_tilt_deg(state[0, 0, 3:7]) < .01 and state[0, 0, 7:].abs().max() == 0
+    if face_axis is not None:
+        from agatha.dynamics import rotation
+        assert int(rotation(state[0, 0, 3:7][None])[0, 1].abs().argmax()) == face_axis
+
+def test_landing_is_relative_to_a_tilted_support():
+    from agatha.dynamics import rotation
+    tilt = (0., 0., .1)                                                # 5.7 deg, below the friction angle: boxes rest on it
+    support = _euler_quat(0, 0, math.degrees(.1)); normal = rotation(support[None])[0, :, 1]
+    size = (.1, .06, .1); quat = cg.quat_mul(support, _euler_quat(3, 0, 2))
+    state, props, context, mask = make([dict(size=size, pos=(0, .9, 0), quat=quat)], tilt=tilt)
+    seated = project(state, state, props, context, mask, landing=False)
+    corners = cg._support_corner_depth(box_corners(seated, props), context)[1]
+    seated[0, 0, :3] += normal*corners.max()                           # put its lowest corner on the tilted top
+    out = project(seated, seated, props, context, mask)
+    assert _face_tilt_deg(out[0, 0, 3:7], normal.tolist()) < .01 and _face_tilt_deg(out[0, 0, 3:7]) > 5   # flat on the slope, not level
+    assert out[0, 0, 7:].abs().max() == 0
+    assert cg._support_corner_depth(box_corners(out, props), context)[1].max().abs() < 1e-4
+    # steeper than the friction angle: it must slide, the landing rules stay out
+    steep = make([dict(size=size, pos=(0, .9, 0), quat=quat)], tilt=(0., 0., .5))[2]
+    assert torch.equal(project(seated, seated, props, steep, mask), project(seated, seated, props, steep, mask, landing=False))
+
+def test_landing_leaves_leaning_stacked_overhanging_and_static_boxes_alone():
+    def same(boxes, **kw):
+        state, props, context, mask = make(boxes, **kw)
+        out = project(state, state, props, context, mask)
+        assert torch.equal(out, project(state, state, props, context, mask, landing=False))
+        return state, out
+    lean = _euler_quat(0, 0, -25); size = (.04, .2, .04)
+    # a box leaning against another box (2 mm from its side): two-surface contact, not snapped, not tipped
+    for static in (True, False):
+        state, out = same([dict(size=size, pos=(.0376, _resting(size, lean)[1], 0), quat=lean),
+                           dict(size=(.1, .2, .1), pos=(.15, .85, 0), static=static)])
+        assert _face_tilt_deg(out[0, 0, 3:7]) == pytest.approx(25, abs=.01)
+    # alone, the same box is tipped
+    state, props, context, mask = make([dict(size=size, pos=(.0376, _resting(size, lean)[1], 0), quat=lean)])
+    assert project(state, state, props, context, mask)[0, 0, 10:].norm() > 0
+    # flat boxes and a stack: bit-identical
+    same([dict(size=(.2, .1, .2), pos=(0, .8, 0)), dict(size=(.1, .1, .1), pos=(0, .9, 0)), dict(size=(.1, .05, .1), pos=(.4, .775, .2))])
+    # a slightly tilted box on top of another one: left to the old rules
+    top = _euler_quat(2, 0, 2)
+    same([dict(size=(.2, .1, .2), pos=(0, .8, 0)), dict(size=(.1, .1, .1), pos=_resting((.1, .1, .1), top, h=.85), quat=top)])
+    # overhanging the table edge (it also bears on the edge), static and tilted, leaning on the table side from the floor
+    tilted = _euler_quat(0, 0, 3)
+    same([dict(size=(.2, .05, .1), pos=_resting((.2, .05, .1), tilted, x=.55), quat=tilted)])
+    same([dict(size=(.1, .1, .1), pos=_resting((.1, .1, .1), _euler_quat(10, 0, 20)), quat=_euler_quat(10, 0, 20), static=True)])
+    # on the floor (no table under it): the same rules with the floor as the surface
+    state, props, context, mask = make([dict(size=(.1, .06, .14), pos=_resting((.1, .06, .14), _euler_quat(3, 0, 2), x=1.5, h=0.), quat=_euler_quat(3, 0, 2))])
+    out = project(state, state, props, context, mask)
+    assert _face_tilt_deg(out[0, 0, 3:7]) < .01 and box_corners(out, props)[0, 0, :, 1].min().item() == pytest.approx(0., abs=1e-5)

@@ -194,7 +194,9 @@ def test_sleep_needs_a_stable_contact_patch():
     assert float(contact_gnn.project(flat, flat, props, context, mask)[0, 0, 7:10].abs().max()) == 0     # resting on a face: sleeps
     t = math.radians(20)
     lean = _box_state((.1, .2, .1), (0, .75+(.1*math.sin(t)+.2*math.cos(t))/2, 0), euler=(0, 0, t), velocity=slow)[0]
-    assert float(contact_gnn.project(lean, lean, props, context, mask)[0, 0, 7]) == pytest.approx(.01)   # on an edge: must keep falling
+    assert float(contact_gnn.project(lean, lean, props, context, mask, landing=False)[0, 0, 7]) == pytest.approx(.01)   # on an edge: must keep falling
+    tipped = contact_gnn.project(lean, lean, props, context, mask)[0, 0]                                 # landing rules: and is tipped back, never slept
+    assert float(tipped[7]) >= .01 and float(tipped[12]) < -.1
     over = flat.clone(); over[..., 0] = .6+.03                                                         # COM past the table edge
     assert float(contact_gnn.project(over, over, props, context, mask)[0, 0, 7]) == pytest.approx(.01)
     edge = flat.clone(); edge[..., 0] = .6-.02                                                         # overhanging, COM still on the table
@@ -232,3 +234,42 @@ def test_downward_push_does_not_tunnel_through_the_table(projected):
         lowest = min(next(o for o in f['objects'] if o['id'] == target)['position'][1] for f in result['frames'])
         assert lowest > scene.support.height, (target, lowest)
         assert result['events']['fell'] == []
+
+# ---- landing: a box released at an angle must end with a face flat on the table (docs/landing-fix.md)
+def _tilt_deg(quaternion) -> float:
+    x, y, z, w = np.asarray(quaternion, float)/np.linalg.norm(quaternion)
+    return float(np.degrees(np.arccos(min(1., max(abs(2*(x*y+z*w)), abs(1-2*(x*x+z*z)), abs(2*(y*z-x*w)))))))
+
+LANDING_CASES = [((.2, .04, .15), (-96, -23, 171), 0.), ((.07, .24, .07), (-94, 148, 138), .1), ((.15, .1, .06), (30, -106, 171), 0.),
+                 ((.3, .03, .2), (-94, -123, 20), .03), ((.1, .1, .1), (20, 0, 35), .05), ((.07, .24, .07), (0, 0, 12), 0.),
+                 ((.2, .035, .14), (40, 10, -25), .2), ((.12, .12, .12), (45, 0, 30), .0)]
+
+@needs_checkpoint
+@pytest.mark.parametrize('size,euler,lift', LANDING_CASES)
+def test_tilted_box_lands_flat(projected, size, euler, lift):
+    import torch
+    from agatha.dynamics import euler_quaternion, rotation
+    angles = [float(np.radians(v)) for v in euler]
+    low = float((rotation(euler_quaternion(torch.tensor([angles])))[0, 1].abs()*torch.tensor(size)/2).sum())
+    scene = Scene.model_validate(dict(objects=[dict(id='box', label='box', size=size, position=[0, .75+lift+low, 0], rotation_euler=angles)]))
+    result = rollout(scene, [], steps=80, fps=20, model=projected)
+    assert finite(result)
+    final = result['final_state']['objects'][0]
+    assert _tilt_deg(final['quaternion']) < 1., (_tilt_deg(final['quaternion']), [round(_tilt_deg(f['objects'][0]['quaternion']), 1) for f in result['frames'][::10]])
+    assert min(abs(final['position'][1]-.75-s/2) for s in size) < .002          # seated on the table on one of its faces
+    assert max(map(abs, final['velocity']+final['angular_velocity'])) == 0
+    assert max(max_penetration(scene, [], result).values()) < 1e-3
+
+@needs_checkpoint
+def test_landing_rules_leave_the_resting_demo_desk_bit_identical(projected):
+    """Flat resting boxes never enter the landing rules: every step equals the projection without them."""
+    import torch
+    scene = demo_scene()
+    prepared, states, g, tilt = prepare(scene, [])
+    state, props, context, mask = contact_gnn.scene_tensors(prepared, states, g, tilt)
+    with torch.inference_mode():
+        for _ in range(30):
+            raw = projected.model(state, props, context, mask)
+            new = contact_gnn.project(state, raw, props, context, mask)
+            assert torch.equal(new, contact_gnn.project(state, raw, props, context, mask, landing=False))
+            state = new

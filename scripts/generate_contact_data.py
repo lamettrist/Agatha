@@ -81,6 +81,30 @@ EXTRA_RANGES = dict(
     bouncy_toss="object restitution 0.3-0.7, support restitution 0.3-0.7; upward tosses 1.5-4.5 m/s from the table or "
                 "airborne starts 0.05-0.45 m above it with 0.3-2.5 m/s lateral velocity",
 )
+# 'Rotate and release' / settling kinds (data/v2_tilt). Like EXTRA_KINDS they are NOT part of KIND_WEIGHTS or HARD_MIX
+# (zero weight in the default and hard mixes: both outputs stay bit-identical); select them with --mix tilt.
+TILT_KINDS = ("tilt_release", "tilt_release_multi", "settle_wobble", "lean_stable")
+TILT_MIX = dict(tilt_release=.45, tilt_release_multi=.20, settle_wobble=.25, lean_stable=.10)
+MIXES["tilt"] = TILT_MIX
+LIVE_FRACTION_TILT = .7
+TILT_RANGES = dict(
+    tilt_release="1-3 boxes (60/25/15%) released from rest (12%: |w|<=0.5 rad/s, |v|<=0.1 m/s): uniformly random 3D "
+                 "orientation 0-0.3 m above the table (30%) or with the lowest corner touching it (15%); one rotation of "
+                 "5-85 deg about a horizontal axis from a face-down pose, touching or 0-0.3 m up (25%); balanced on an edge "
+                 "with the COM 1-12 deg (15%: 0.3-1 deg) either side of the edge (18%); balanced on a corner with the body "
+                 "diagonal 1.5-15 deg (15%: 0.5-1.5 deg) off vertical (12%). Sizes: cube / bottle / flat slab / book / "
+                 "laptop, phone, mug, box / generic; friction 0.5 for 60%",
+    tilt_release_multi="1-4 resting boxes / stacks (10% static), then 1-2 tilted boxes released onto one of them (45%) "
+                       "or 3-50 mm beside it, mostly tipping towards it (55%); lift 0 (35%) or 0-0.2 m",
+    settle_wobble="1-2 boxes on a face tilted 1-15 deg (at most 0.75 x the balance angle) about a bottom edge (70%) or "
+                  "any horizontal axis (30%), touching the table (20%: up to 2 cm above), zero angular velocity "
+                  "(30%: <=0.4 rad/s); resting distractors in 35%",
+    lean_stable="plank 0.01-0.05 x 0.12-0.30 x 0.05-0.22 leaning 8-40 deg from vertical against the side of a static "
+                "(50%) or 1.5-3 kg block, or 25-70 deg from vertical over its top edge; friction 0.6-1.0; recipes are "
+                "rejection-sampled with a full rollout so that the plank stays leaned (see stays_leaned)",
+    tilt_kinds_common="~70% live default physics; rolling friction is always 0 (non-live episodes randomize the other "
+                      "four unobservable parameters); no sprinkled API actions (no tilt, gravity, set_mass, remove)",
+)
 _ACTIVE_WEIGHTS = None          # set by generate() before the worker pool forks
 
 RANGES = dict(
@@ -640,11 +664,167 @@ def s_bouncy_toss(b: Builder):
             lateral = float(rng.uniform(.1, .9)); theta = float(rng.uniform(-math.pi, math.pi))
             b.push(o, (math.cos(theta)*lateral, 1., math.sin(theta)*lateral), speed=float(rng.uniform(1.5, 4.5)))
 
+# ----------------------------------------------------------------------------- rotate-and-release / settling scenarios
+_FACES = ((0., 0., 0., 1.), q_axis((1, 0, 0), math.pi/2), q_axis((0, 0, 1), math.pi/2))   # which body axis points up
+
+def q_between(u, v):
+    """Shortest rotation taking unit vector u to unit vector v."""
+    axis = np.cross(u, v); n = float(np.linalg.norm(axis))
+    if n < 1e-9: return (0., 0., 0., 1.)
+    return q_axis(axis, math.atan2(n, float(np.dot(u, v))))
+
+def tilt_from_flat_deg(q):
+    """Angle (deg) between world up and the nearest body axis; 0 = a face is flat on a level surface. q [...,4] xyzw."""
+    q = np.asarray(q, float); x, y, z, w = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
+    up = np.stack([2*(x*y+w*z), 1-2*(x*x+z*z), 2*(y*z-w*x)], -1)
+    return np.degrees(np.arccos(np.clip(np.abs(up).max(-1)/np.maximum(np.linalg.norm(up, axis=-1), 1e-12), 0, 1)))
+
+def stays_leaned(episode: dict, slot: int = 1, others=(0,)) -> bool:
+    """The object in `slot` ends >10 deg from flat, did not travel, and is motionless over the last 3 s."""
+    s = episode["states"]; t1 = min(20, len(s)-1)
+    tilt = tilt_from_flat_deg(s[:, slot, 3:7])
+    still = (np.linalg.norm(s[-1, slot, :3]-s[t1, slot, :3]) < .005 and abs(tilt[-1]-tilt[t1]) < 2.
+             and np.linalg.norm(s[-1, slot, 7:10]) < REST_LIN and np.linalg.norm(s[-1, slot, 10:13]) < REST_ANG)
+    held = all(np.linalg.norm(s[-1, i, :3]-s[0, i, :3]) < .005 for i in others)
+    return bool(tilt[-1] > 10. and still and held and np.linalg.norm(s[-1, slot, :3]-s[0, slot, :3]) < .03
+                and abs(tilt[-1]-tilt[0]) < 10.)
+
+def _tilt_size(b: Builder):
+    """(size, mass or None): cubes, bottle-like boxes, flat slabs, books, other desk items, generic boxes."""
+    rng = b.rng; style = str(rng.choice(["cube", "bottle", "slab", "book", "item", "any"], p=[.2, .2, .15, .15, .15, .15]))
+    if style == "cube": return b.size("cube"), None
+    if style == "bottle":
+        return np.array([rng.uniform(.05, .10), rng.uniform(.16, .30), rng.uniform(.05, .10)]), float(rng.uniform(.3, 1.))
+    if style == "slab": return b.size("flat"), None
+    if style == "any": return b.size("any"), None
+    name = "book" if style == "book" else str(rng.choice(["laptop", "phone", "mug", "box"]))
+    base, m = DESK_ITEMS[name]
+    return np.asarray(base)*rng.uniform(.85, 1.15, 3), m*float(rng.uniform(.7, 1.4))
+
+def _tilt_q(b: Builder, size, mode: str, toward=None):
+    """Orientation for a tilted box. Modes: random | axis | edge | corner | wobble_edge | wobble_any."""
+    rng = b.rng
+    if mode == "random":
+        q = rng.normal(size=4); return tuple(q/np.linalg.norm(q))
+    q0 = qmul(q_yaw(float(rng.uniform(-math.pi, math.pi))), _FACES[int(rng.integers(3))])
+    rot = rotmat(q0); up = int(np.argmax(np.abs(rot[1]))); horizontal = [i for i in range(3) if i != up]
+    balance = [math.atan2(size[i], size[up]) for i in horizontal]   # COM above the bottom edge at this tilt
+    phi = float(rng.uniform(-math.pi, math.pi))
+    if mode == "axis":
+        if toward is not None: phi = math.atan2(-toward[0], toward[1])   # the top tips towards `toward` (x, z)
+        return qmul(q_axis((math.cos(phi), 0, math.sin(phi)), math.radians(float(rng.uniform(5, 85)))), q0)
+    if mode in ("edge", "wobble_edge"):
+        k = int(rng.integers(2)); edge = rot[:, horizontal[k]]*float(rng.choice([-1., 1.]))
+        if mode == "edge":
+            off = math.radians(float(rng.uniform(.3, 1.)) if rng.random() < .15 else float(rng.uniform(1., 12.)))
+            angle = float(np.clip(balance[1-k]+off*float(rng.choice([-1., 1.])), math.radians(1.), math.radians(89.)))
+        else: angle = min(math.radians(float(rng.uniform(1., 15.))), .75*balance[1-k])
+        return qmul(q_axis(edge, angle), q0)
+    if mode == "wobble_any":
+        angle = min(math.radians(float(rng.uniform(1., 15.))), .75*min(balance))
+        return qmul(q_axis((math.cos(phi), 0, math.sin(phi)), angle), q0)
+    corner = rot@(np.asarray(size)/2*rng.choice([-1., 1.], 3))          # mode == "corner": body diagonal near vertical
+    q = qmul(q_between(corner/np.linalg.norm(corner), np.array([0., -1., 0.])), q0)
+    off = math.radians(float(rng.uniform(.5, 1.5)) if rng.random() < .15 else float(rng.uniform(1.5, 15.)))
+    return qmul(q_axis((math.cos(phi), 0, math.sin(phi)), off), q)
+
+def _tilt_box(b: Builder, mode: str, toward=None):
+    size, mass = _tilt_size(b)
+    return b.box(size, q=_tilt_q(b, size, mode, toward), mass=mass, friction=.5 if b.rng.random() < .6 else None)
+
+def _nudge(b: Builder, o, p_move=.12, spin=.5, speed=.1):
+    rng = b.rng
+    if rng.random() < p_move:
+        axis = rng.normal(size=3); o["ang"] = axis/np.linalg.norm(axis)*float(rng.uniform(0, spin))
+        if speed and rng.random() < .5: o["lin"] = rng.uniform(-speed, speed, 3)
+
+def s_tilt_release(b: Builder):
+    rng = b.rng
+    for _ in range(int(rng.choice([1, 2, 3], p=[.6, .25, .15]))):
+        for _ in range(25):
+            mode = str(rng.choice(["random", "touch", "axis", "edge", "corner"], p=[.3, .15, .25, .18, .12]))
+            o = _tilt_box(b, "random" if mode == "touch" else mode)
+            if mode == "random" or (mode == "axis" and rng.random() < .5): o["pos"][1] += float(rng.uniform(0., .3))
+            _nudge(b, o)
+            if b.place([o], inset=.06): break
+
+def s_tilt_release_multi(b: Builder):
+    rng = b.rng; b.fill(count(rng, 1, 4), stacks=.35, static=.1)
+    if not b.objs: return
+    resting = list(b.objs)
+    for _ in range(1 if rng.random() < .8 else 2):
+        target = resting[int(rng.integers(len(resting)))]
+        for _ in range(25):
+            if rng.random() < .45:   # released onto the target
+                o = _tilt_box(b, str(rng.choice(["random", "axis", "edge", "corner"], p=[.4, .3, .15, .15])))
+                x = target["pos"][0]+float(rng.uniform(-.9, .9))*target["ext"][0]
+                z = target["pos"][2]+float(rng.uniform(-.9, .9))*target["ext"][2]
+            else:                    # released beside it, mostly tipping towards it
+                theta = float(rng.uniform(-math.pi, math.pi)); c, s = math.cos(theta), math.sin(theta)
+                mode = str(rng.choice(["axis", "random", "edge"], p=[.6, .25, .15]))
+                o = _tilt_box(b, mode, toward=(-c, -s) if rng.random() < .75 else None)
+                lim = target["ext"]+o["ext"]+float(rng.uniform(.005, .05))
+                reach = min(lim[0]/max(abs(c), 1e-6), lim[2]/max(abs(s), 1e-6))
+                x = target["pos"][0]+c*reach; z = target["pos"][2]+s*reach
+            bottom = b.h
+            for other in b.objs:
+                if abs(x-other["pos"][0]) < o["ext"][0]+other["ext"][0]+.004 and abs(z-other["pos"][2]) < o["ext"][2]+other["ext"][2]+.004:
+                    bottom = max(bottom, other["pos"][1]+other["ext"][1])
+            lift = 0. if rng.random() < .35 else float(rng.uniform(0., .2))
+            o["pos"] = np.array([x, bottom+lift+o["ext"][1], z])
+            if abs(x) > b.w/2-.03 or abs(z) > b.d/2-.03 or not b.free([o]): continue
+            _nudge(b, o); b.commit([o]); break
+
+def s_settle_wobble(b: Builder):
+    rng = b.rng
+    for _ in range(1 if rng.random() < .7 else 2):
+        for _ in range(25):
+            o = _tilt_box(b, "wobble_edge" if rng.random() < .7 else "wobble_any")
+            if rng.random() < .2: o["pos"][1] += float(rng.uniform(0., .02))
+            if rng.random() < .3:
+                phi = float(rng.uniform(-math.pi, math.pi))
+                o["ang"] = np.array([math.cos(phi), 0, math.sin(phi)])*float(rng.uniform(0., .4))
+            if b.place([o], inset=.05): break
+    if b.objs and rng.random() < .35: b.fill(len(b.objs)+int(rng.integers(1, 3)), stacks=.2, static=0.)
+
+def s_lean_stable(b: Builder):
+    """objs[0] = the block (static or heavy), objs[1] = the plank leaning on it; make_case verifies that it stays."""
+    rng = b.rng; wall = rng.random() < .6
+    lsize = np.array([rng.uniform(.01, .05), rng.uniform(.12, .30), rng.uniform(.05, .22)])
+    phi = math.radians(float(rng.uniform(8, 40)) if wall else float(rng.uniform(25, 70)))   # lean from vertical
+    c, s = math.cos(phi), math.sin(phi); t, length = lsize[0], lsize[1]
+    corner = lambda sx, sy: np.array([sx*t/2*c-sy*length/2*s, sx*t/2*s+sy*length/2*c])     # plank cross-section
+    low = min(corner(sx, sy)[1] for sx in (-1, 1) for sy in (-1, 1))
+    left = min(corner(sx, sy)[0] for sx in (-1, 1) for sy in (-1, 1))
+    if wall:    # the plank's top corner touches the block's side face (x = 0)
+        touch = corner(-1, 1)[1]-low; height = touch+float(rng.uniform(.01, .1))
+        if height > .35: return
+        x = -left+.0005
+    else:       # the plank's lower face lies over the block's top edge at (0, height)
+        height = float(rng.uniform(.04, .2)); along = height/c
+        if not .35*length < along < .9*length: return
+        x = height*s/c+.0005-corner(-1, -1)[0]
+    width = float(rng.uniform(.08, .3)); depth = float(np.clip(lsize[2]*rng.uniform(1., 1.8), .08, .35))
+    block = b.box(np.array([width, height, depth]), q=(0., 0., 0., 1.), mass=float(rng.uniform(1.5, 3.)),
+                  friction=float(rng.uniform(.6, 1.)), static=rng.random() < .5)
+    plank = b.box(lsize, q=q_axis((0, 0, 1), phi), mass=float(rng.uniform(.05, .5)), friction=float(rng.uniform(.6, 1.)))
+    block["pos"] = np.array([-width/2, height/2, 0.])
+    plank["pos"] = np.array([x, -low, float(rng.uniform(-.5, .5))*max(depth-lsize[2], 0.)])
+    yaw = q_yaw(float(rng.uniform(-math.pi, math.pi))); rot = rotmat(yaw)
+    for o in (block, plank):
+        o["pos"] = rot@o["pos"]; o["q"] = tuple(float(v) for v in qmul(yaw, o["q"]))
+        o["ext"] = np.abs(rotmat(o["q"]))@o["size"]/2
+    if not b.place([block, plank], inset=.03): return
+    block["supports"] = True
+    if rng.random() < .3: b.fill(len(b.objs)+int(rng.integers(1, 3)), stacks=0., static=0.)
+
 SCENARIOS = dict(rest=s_rest, gentle_push=s_gentle_push, slide_stop=s_slide_stop, desk=s_desk, topple=s_topple,
                  edge_fall=s_edge_fall, stack_collapse=s_stack_collapse, collision=s_collision, drop=s_drop,
                  toss=s_toss, tilt_slide=s_tilt_slide, noclip=s_noclip,
                  domino_chain=s_domino_chain, hard_push=s_hard_push, edge_marginal=s_edge_marginal,
-                 stack_push=s_stack_push, tilt_api=s_tilt_api, bouncy_toss=s_bouncy_toss)
+                 stack_push=s_stack_push, tilt_api=s_tilt_api, bouncy_toss=s_bouncy_toss,
+                 tilt_release=s_tilt_release, tilt_release_multi=s_tilt_release_multi, settle_wobble=s_settle_wobble,
+                 lean_stable=s_lean_stable)
 
 
 def sprinkle(b: Builder, kind: str):
@@ -710,16 +890,28 @@ def make_case(rng: np.random.Generator, max_objects: int = 8, kind: str | None =
         scene, actions = random_case(rng)
         return dict(kind=kind, scene=scene, actions=actions, dynamics=None, extra={o.id: (0., 0., 0.) for o in scene.objects},
                     velocities={}, corotate=False, support_friction=.5, support_restitution=0., live=True)
-    live = rng.random() < (LIVE_FRACTION_EXTRA if kind in EXTRA_KINDS else LIVE_FRACTION_NON_LEGACY)
+    live = rng.random() < (LIVE_FRACTION_TILT if kind in TILT_KINDS else
+                           LIVE_FRACTION_EXTRA if kind in EXTRA_KINDS else LIVE_FRACTION_NON_LEGACY)
     if kind == "bouncy_toss": live = False
-    for _ in range(40 if kind in EXTRA_KINDS else 20):
+    fallback = None
+    for _ in range(40 if kind in EXTRA_KINDS or kind in TILT_KINDS else 20):
         table = (1.2, .8, .75) if kind == "desk" and rng.random() < .7 else None
         if kind in DESK_TABLE_KINDS and rng.random() < .6: table = (1.2, .8, .75)
         b = Builder(rng, live, table)
+        # Bullet's rolling friction holds a box balanced on an edge or corner (measured: every box that ended tilted on
+        # the bare table had rolling_friction > 0), which is exactly the outcome these kinds must not teach.
+        if kind in TILT_KINDS: b.randomized["rolling_friction"] = False
         SCENARIOS[kind](b)
         if b.objs and len(b.objs)+(b.alias is not None) <= max_objects:
+            if kind in TILT_KINDS:   # no sprinkled API actions: plain 'rotate, release, let it settle' scenes
+                case = finalize(b, kind)
+                if kind != "lean_stable": return case
+                episode = simulate_case(case, 80, max_objects)   # deterministic: the stored rollout is this one
+                if episode is not None and stays_leaned(episode): return case
+                fallback = case; continue
             sprinkle(b, kind)
             return finalize(b, kind)
+    if fallback is not None: return fallback
     raise RuntimeError(f"could not build a {kind} scene")
 
 
@@ -942,7 +1134,8 @@ def generate(out: Path, train_episodes: int = 25000, val_episodes: int = 1000, t
         episodes=len(everything), transitions=len(everything)*steps,
         seconds=seconds, simulation_seconds=simulated, workers=workers, episodes_per_second=total/max(simulated, 1e-9),
         kind_weights=KIND_WEIGHTS if kind_weights is None else kind_weights, hard_kinds=list(HARD_KINDS),
-        ranges=RANGES if kind_weights is None else dict(RANGES, **EXTRA_RANGES),
+        ranges=RANGES if kind_weights is None else dict(RANGES, **EXTRA_RANGES, **(
+            TILT_RANGES if set(kind_weights) & set(TILT_KINDS) else {})),
         rest_definition=f"in contact and |v|<{REST_LIN} m/s and |w|<{REST_ANG} rad/s",
         contact_definition=f"Bullet contact point with distance <= {CONTACT_DISTANCE} m in the last substep (frame 0: closest-point query); a static desk duplicating the support counts as support",
         chaotic_definition="any dynamic object fell or tipped (summarize semantics), or moved > 0.30 m from its start at any frame, or a contact between two dynamic objects began after t=0 with relative COM speed > 0.5 m/s",
@@ -965,7 +1158,8 @@ def main():
     parser.add_argument("--shard-size", type=int, default=500)
     parser.add_argument("--seed", type=int, default=2027)
     parser.add_argument("--mix", choices=sorted(MIXES), default="default",
-                        help="'hard' = only the supplementary kinds " + ", ".join(EXTRA_KINDS))
+                        help="'hard' = only the supplementary kinds " + ", ".join(EXTRA_KINDS)
+                             + "; 'tilt' = only the rotate-and-release kinds " + ", ".join(TILT_KINDS))
     parser.add_argument("--kind-weights", type=json.loads, default=None,
                         help='JSON {kind: weight} overriding --mix, e.g. \'{"hard_push": 1, "edge_marginal": 1}\'')
     args = parser.parse_args()
