@@ -1,4 +1,4 @@
-# Agatha / Foresight
+# Agatha / PhysTensor
 
 Photo → approximate 3D boxes → poke the scene → compare PyBullet with a genuine small learned world model → ask an OpenAI agent grounded in Exa product specs.
 
