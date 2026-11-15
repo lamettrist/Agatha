@@ -56,7 +56,8 @@ def contact_metrics(world, tolerance=.005):
     p.performCollisionDetection(physicsClientId=world.client)
     dynamic=[o for o in world.scene.objects if not o.is_static]
     floats=[]; penetrations=[]; distances={}
-    alias=set(world._support_alias_ids())
+    s=world.scene.support
+    alias={o.id for o in world.scene.objects if o.is_static and o.size[0]>=s.size[0]*.95 and o.size[2]>=s.size[1]*.95 and abs(o.position[1]+o.size[1]/2-s.height)<.03}
     for obj in dynamic:
         target=obj.supported_by or 'support'
         targets=[target]+list(alias) if target=='support' else [target]

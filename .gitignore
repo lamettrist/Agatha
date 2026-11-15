@@ -9,3 +9,6 @@ models/transitions.npz
 models/transitions_cases.json
 models/vision/
 *.log
+.venv-train/
+models/runs/
+logs/

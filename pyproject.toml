@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 dependencies = ["fastapi>=0.115,<1", "pydantic>=2.8,<3", "uvicorn>=0.30", "python-multipart", "python-dotenv", "numpy>=1.26", "pillow", "pybullet==3.2.7", "torch>=2.2,<3", "ultralytics>=8.3,<8.5", "transformers>=4.45,<5", "openai>=2,<4", "exa-py>=2,<3", "requests"]
 [project.optional-dependencies]
 test = ["pytest", "httpx"]
-reconstruction = ["scipy>=1.12", "trimesh>=4.4", "open3d>=0.19,<0.21", "einops>=0.7", "omegaconf>=2.3", "timm>=1,<2"]
+reconstruction = ["scipy>=1.12", "trimesh>=4.4", "open3d==0.19.0", "einops>=0.7", "omegaconf>=2.3", "timm>=1,<2", "coacd>=1.0", "imageio", "pycolmap>=4.0", "usd-core"]
 [tool.setuptools.packages.find]
 include = ["agatha*"]
 [tool.pytest.ini_options]

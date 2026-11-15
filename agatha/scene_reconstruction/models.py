@@ -87,8 +87,29 @@ class Registry:
             result=processor.post_process_grounded_object_detection(output,inputs.input_ids,
                 threshold=float(os.getenv('RECON_DETECTION_THRESHOLD','.22')),text_threshold=.20,
                 target_sizes=[image.size[::-1]])[0]
-            return [dict(label=canonical(label),detector_label=label,bbox=box.tolist(),confidence=float(score))
+            detections=[dict(label=canonical(label),detector_label=label,bbox=box.tolist(),confidence=float(score))
                     for box,score,label in zip(result['boxes'].cpu(),result['scores'].cpu(),result['text_labels'])]
+            # Re-query ambiguous screens and nested accessories using actual model evidence.
+            additions=[]
+            for det in list(detections):
+                if det['label'] not in ('monitor','jacket'):continue
+                x1,y1,x2,y2=det['bbox'];pad=12
+                box=(max(0,int(x1-pad)),max(0,int(y1-pad)),min(image.width,int(x2+pad)),min(image.height,int(y2+pad)))
+                crop=image.crop(box);query='laptop.' if det['label']=='monitor' else 'gloves.'
+                inputs2=processor(images=crop,text=query,return_tensors='pt').to(model.device)
+                output2=model(**inputs2)
+                result2=processor.post_process_grounded_object_detection(output2,inputs2.input_ids,
+                    threshold=.35 if det['label']=='monitor' else .15,text_threshold=.10,target_sizes=[crop.size[::-1]])[0]
+                if not len(result2['scores']):continue
+                idx=int(result2['scores'].argmax());bbox=result2['boxes'][idx].cpu().numpy()+np.array([box[0],box[1],box[0],box[1]])
+                if det['label']=='monitor':
+                    det['original_detector_label']=det['detector_label'];det['label']='laptop'
+                    det['detector_label']='partially visible laptop';det['bbox']=bbox.tolist()
+                    det['confidence']=float(result2['scores'][idx]);det['refinement']='single_class_crop_query'
+                else:
+                    additions.append(dict(label='gloves',detector_label='gloves',bbox=bbox.tolist(),
+                        confidence=float(result2['scores'][idx]),refinement='single_class_crop_query'))
+            return [*detections,*additions]
 
     @torch.inference_mode()
     def segment(self,image,detections):
@@ -107,6 +128,11 @@ class Registry:
                     masks.append(dict(**det,mask=mask[0].numpy().astype(bool),mask_score=float(score[0]),mask_source='sam2_box'))
             w,h=image.size; side=int(os.getenv('RECON_AUTO_GRID','12'))
             points=[[[float(x),float(y)]] for y in np.linspace(h*.04,h*.96,side) for x in np.linspace(w*.04,w*.96,side)]
+            # Extra points in cloth/bag regions recover small separate accessories.
+            for det in detections:
+                if det['label'] not in ('jacket','backpack','bag'):continue
+                x1,y1,x2,y2=det['bbox']
+                points.extend([[[float(x),float(y)]] for y in np.linspace(y1,y2,7)[1:-1] for x in np.linspace(x1,x2,7)[1:-1]])
             for start in range(0,len(points),32):
                 batch=points[start:start+32]
                 inputs=processor(images=image,input_points=[batch],input_labels=[[[1]]*len(batch)],return_tensors='pt').to(model.device)
@@ -115,7 +141,7 @@ class Registry:
                 decoded=processor.post_process_masks(output.pred_masks.cpu(),inputs['original_sizes'].cpu())[0]
                 for candidates,scores in zip(decoded,output.iou_scores[0].cpu()):
                     idx=int(scores.argmax()); mask=candidates[idx].numpy().astype(bool)
-                    if float(scores[idx])<.88 or mask.sum()<80 or mask.mean()>.45: continue
+                    if float(scores[idx])<.82 or mask.sum()<80 or mask.mean()>.45: continue
                     yy,xx=np.where(mask)
                     masks.append(dict(label='unknown object',bbox=[float(xx.min()),float(yy.min()),float(xx.max()+1),float(yy.max()+1)],
                         confidence=float(scores[idx]),mask=mask,mask_score=float(scores[idx]),mask_source='sam2_automatic'))

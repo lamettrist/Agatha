@@ -113,6 +113,17 @@ def add_leaderboard_entry(request: LeaderboardRequest):
     try: return store.add_score(request.name,request.scene_id,request.chaos_score)
     except ValueError as exc: raise HTTPException(422,str(exc))
 
+from .storage import ROOT
+METRICS_PATH=ROOT/'models/metrics.json'
+
+@app.get('/api/metrics')
+def metrics():
+    """Held-out evaluation numbers written by the training/eval scripts (read-only)."""
+    import json
+    try: return json.loads(METRICS_PATH.read_text())
+    except FileNotFoundError: raise HTTPException(404,'models/metrics.json not found: train or evaluate a world model first')
+    except ValueError as exc: raise HTTPException(500,f'models/metrics.json is not valid JSON: {exc}')
+
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from .storage import ROOT
@@ -160,4 +171,35 @@ def edit_scene_object(scene_id: str, object_id: str, edit: ObjectEdit):
                        'reprojection_mean_iou':None,'depth_mae_m':None,'coverage_nonplane_pixels':None}
     report['edited_from']=scene_id;report['acceptance_pass']=False
     report['warnings']=[*report.get('warnings',[]),'Manually edited scene; original image metrics no longer apply.']
+    return store.add(scene,report)
+
+
+@app.post('/api/scenes/video')
+async def from_video(file: UploadFile = File(...), table_width_m: float | None = Form(None)):
+    from .scene_reconstruction.video import reconstruct_video
+    from starlette.concurrency import run_in_threadpool
+    import tempfile
+    from pathlib import Path
+    data=await file.read(100*1024*1024+1)
+    if len(data)>100*1024*1024: raise HTTPException(413,'Video exceeds 100 MB')
+    with tempfile.TemporaryDirectory(prefix='agatha-video-') as tmp:
+        path=Path(tmp)/'input.mp4';path.write_bytes(data)
+        try: scene,report=await run_in_threadpool(reconstruct_video,path,table_width_m)
+        except (ValueError,RuntimeError) as exc: raise HTTPException(422,str(exc))
+    return store.add(scene,report)
+
+@app.post('/api/scenes/scan')
+async def from_scan(file: UploadFile = File(...)):
+    from .scene_reconstruction.scan import reconstruct_scan
+    from starlette.concurrency import run_in_threadpool
+    import tempfile
+    from pathlib import Path
+    suffix=Path(file.filename or '').suffix.lower()
+    if suffix not in ('.ply','.obj','.usdz'):raise HTTPException(422,'Upload PLY, OBJ or USDZ')
+    data=await file.read(100*1024*1024+1)
+    if len(data)>100*1024*1024:raise HTTPException(413,'Scan exceeds 100 MB')
+    with tempfile.TemporaryDirectory(prefix='agatha-scan-') as tmp:
+        path=Path(tmp)/('input'+suffix);path.write_bytes(data)
+        try:scene,report=await run_in_threadpool(reconstruct_scan,path)
+        except (ValueError,RuntimeError,ImportError) as exc:raise HTTPException(422,str(exc))
     return store.add(scene,report)

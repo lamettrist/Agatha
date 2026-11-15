@@ -109,6 +109,6 @@ class SimulationRequest(StrictModel):
     scene_id: str
     actions: list[Action] = Field(default_factory=list, max_length=20)
     engine: Literal["physics", "learned", "both"] = "both"
-    learned_architecture: Literal['default','mlp_multistep','graph_impulse'] = 'default'
+    learned_architecture: Literal['default','mlp_multistep','graph_impulse','contact_gnn'] = 'default'
     duration: float = Field(default=3, ge=0.1, le=5)
     fps: Literal[10, 20, 30] = 30

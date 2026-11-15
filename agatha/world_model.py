@@ -5,6 +5,7 @@ all contact/friction/rotation corrections. No collision solver in learned rollou
 """
 from functools import lru_cache
 import math
+import os
 from pathlib import Path
 from typing import Any
 import numpy as np
@@ -96,9 +97,48 @@ class DynamicsMLP(nn.Module):
                                nn.Linear(192,128),nn.SiLU(),nn.Linear(128,13))
     def forward(self,x): return self.net(x)
 
+CONTACT_PROJECTION_ENV='AGATHA_CONTACT_PROJECTION'
+
+def contact_projection_default() -> bool:
+    """Projection is on unless AGATHA_CONTACT_PROJECTION is 0/false/off/no (read at call time)."""
+    return os.environ.get(CONTACT_PROJECTION_ENV,'1').strip().lower() not in ('0','false','off','no')
+
+def contact_approximations(scene: Scene) -> list[str]:
+    """Where a valid Scene leaves what contact_gnn was trained on (boxes, 0.08 m slab, default damping)."""
+    from .contact_gnn import SUPPORT_THICKNESS
+    notes=[]; objects=scene.objects
+    if any(o.shape!='box' or o.collision is not None for o in objects):
+        notes.append('non-box shapes/collision parts are approximated by their bounding box')
+    if abs(scene.support.thickness-SUPPORT_THICKNESS)>1e-6:
+        notes.append(f'the support slab is modelled {SUPPORT_THICKNESS:g} m thick (scene says {scene.support.thickness:g} m)')
+    if any(abs(o.linear_damping-.04)>1e-9 or abs(o.angular_damping-.04)>1e-9 for o in objects):
+        notes.append('custom damping is ignored (trained with 0.04)')
+    if any(o.soft_approx for o in objects): notes.append('soft objects are treated as rigid boxes')
+    if any(o.restitution>.6 for o in objects): notes.append('restitution above the trained range is clamped to 0.6')
+    return notes
+
+class ContactGNNAdapter:
+    """contact_gnn checkpoint behind the LearnedModel.step interface; optional non-learned projection."""
+    def __init__(self,checkpoint: dict[str,Any]):
+        from . import contact_gnn
+        self.module=contact_gnn
+        self.model=contact_gnn.build_from_checkpoint(checkpoint)
+    def step(self,scene: Scene,states: np.ndarray,gravity: float,tilt: list[float],projection: bool = True) -> np.ndarray:
+        n=len(states)
+        if not n: return states.copy()
+        state,props,context,mask=self.module.scene_tensors(scene,states,gravity,tilt)
+        # Per-object restitution is a trained input (0-0.6); everything else uses the bounding box.
+        for i,o in enumerate(scene.objects[:n]):
+            if o.restitution: props[0,i,6]=min(o.restitution,.6)
+        with torch.inference_mode():
+            output=self.model(state,props,context,mask)
+            if projection: output=self.module.project(state,output,props,context,mask)
+        return output[0,:n].numpy().astype(np.float32)
+
 class LearnedModel:
-    def __init__(self,path: str | Path = ROOT/'models/world_model.pt'):
+    def __init__(self,path: str | Path = ROOT/'models/world_model.pt',projection: bool | None = None):
         torch.set_num_threads(4)
+        self._projection=projection  # None: follow AGATHA_CONTACT_PROJECTION (default on); contact_gnn only
         path=Path(path)
         if not path.exists(): raise FileNotFoundError('Learned checkpoint missing. Regenerate it with the README training commands; physics remains available.')
         checkpoint=torch.load(path,map_location='cpu',weights_only=True)
@@ -109,14 +149,25 @@ class LearnedModel:
             self.adapter=StateModelAdapter(checkpoint)
             self.model=self.adapter.model
             return
+        if self.kind=='contact_gnn':
+            self.adapter=ContactGNNAdapter(checkpoint)
+            self.model=self.adapter.model
+            return
         self.model=DynamicsMLP(); self.model.load_state_dict(checkpoint['state_dict']); self.model.eval()
         self.xmean=checkpoint['xmean']; self.xstd=checkpoint['xstd']
         self.ymean=checkpoint['ymean']; self.ystd=checkpoint['ystd']
 
+    @property
+    def projection_applied(self) -> bool:
+        """Whether the non-learned contact projection runs after each step (always False for old kinds)."""
+        if self.kind!='contact_gnn': return False
+        return contact_projection_default() if self._projection is None else bool(self._projection)
+
     def step(self,scene: Scene,states: np.ndarray,gravity: float,tilt: list[float]) -> np.ndarray:
         if not len(states): return states.copy()
         if self.adapter is not None:
-            output=self.adapter.step(scene,states,gravity,tilt)
+            if self.kind=='contact_gnn': output=self.adapter.step(scene,states,gravity,tilt,projection=self.projection_applied)
+            else: output=self.adapter.step(scene,states,gravity,tilt)
             if not np.isfinite(output).all(): raise ValueError('Learned model diverged')
             return output
         if not scene.support.collisions_enabled:
@@ -134,9 +185,9 @@ class LearnedModel:
         if not np.isfinite(out).all(): raise ValueError('Learned model diverged')
         return out.astype(np.float32)
 
-@lru_cache(maxsize=3)
+@lru_cache(maxsize=4)
 def load_model(architecture: str = 'default') -> LearnedModel:
-    filenames={'default':'world_model.pt','mlp_multistep':'mlp_multistep.pt','graph_impulse':'graph_impulse.pt'}
+    filenames={'default':'world_model.pt','mlp_multistep':'mlp_multistep.pt','graph_impulse':'graph_impulse.pt','contact_gnn':'contact_gnn.pt'}
     if architecture not in filenames: raise ValueError('Unknown learned architecture')
     try: return LearnedModel(ROOT/'models'/filenames[architecture])
     except FileNotFoundError: raise
@@ -164,6 +215,17 @@ def rollout(scene: Scene, actions: list[Action], steps: int = 60, fps: int = 20,
         s=(1-weight)*a+weight*b
         if len(s): s[:,3:7]/=np.maximum(np.linalg.norm(s[:,3:7],axis=1,keepdims=True),1e-8)
         frames.append(frame(s,prepared,i/fps))
+    if model.kind=='contact_gnn':
+        applied=model.projection_applied
+        notes=contact_approximations(prepared)
+        disclaimer=('Learned contact graph network trained on synthetic PyBullet boxes; '+
+                    ('a non-learned contact projection (push-out along the minimum-overlap axis, clamp to the support plane, sleep of tiny velocities) is applied after each step.'
+                     if applied else 'no projection applied, so objects may interpenetrate or drift.')+
+                    ' Contacts are not reported. Autoregressive error grows with time.'+
+                    (' Approximations: '+'; '.join(notes)+'.' if notes else ''))
+        return dict(engine='learned',**summarize(prepared,frames,tilt=tilt),support_rotation_euler=tilt,support_collisions_enabled=prepared.support.collisions_enabled,
+                    estimated=True,contacts_available=False,model_architecture='contact_gnn',projection_applied=applied,
+                    approximations=notes,disclaimer=disclaimer)
     return dict(engine='learned',**summarize(prepared,frames,tilt=tilt),support_rotation_euler=tilt,support_collisions_enabled=prepared.support.collisions_enabled,
                 estimated=True,contacts_available=False,model_architecture=model.kind,
                 disclaimer=f'Learned {model.kind} prediction, trained on synthetic boxes; contacts are not detected. Autoregressive error grows with time.')

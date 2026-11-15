@@ -9,8 +9,13 @@ from .schema import Scene, Action
 DT = 1 / 240
 
 class World:
-    def __init__(self, scene: Scene):
+    def __init__(self, scene: Scene, dynamics: dict | None = None):
+        """dynamics (optional, default behaviour unchanged) overrides parameters the API
+        cannot express: {'objects': {id: {'restitution','rolling_friction','spinning_friction'}},
+        'support_friction': .5, 'support_restitution': 0.}."""
         self.scene = scene.model_copy(deep=True)
+        dynamics = dynamics or {}
+        overrides = dynamics.get("objects") or {}
         self.client = p.connect(p.DIRECT)
         self.bodies: dict[str, int] = {}
         self.gravity = 9.81
@@ -21,14 +26,18 @@ class World:
         p.setGravity(0, 0, -self.gravity, physicsClientId=c)
         self._box("floor", (20, .1, 20), (0, -.05, 0), 0)
         w, d = scene.support.size
-        self._box("support", (w, scene.support.thickness, d), (0, scene.support.height-scene.support.thickness/2, 0), 0)
+        self._box("support", (w, scene.support.thickness, d), (0, scene.support.height-scene.support.thickness/2, 0), 0,
+                  friction=dynamics.get("support_friction", .5),
+                  restitution=dynamics.get("support_restitution", 0))
         for o in scene.objects:
-            if o.collision is not None or o.shape != 'box':
+            if o.collision is not None or o.shape != 'box' or o.restitution or o.soft_approx or o.linear_damping!=.04 or o.angular_damping!=.04:
                 from .scene_reconstruction.bodies import create_body
-                create_body(self, o)
+                create_body(self, o, overrides.get(o.id))
             else:
+                params = dict(restitution=o.restitution, **{k:v for k,v in overrides.get(o.id, {}).items() if k != 'restitution'})
+                params['restitution'] = overrides.get(o.id, {}).get('restitution', o.restitution)
                 self._box(o.id, o.size, o.position, 0 if o.is_static else o.mass_kg,
-                          euler_to_bullet(o.rotation_euler), o.friction)
+                          euler_to_bullet(o.rotation_euler), o.friction, **params)
 
         if not scene.support.collisions_enabled:
             self._support_collisions(False)
@@ -44,14 +53,48 @@ class World:
                 p.setCollisionFilterGroupMask(self.bodies[id], -1,
                     1 if enabled else 0, -1 if enabled else 0, physicsClientId=self.client)
 
-    def _box(self, name, size, pos, mass, quat=(0,0,0,1), friction=.5):
+    def _support_alias_ids(self) -> list[str]:
+        """Static objects that duplicate the support slab (e.g. the demo 'desk')."""
+        s = self.scene.support
+        return [o.id for o in self.scene.objects if o.is_static
+                and o.size[0] >= s.size[0]*.95 and o.size[2] >= s.size[1]*.95
+                and abs(o.position[1]+o.size[1]/2-s.height) < .03]
+
+    def contact_pairs(self, max_distance: float = 1e-3) -> set[tuple[str, str]]:
+        """Sorted name pairs with a contact point in the most recent substep."""
+        reverse = {v: k for k, v in self.bodies.items()}
+        pairs = set()
+        for cp in p.getContactPoints(physicsClientId=self.client):
+            if cp[8] <= max_distance and cp[1] in reverse and cp[2] in reverse:
+                pairs.add(tuple(sorted((reverse[cp[1]], reverse[cp[2]]))))
+        return pairs
+
+    def contact_flags(self, pairs: set[tuple[str, str]] | None = None,
+                      max_distance: float = 1e-3) -> dict[str, tuple[bool, bool, bool]]:
+        """Per present object: (touching support, touching floor, touching another object).
+
+        A static duplicate of the support counts as the support, not as an object."""
+        pairs = self.contact_pairs(max_distance) if pairs is None else pairs
+        support = {"support", *self._support_alias_ids()}
+        flags = {o.id: [False, False, False] for o in self.scene.objects if o.id in self.bodies}
+        for a, b in pairs:
+            for me, other in ((a, b), (b, a)):
+                if me in flags:
+                    flags[me][0 if other in support else 1 if other == "floor" else 2] = True
+        return {k: tuple(v) for k, v in flags.items()}
+
+    def _box(self, name, size, pos, mass, quat=(0,0,0,1), friction=.5, restitution=0,
+             rolling_friction=None, spinning_friction=None):
         half = (size[0]/2, size[2]/2, size[1]/2)
         shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=half, physicsClientId=self.client)
         b = p.createMultiBody(baseMass=mass, baseCollisionShapeIndex=shape,
                              basePosition=to_bullet(pos), baseOrientation=quat,
                              physicsClientId=self.client)
-        p.changeDynamics(b, -1, lateralFriction=friction, restitution=0,
-                         linearDamping=.04, angularDamping=.04, physicsClientId=self.client)
+        extra = {}
+        if rolling_friction is not None: extra["rollingFriction"] = rolling_friction
+        if spinning_friction is not None: extra["spinningFriction"] = spinning_friction
+        p.changeDynamics(b, -1, lateralFriction=friction, restitution=restitution,
+                         linearDamping=.04, angularDamping=.04, physicsClientId=self.client, **extra)
         self.bodies[name] = b
 
     def apply(self, actions: list[Action]) -> None:
@@ -121,8 +164,8 @@ def summarize(scene: Scene, frames: list[dict], contacts: list[dict] | None = No
             o = initial[state["id"]]
             if o.is_static: continue
             pos = np.asarray(state["position"])
-            local = rot.T @ (pos - [0, scene.support.height-.04, 0])
-            if (not scene.support.collisions_enabled or abs(local[0]) > scene.support.size[0]/2 or abs(local[2]) > scene.support.size[1]/2) and local[1] < .01:
+            local = rot.T @ (pos - [0, scene.support.height-scene.support.thickness/2, 0])
+            if (not scene.support.collisions_enabled or abs(local[0]) > scene.support.size[0]/2 or abs(local[2]) > scene.support.size[1]/2) and local[1] < scene.support.thickness/2-.03:
                 fell.add(o.id)
             r = p.getMatrixFromQuaternion(state["quaternion"])
             if r[4] < math.cos(math.radians(35)):

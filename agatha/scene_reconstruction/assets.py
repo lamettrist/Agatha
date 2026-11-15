@@ -76,7 +76,8 @@ def write_cloud(path,cloud,rgb,valid):
 
 def export_visual(obj,image,inst,camera,camera_pose,path):
     import trimesh
-    mesh=object_mesh(obj)
+    surface=Path(path).parent/(obj.id+'_surface.ply')
+    mesh=trimesh.load_mesh(surface) if surface.exists() else object_mesh(obj)
     points=camera_points(mesh.vertices@rotation(obj.rotation_euler).T+obj.position,camera_pose)
     uv=project(points,camera)/np.array(image.size)
     # Crop the source image and preserve its projection rather than stretching a bbox.

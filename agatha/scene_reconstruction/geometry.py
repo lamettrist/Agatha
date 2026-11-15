@@ -218,3 +218,36 @@ def reference_camera_height(instances,camera,normal):
     result=solve_scale(refs)
     if not refs: raise ValueError('No complete plastic bottle references')
     return result['factor'],result
+
+
+def horizontal_mask_anchor(inst):
+    """Use the front edge midpoint, not the lowest perspective-distorted corner."""
+    mask=inst['mask'];yy,xx=np.where(mask)
+    threshold=float(yy.min()+.70*np.ptp(yy));profile=[]
+    for x in range(int(xx.min()),int(xx.max())+1):
+        rows=np.flatnonzero(mask[:,x])
+        if len(rows) and rows[-1]>threshold:profile.append((x,int(rows[-1])))
+    if len(profile)<5:return mask_anchor(inst)[0]
+    values=np.array(profile);center=float(np.median(values[:,0]))
+    nearby=values[abs(values[:,0]-center)<max(3,.08*np.ptp(values[:,0]))]
+    return [center,float(np.median(nearby[:,1]))]
+
+
+def image_axis_yaw(image,inst,world_position,camera,camera_pose):
+    from .assets import camera_points
+    gray=cv2.cvtColor(np.array(image),cv2.COLOR_RGB2GRAY)
+    edges=cv2.Canny(gray,50,140);edges[~inst['mask']]=0
+    width=inst['bbox'][2]-inst['bbox'][0]
+    lines=cv2.HoughLinesP(edges,1,np.pi/180,threshold=40,minLineLength=max(25,width*.22),maxLineGap=12)
+    slopes=[]
+    if lines is not None:
+        for x1,y1,x2,y2 in lines.reshape(-1,4):
+            if abs(x2-x1)>width*.2 and abs((y2-y1)/(x2-x1))<.5:slopes.append((y2-y1)/(x2-x1))
+    if not slopes:return 0.,None
+    slope=float(np.median(slopes));x,y,z=camera_points(np.array([world_position]),camera_pose)[0]
+    if z<=0:return 0.,None
+    jacobian=np.array([[camera['fx']/z,0,-camera['fx']*x/z**2],[0,camera['fy']/z,-camera['fy']*y/z**2]])
+    projected=jacobian@np.array(camera_pose['world_to_camera'])
+    a=np.array([slope,-1])@projected[:,0];b=np.array([slope,-1])@projected[:,2]
+    yaw=float(np.arctan2(a,b));yaw=(yaw+np.pi/2)%np.pi-np.pi/2
+    return float(np.clip(yaw,-np.pi/3,np.pi/3)),dict(edge_slope=slope,lines=len(slopes))

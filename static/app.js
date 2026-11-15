@@ -73,7 +73,7 @@ async function loadDemo(scenario='desk'){if(busy)return;setBusy(true);try{loadRe
 function actions(){const type=$('action').value,id=$('object').value,amount=Number($('amount').value);if(type==='toss')return[{type:'push',id,direction:[0,1,0],impulse_Ns:amount}];if(type==='set_support_collisions'||type==='enable_support_collisions')return[{type:'set_support_collisions',enabled:type==='enable_support_collisions'}];if(type==='push')return[{type,id,direction:[1,0],impulse_Ns:amount}];if(type==='remove')return[{type,id}];if(type==='set_mass')return[{type,id,kg:amount}];if(type==='tilt_support')return[{type,angle_deg:amount,axis:'z'}];return[{type,g:amount}];}
 async function run(interventions=actions()){
   if(!record||busy)return;if(!$('table-collisions').checked&&!interventions.some(a=>a.type==='set_support_collisions'))interventions=[{type:'set_support_collisions',enabled:false},...interventions];setBusy(true);playing=false;status('Running PyBullet + learned autoregressive rollout…');
-  try{result=await api('/api/simulate',{scene_id:record.scene_id,actions:interventions,engine:'both',learned_architecture:$('architecture').value,duration:3,fps:30});$('model-label').textContent=result.learned?.model_architecture==='graph_impulse'?'Graph · 3 message rounds':result.learned?'MLP · learned dynamics':'Unavailable';$('fell').textContent=result.physics.events.fell.length;$('chaos').textContent=result.physics.chaos_score.toFixed(3);status(`${result.physics.support_collisions_enabled===false?'Table collisions disabled. ':''}Physics fell: ${result.physics.events.fell.join(', ')||'none'}. Learned fell: ${result.learned?.events.fell.join(', ')||'none'}. ${(result.warnings||[]).join(' ')}`);$('timeline').max=result.physics.frames.length-1;startPlayback();}finally{setBusy(false);}
+  try{result=await api('/api/simulate',{scene_id:record.scene_id,actions:interventions,engine:'both',learned_architecture:$('architecture').value,duration:3,fps:30});$('model-label').textContent=modelLabel(result.learned);$('fell').textContent=result.physics.events.fell.length;$('chaos').textContent=result.physics.chaos_score.toFixed(3);status(`${result.physics.support_collisions_enabled===false?'Table collisions disabled. ':''}Physics fell: ${result.physics.events.fell.join(', ')||'none'}. Learned fell: ${result.learned?.events.fell.join(', ')||'none'}. ${(result.warnings||[]).join(' ')}`);$('timeline').max=result.physics.frames.length-1;startPlayback();}finally{setBusy(false);}
 }
 function applyFrame(index){
   currentIndex=index;if(!result)return;const physics=result.physics?.frames[index];if(!physics)return;$('timeline').value=index;$('time').textContent=`${physics.t.toFixed(2)} / ${result.physics.frames.at(-1).t.toFixed(2)} s`;
@@ -92,4 +92,50 @@ $('engine').addEventListener('change',()=>{const engine=$('engine').value;for(co
 $('timeline').addEventListener('input',()=>{playing=false;$('play').textContent='▶';applyFrame(Number($('timeline').value));});$('play').addEventListener('click',()=>{if(playing){playing=false;$('play').textContent='▶';}else if(result&&currentIndex<result.physics.frames.length-1&&currentIndex>0){playing=true;playStart=performance.now()-currentIndex/30*1000;$('play').textContent='Ⅱ';}else startPlayback();});
 $('ask-form').addEventListener('submit',safely(async event=>{event.preventDefault();if(!record)return;$('ask').disabled=true;$('answer').textContent='Agent is reading the scene, looking up properties, and running tools…';$('sources').replaceChildren();try{const data=await api('/api/assistant/query',{scene_id:record.scene_id,question:$('question').value});$('answer').textContent=data.answer+(data.warnings?.length?' '+data.warnings.join(' '):'');for(const source of data.sources){if(!/^https?:\/\//.test(source.url))continue;const a=document.createElement('a');a.href=source.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=`↗ ${source.label} · ${source.mass_kg} kg · ${source.url}`;$('sources').append(a);}$('trace-wrap').hidden=false;$('trace').textContent=JSON.stringify({actions_ran:data.actions_ran,tool_trace:data.tool_trace},null,2);}catch(error){$('answer').textContent=error.message;}finally{$('ask').disabled=false;}}));
 $('score-form').addEventListener('submit',safely(async event=>{event.preventDefault();if(!record||!result?.physics){status('Run physics before submitting a score.');return;}await api('/api/leaderboard',{name:$('name').value,scene_id:record.scene_id,chaos_score:result.physics.chaos_score});await scores();status('Physics score submitted.');}));
+// --- World model before/after card (reads /api/metrics; purely additive, never blocks the demo) ---
+function modelLabel(learned){
+  if(!learned)return'Unavailable';
+  if(learned.model_architecture==='graph_impulse')return'Graph · 3 message rounds';
+  if(learned.model_architecture==='contact_gnn')return'Contact GNN · learned'+(learned.projection_applied===true?' + projection':learned.projection_applied===false?' only (no projection)':'');
+  return'MLP · learned dynamics';
+}
+const DASH='—';
+function sig(value,scale=1){if(typeof value!=='number'||!Number.isFinite(value))return DASH;const v=value*scale;if(v===0)return'0';const text=v.toPrecision(3);return text.includes('e')?String(Number(text)):text;}
+const pick=(object,...path)=>path.reduce((o,key)=>o==null?undefined:o[key],object);
+function el(tag,text,className){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;}
+function metricsTable(columns,rows){
+  // rows: [label, unit, [values], scale, higherIsBetter]
+  const table=el('table'),head=el('tr');head.append(el('th','HELD-OUT METRIC'));for(const c of columns)head.append(el('th',c));table.append(el('thead'));table.tHead.append(head);const body=el('tbody');table.append(body);
+  for(const [label,unit,values,scale=1,higher=false] of rows){
+    const tr=el('tr'),name=el('td',label+' ');name.append(el('small',unit));tr.append(name);
+    const finite=values.map(v=>typeof v==='number'&&Number.isFinite(v)?v:null),present=finite.filter(v=>v!==null);
+    const best=present.length>1?(higher?Math.max(...present):Math.min(...present)):null;
+    finite.forEach(v=>tr.append(el('td',sig(v,scale),v!==null&&v===best?'best':'')));body.append(tr);
+  }
+  return table;
+}
+function renderMetrics(metrics){
+  const card=$('model-metrics'),body=$('model-metrics-body'),caption=$('model-metrics-caption');if(!card||!body||!caption)return;
+  const v2=metrics?.contact_v2;
+  if(v2&&typeof v2==='object'){
+    const engines=['old','new_raw','new_projected'],get=(...path)=>engines.map(e=>pick(v2,e,...path));
+    const rows=[];
+    for(const [key,label] of [['0.5s','0.5 s'],['1s','1 s'],['2s','2 s']])for(const regime of ['gentle','chaotic'])rows.push([`Position error @ ${label} · ${regime}`,'m',get(regime,'pos_err_m',key)]);
+    rows.push(['Orientation error @ 2 s · gentle','deg',get('gentle','ori_err_deg_2s')],['Orientation error @ 2 s · chaotic','deg',get('chaotic','ori_err_deg_2s')],
+      ['Fell / didn’t-fall accuracy','%',get('all','fell_accuracy'),100,true],['Mean penetration depth','mm',get('all','mean_penetration_m'),1000],['Rest drift','mm/s',get('all','rest_drift_mps'),1000]);
+    body.replaceChildren(metricsTable(['Old MLP','New (model only)','New + projection'],rows));
+    const decision=v2.ship_decision||{},n=pick(v2,'old','all','n_episodes')??pick(v2,'new_projected','all','n_episodes'),total=pick(v2,'dataset','n_episodes'),gentle=pick(v2,'old','gentle','n_episodes'),chaotic=pick(v2,'old','chaotic','n_episodes'),seconds=pick(v2,'dataset','rollout_seconds');
+    const shipped=typeof v2.shipped==='boolean'?(v2.shipped?`Shipped as default: ${decision.primary_variant==='new_raw'?'new Contact GNN (model only)':'new Contact GNN + projection'}.`:'Shipped as default: old MLP (Contact GNN is selectable as option C).'):typeof decision.ship==='boolean'?`Ship gate ${decision.ship?'passed':'not passed'}.`:'';
+    const alone=typeof decision.model_alone_passes==='boolean'?` The learned model alone ${decision.model_alone_passes?'also passes':'does not pass'} the ship gate.`:'';
+    caption.textContent=`${shipped?shipped+' ':''}“Projection” is a non-learned contact fix applied after every step; “model only” is the learned network alone.${alone} Held-out synthetic PyBullet scenes, n = ${n??DASH} episodes${total&&total!==n?` (default-physics subset of ${total} test episodes)`:''}${gentle!=null&&chaotic!=null?`: ${gentle} gentle / ${chaotic} chaotic`:''}; autoregressive${seconds?` ${seconds} s`:''} rollouts, never teacher-forced. Lower is better except accuracy; best per row highlighted. Not a guarantee on real photos.`;
+    $('model-metrics-tag').textContent='HELD-OUT · SYNTHETIC';card.hidden=false;return;
+  }
+  const legacy=metrics?.mean_position_error_m;
+  if(!legacy&&typeof metrics?.fell_agreement!=='number'){card.hidden=true;return;}
+  body.replaceChildren(metricsTable([metrics.kind||'Current model'],[['Position error @ 0.5 s','m',[pick(legacy,'0.5')]],['Position error @ 1 s','m',[pick(legacy,'1.0')]],['Position error @ 2 s','m',[pick(legacy,'2.0')]],['Fell agreement with physics','%',[metrics.fell_agreement],100,true]]));
+  caption.textContent=`Current shipped model only; no before/after comparison has been published yet. ${metrics.held_out_scenes??DASH} held-out synthetic scenes. ${metrics.note||''}`;
+  $('model-metrics-tag').textContent='HELD-OUT · SYNTHETIC';card.hidden=false;
+}
+async function loadMetrics(){try{renderMetrics(await api('/api/metrics'));}catch(error){const card=$('model-metrics');if(card)card.hidden=true;console.warn('Model metrics unavailable:',error.message);}}
+loadMetrics();
 try{views.push(buildView('physics'),buildView('learned'));requestAnimationFrame(animate);await loadDemo();await scores();}catch(error){status(`Demo initialization failed: ${error.message}. WebGL is required for the 3D view; API docs at /docs.`);console.error(error);}

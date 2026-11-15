@@ -31,7 +31,7 @@
 </details>
 <label class="field">Click in 3D<select id="click-mode"><option value="inspect">Inspect object</option><option value="push">Push object</option></select></label>
 <label class="collision-control"><input id="table-collisions" type="checkbox" checked> Solid table collisions</label><p class="muted">Uncheck to deliberately let objects pass through the table.</p>
-<label class="field">Learned model<select id="architecture"><option value="default">Selected default</option><option value="mlp_multistep">A / Multi-step MLP</option><option value="graph_impulse">B / Graph impulses</option></select></label>
+<label class="field">Learned model<select id="architecture"><option value="default">Selected default</option><option value="mlp_multistep">A / Multi-step MLP</option><option value="graph_impulse">B / Graph impulses</option><option value="contact_gnn">C / Contact graph net (new)</option></select></label>
 <label class="field">Intervention<select id="action"><option value="push">Push → +X (impulse, Ns)</option><option value="toss">Toss upward (impulse, Ns)</option><option value="remove">Remove object</option><option value="set_mass">Set object mass (kg)</option><option value="tilt_support">Tilt support around Z (degrees)</option><option value="set_gravity">Set gravity (m/s²)</option></select></label>
 <label class="field" id="amount-field">Amount<input id="amount" type="number" value="0.55" step="0.05" min="0.01" max="20"></label>
 <button id="run" class="primary">Run both engines <span>▶</span></button>
@@ -52,6 +52,7 @@
 <form id="ask-form"><label class="sr-only" for="question">Ask a what-if question</label><input id="question" placeholder="What if I push the mug? Look up its mass first." value="What if I push the mug? Look up its mass and compare both engines."><button id="ask" class="primary" type="submit">Ask ↗</button></form>
 <p id="answer">The agent uses real tool outputs. API keys enable OpenAI + Exa; simulations work independently.</p><div id="sources"></div><details id="trace-wrap" hidden><summary>Actions and tool evidence</summary><pre id="trace"></pre></details>
 </div>
+<div class="card model-metrics" id="model-metrics" hidden><div class="assistant-heading"><h2>World model: before vs after</h2><span class="muted" id="model-metrics-tag">HELD-OUT · SYNTHETIC</span></div><div id="model-metrics-body" class="model-metrics-body"></div><p id="model-metrics-caption" class="muted"></p></div>
 <div class="card leaderboard"><div class="assistant-heading"><h2>Make it fall / local leaderboard</h2><span class="muted">FALL COUNT + DISPLACEMENT (m)</span></div><form id="score-form"><input id="name" placeholder="Team name" maxlength="40" required aria-label="Leaderboard name"><button id="save-score" type="submit">Submit physics score ↗</button></form><ol id="scores"></ol></div>
 </section>
 </div>

@@ -18,7 +18,7 @@ from .segmentation import deduplicate,split_depth_clusters
 from .bodies import settle,stability
 from .assets import write_debug,export_visual
 
-VERSION='metric-photo-v6'
+VERSION='metric-photo-v11'
 RUN_LOCK=RLock()
 # kg, friction, rigid approximation, dimensions used ONLY when geometry fails.
 PRIORS={
@@ -125,6 +125,7 @@ def lift(inst,cloud_world,valid,index,support_height,points_override=None):
         size=tuple(np.maximum(size,.002)),position=tuple(fit['center']),rotation_euler=tuple(fit['rotation_euler']),
         mass_kg=mass,friction=friction,soft_approx=soft,supported_by='support',
         linear_damping=.6 if soft else .04,angular_damping=.8 if soft else .04)
+    if label=='chair':obj.supported_by='floor'
     inst['object_id']=obj.id
     return obj,dict(id=obj.id,label=obj.label,shape_method=method,valid_points=len(points),fallback=fallback,
                     residual_m=fit.get('residual_m'),details=extra)
@@ -141,7 +142,7 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
     camera.update(width=image.width,height=image.height)
     if geometry_override is not None and 'camera' in geometry_override: camera=dict(geometry_override['camera'])
     config=dict(version=VERSION,models=MODEL_IDS,table_width_m=table_width_m,distance_reference=distance_reference,
-                auto_grid=os.getenv('RECON_AUTO_GRID','12'),detection_threshold=os.getenv('RECON_DETECTION_THRESHOLD','.22'))
+                mesh_enabled=os.getenv('RECON_MESH','1'),auto_grid=os.getenv('RECON_AUTO_GRID','12'),detection_threshold=os.getenv('RECON_DETECTION_THRESHOLD','.22'))
     digest=sha256(image.tobytes()+json.dumps(config,sort_keys=True).encode()).hexdigest()
     if geometry_override is not None: digest=sha256((digest+geometry_override['hash']).encode()).hexdigest()
     directory=root_dir()/digest;start=time.perf_counter()
@@ -193,6 +194,8 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                     masks.append(dict(det,mask=mask,mask_source='rectangle_fallback',mask_score=None))
                 stage['status']='fallback'
             stage['raw_masks']=len(masks)
+        try: model.classify(image,[m for m in masks if m['label']=='unknown object'])
+        except Exception as exc: report['warnings'].append(f'Automatic-mask classification failed: {type(exc).__name__}: {str(exc)[:200]}')
         with timed(report,'structure') as stage:
             table_masks=[m['mask'] for m in masks if m['label']=='table']
             exclude=np.logical_or.reduce([m['mask'] for m in masks if m['label'] not in PLANE_LABELS]) if any(m['label'] not in PLANE_LABELS for m in masks) else np.zeros(depth.shape,bool)
@@ -235,10 +238,14 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                 if inst['mask_source']=='sam2_automatic':
                     overlap=(inst['mask']&plane_union).sum()/max(inst['mask'].sum(),1)
                     contained=any((inst['mask'][max(0,int(other['bbox'][1])):int(other['bbox'][3]),max(0,int(other['bbox'][0])):int(other['bbox'][2])].sum()/max(inst['mask'].sum(),1))>.90 for other in instances if other is not inst and other['mask_source']=='sam2_box' and other['label'] not in PLANE_LABELS)
-                    if overlap>.60 or inst.get('classifier_label') in PLANE_LABELS or inst.get('classifier_confidence',0)<.45 or contained:
+                    if overlap>.60 or inst.get('classifier_label') in PLANE_LABELS or inst.get('classifier_confidence',0)<.35 or (contained and inst['label']!='gloves'):
                         dropped.append(dict(label=inst['label'],reason='automatic_structure_mask'));continue
                 filtered.append(inst)
             # A keyboard wholly inside an open laptop detection belongs to that laptop.
+            for accessory in filtered:
+                if accessory['label']=='gloves':
+                    for cloth in filtered:
+                        if cloth['label']=='jacket':cloth['mask']=cloth['mask']&~accessory['mask']
             instances=[i for i in filtered if not (i['label']=='keyboard' and any(
                 o['label']=='laptop' and i['bbox'][0]>=o['bbox'][0]-15 and i['bbox'][2]<=o['bbox'][2]+15
                 and i['bbox'][1]>=o['bbox'][1] and i['bbox'][3]<=o['bbox'][3]+15 for o in filtered))]
@@ -275,9 +282,22 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
             if np.max(support_size)>10: raise ValueError('Implausible support dimensions; provide a scale reference')
             cloud_world[:,:,1]+=.75
             camera_pose=dict(origin_world=((-origin)@basis.T*factor+[0,.75,0]).tolist(),world_to_camera=basis.T.tolist())
-        support=Support(size=tuple(support_size),height=.75,thickness=.03)
+        support_height=.75
+        floor_masks=[m['mask'] for m in masks if m['label']=='floor']
+        if floor_masks:
+            floor_pixels=np.logical_or.reduce(floor_masks)&valid
+            try:
+                floor=g.fit_plane(cloud_world[floor_pixels],threshold=.025,normal_hint=[0,1,0])
+                floor_y=float(floor['center'][1]);measured_height=.75-floor_y
+                if .2<measured_height<3:
+                    support_height=measured_height;cloud_world[:,:,1]-=floor_y
+                    camera_pose['origin_world'][1]-=floor_y
+                    report['stages']['structure']['floor_height_correction_m']=floor_y
+                    report['stages']['structure']['support_height_m']=support_height
+            except ValueError:pass
+        support=Support(size=tuple(support_size),height=support_height,thickness=.03)
         with timed(report,'lift') as stage:
-            objects=[]
+            objects=[];fused_world_by_id={}
             for i,inst in enumerate(instances[:240]):
                 try:
                     fused=None
@@ -287,6 +307,7 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                     obj,details=lift(inst,cloud_world,valid,i,support.height,points_override=fused)
                     details['fused_multiview_points']=0 if fused is None else len(fused)
                     objects.append(obj);report['objects'].append(details)
+                    if fused is not None and len(fused):fused_world_by_id[obj.id]=fused
                 except Exception as exc:
                     # A bad piece cannot drop the rest of the scene, but is explicitly counted.
                     report['warnings'].append(f'Object {i} ({inst["label"]}) failed: {type(exc).__name__}: {exc}')
@@ -304,8 +325,11 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
         for inst,obj in zip(instances,objects):
             if obj.is_static: continue
             try:
-                bottom,top=g.mask_anchor(inst);direction=g.ray(bottom,camera)
+                bottom,top=g.mask_anchor(inst)
+                if inst['label']=='laptop':bottom=g.horizontal_mask_anchor(inst)
+                direction=g.ray(bottom,camera)
                 normal=plane['normal'];offset=float(origin@normal)*factor
+                if obj.supported_by=='floor':offset-=support.height
                 denom=float(direction@normal)
                 if denom>=-.01: continue
                 camera_contact=direction*(offset/denom)
@@ -344,13 +368,14 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                     if label in ('backpack','bag','jacket','gloves'):
                         w=float(np.clip(projected_width,prior[0]*.65,prior[0]*1.4))
                         h=float(np.clip(projected_height,prior[1]*.6,prior[1]*1.3))
+                        if label=='backpack' and camera_contact[2]>=back_depth+.079:h=prior[1]
                         dims=(w,h,prior[2]);obj.size=dims;obj.rotation_euler=(0,0,0)
                         obj.collision=Collision(parts=[CollisionPart(size=dims)])
                         obj.shape_method='occlusion_completed_box_template'
                     elif label=='laptop':
                         # Known laptop class dimensions regularize glossy depth outliers.
                         width=float(np.clip(projected_width,.28,.38));base_depth=width*.70
-                        if 'closed' in inst.get('detector_label','') and 'open' not in inst.get('detector_label','') or height_px<150:
+                        if ('closed' in inst.get('detector_label','') and 'open' not in inst.get('detector_label','')) or (height_px<150 and 'partially' not in inst.get('detector_label','')):
                             dims=(width,.018,base_depth);obj.size=dims;obj.shape='box'
                             obj.collision=Collision(parts=[CollisionPart(size=dims)]);obj.shape_method='closed_laptop_template'
                         else:
@@ -358,13 +383,22 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                             obj.collision=Collision(parts=[CollisionPart(size=(width,.018,base_depth)),
                                 CollisionPart(size=(width,sh,.006),position=(0,.009+sh*np.sin(angle)/2,-base_depth/2+sh*np.cos(angle)/2),rotation_euler=(float(np.pi/2-angle),0,0))])
                             obj.shape_method='open_laptop_template_glossy_depth'
-                        obj.rotation_euler=(0,0,0)
-                        world_contact[2]-=base_depth/2
+                        yaw,axis_details=g.image_axis_yaw(image,inst,[world_contact[0],support.height+.12,world_contact[2]],camera,camera_pose)
+                        if 'partially' in inst.get('detector_label',''):
+                            try:
+                                screen=g.fit_plane(cloud_world[inst['mask']&valid],threshold=.008)
+                                normal_screen=screen['normal'];yaw=float(np.arctan2(normal_screen[0],normal_screen[2]))
+                                yaw=(yaw+np.pi/2)%np.pi-np.pi/2
+                            except ValueError:pass
+                        obj.rotation_euler=(0,yaw,0)
+                        inst['image_axis_fit']=axis_details
+                        world_contact[0]-=np.sin(yaw)*base_depth/2
+                        world_contact[2]-=np.cos(yaw)*base_depth/2
                     elif label in ('phone','mouse'):
                         obj.size=tuple(prior);obj.rotation_euler=(0,0,0)
                         obj.collision=Collision(parts=[CollisionPart(size=tuple(prior))]);obj.shape_method='small_object_template'
                 obj.position=(float(world_contact[0]),obj.position[1],float(world_contact[2]))
-                contact_points.append(world_contact[[0,2]])
+                if obj.supported_by!='floor':contact_points.append(world_contact[[0,2]])
             except (ValueError,IndexError): continue
         if contact_points:
             pts=np.array(contact_points)
@@ -373,12 +407,26 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
             center=(lo+hi)/2;support.size=tuple(np.minimum(hi-lo,10))
             for obj in objects: obj.position=(obj.position[0]-center[0],obj.position[1],obj.position[2]-center[1])
             cloud_world-=np.array([center[0],0,center[1]])
+            fused_world_by_id={key:pts-[center[0],0,center[1]] for key,pts in fused_world_by_id.items()}
             camera_pose['origin_world']=(np.array(camera_pose['origin_world'])-[center[0],0,center[1]]).tolist()
             report['estimated'].append('hidden table bounds expanded to include observed object contact rays')
         for details in report['objects']:
             obj=next((o for o in objects if o.id==details['id']),None)
             if obj is not None:
                 details['initial_shape_method']=details['shape_method'];details['shape_method']=obj.shape_method
+        directory.mkdir(parents=True,exist_ok=True)
+        if os.getenv('RECON_REFINE','1')=='1':
+            with timed(report,'silhouette_refinement') as stage:
+                from .refinement import refine
+                stage['objects']=refine(objects,instances,camera,camera_pose,support.height)
+        if os.getenv('RECON_MESH','1')=='1':
+            with timed(report,'irregular_meshes') as stage:
+                from .meshes import generate_objects
+                mesh_reports=generate_objects(image,instances,objects,cloud_world,valid,directory,fused_by_id=fused_world_by_id,camera=camera,camera_pose=camera_pose,support_height=support.height)
+                stage['objects']=mesh_reports
+                stage['workers']=min(7,len(registry().devices))
+                for item in mesh_reports:
+                    if item['status']=='fallback':report['warnings'].append(f"{item['id']} mesh fallback: {item['reason']}")
         scene=Scene(objects=objects,support=support)
         with timed(report,'settle') as stage:
             scene,contacts=settle(scene);stage.update(contacts);report['metrics']['contacts_after_settle']=contacts

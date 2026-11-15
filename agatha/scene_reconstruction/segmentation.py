@@ -24,7 +24,8 @@ def deduplicate(instances, depth, plane_mask=None):
             iou=intersection/max((mask | old['mask']).sum(),1)
             containment=intersection/min(mask.sum(),old['mask'].sum())
             consistent=median is None or old['median_depth_m'] is None or abs(median-old['median_depth_m'])<.15
-            if consistent and (iou>.65 or containment>.85):
+            independent_accessory=inst['label']=='gloves' and old['label'] in ('jacket','bag','backpack')
+            if consistent and not independent_accessory and (iou>.65 or containment>.85):
                 duplicate=True;break
         if duplicate:
             dropped.append(dict(label=inst['label'],reason='duplicate_or_part_mask'));continue
