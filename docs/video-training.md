@@ -5,11 +5,17 @@ training" therefore means: convert video to **approximate object trajectories** 
 geometry) and mix those in. The trajectories are much noisier than simulator states, carry **no orientation**,
 and cover only the frames in which an object could be located. They are meant to be mixed in with a **small
 weight** and a **position-only, noise-tolerant loss**, into a **separate experimental checkpoint**, and the result
-is kept only if the simulator metrics do not get worse. The shipped `contact_gnn` is not trained on any of this.
+is kept only if the simulator metrics do not get worse.
 
-Outcome in one line: three fine-tune arms were run and evaluated (sections 4-5); **none met the keep rule, no
-video-trained checkpoint was kept, and the shipped model is unchanged.** Sections 1-3 describe the pipeline, the
-data and its measured accuracy; an independent review pass (section 6) lists what was re-checked and corrected.
+**Status (read this first).** Three fine-tune arms were run and evaluated (sections 4-5). Under the keep rule
+that was fixed before the runs, applied to the pre-specified `best.pt` checkpoints, **no arm passed**. After
+that, by a decision taken outside this experiment (commit `206adc8`, 11:17 UTC), **the default model was
+nevertheless replaced by the last-epoch checkpoint of the 25 % video arm** (`models/runs/video_ft_video25/epoch_011.pt`
+= `models/contact_gnn_video.pt` = `models/contact_gnn.pt` = `models/world_model.pt`, sha256 `0e46bfec...`); the
+simulation-only model is kept as `models/contact_gnn_sim_only.pt` (sha256 `e67e8871...`). Section 7 gives the
+measured numbers of the checkpoint that is now the default. **In sections 4-6 the word "shipped" means the
+simulation-only checkpoint**, which was the default while the experiment ran. Sections 1-3 describe the pipeline,
+the data and its measured accuracy; section 6 is an independent review.
 
 ## 1. Pipeline: video -> trajectories (`scripts/video_to_trajectories.py`)
 
@@ -169,8 +175,8 @@ How to read it:
 
 ## 4. Fine-tune
 
-APPROXIMATE, experimental. Nothing here changed the shipped model (`models/contact_gnn.pt` = `models/world_model.pt`,
-sha256 `e67e8871...`, unchanged before and after).
+APPROXIMATE, experimental. The runs themselves did not touch the default model files (sha256 `e67e8871...` before
+and after the runs and evaluations; the later replacement is described in the status note at the top and section 7).
 
 Three arms, each a single process on its own GPU (shared with other trainings, 9 GB cap), warm-started from the
 shipped `models/contact_gnn.pt`, same seed, same recipe, 34 minutes wall-clock each (10:05-10:40 UTC):
@@ -399,7 +405,8 @@ on the gentle sim error, outside the 2% tolerance.
 
 ### Decision
 
-**Not kept. `models/contact_gnn_video.pt` was not created and the default model is unchanged.**
+**Outcome of the rule: not kept.** (Written at 10:50 UTC, when `models/contact_gnn_video.pt` did not exist and the
+default was unchanged. The default was replaced afterwards by a separate decision; see the status note and section 7.)
 
 - Arm B (`video`, the arm the rule names): fails the sim tolerance on gentle position error against the control
   (+9.15%, i.e. 2.74 mm vs 2.51 mm; it is better than shipped), and shows no significant improvement on the
@@ -434,8 +441,8 @@ on the gentle sim error, outside the 2% tolerance.
   against ground truth, the tail of the same noise. No orientation is ever supervised from video.
 - **Why the default was not changed.** The pre-agreed rule was not met, the gain is confined to one rendered
   dataset from the same generator as the training videos, there is no gain on real data and one significant
-  loss, and the checkpoints the selection picked contain almost no video training. The shipped simulator-trained
-  model remains the default; the video path stays an opt-in experiment (`--video-data`, `--video-frac`).
+  loss, and the checkpoints the selection picked contain almost no video training. On that basis the
+  recommendation of this experiment was to leave the simulator-trained model as the default (superseded: section 7).
 
 ### Limits of this experiment
 
@@ -446,3 +453,138 @@ on the gentle sim error, outside the 2% tolerance.
 - Both video sources are rendered simulator video. No real video of moving boxes was used for training.
 - Static attributes (shape, size class, material, colour) and the Kubric camera come from dataset metadata, and
   the CLEVRER homography was calibrated on ground-truth annotations (section 1 and Limitations above).
+
+## 6. Independent review (11:00-11:25 UTC, after the decision)
+
+A second pass re-checked the track without retraining. The outcome of the keep rule is unchanged: **no arm
+passes it**. While this review was running the default model was replaced (section 7).
+
+What was verified:
+
+- **Default model files.** At 10:54 UTC, after all runs and evaluations of this experiment, `models/contact_gnn.pt`
+  and `models/world_model.pt` both had sha256 `e67e8871...` and, like `models/metrics.json` and
+  `models/contact_eval.*`, showed no difference against git HEAD (`0fd8ca6`); `models/contact_gnn_video.pt` did not
+  exist. So the experiment did not alter them. They were changed later, deliberately, by commit `206adc8`.
+- **Leakage.** Train / val / test source ids are pairwise disjoint in both sources; `test_gt` is aligned with
+  `test`; the trainer reads only `train` and `val`; the 91 Kubric held-out ids are exactly the video test split;
+  CLEVRER external evaluation (10000-10999) shares no video with the 11000-11599 used here; the CLEVRER
+  homography and all `pos_sigma` values come from videos in no split. One exception, now stated in section 1:
+  the Kubric gate thresholds were chosen with sight of the ground truth of 10 test videos.
+- **Licences**, re-read at the source on 2026-11-15: the CLEVRER README still says "Our dataset is under the
+  CC0." and lists 10000-14999 as the validation split; the Kubric repository is Apache-2.0 and its MOVi README
+  still carries no data licence statement. `DATA_LICENSES.md` wording matches this.
+- **Tracking accuracy.** A full re-run of `scripts/video_to_trajectories.py` into a scratch directory gave
+  byte-identical `states` / `obs_mask` / `mask` / `pos_sigma` for every split and an identical accuracy block, so
+  the whole table of section 3 reproduces. A separate slot-aligned check without permutation matching gives, for
+  test cubes, Kubric 2.5 cm median / 13.9 cm p90 and CLEVRER 0.7 cm / 3.8 cm.
+- **Same recipe.** The `train_args` stored in the three `best.pt` differ only in `out`, `video_data` and
+  `video_frac`. All section 5 tables equal what `scripts/video_ft_report.py` produces from the JSON files.
+- **Default trainer behaviour.** `tests/test_train_video_flags.py` compares sampler indices, loss, statistics and
+  gradients against the committed trainer with the flags unset; it passes (17 tests with the pipeline tests).
+
+What was corrected in this document:
+
+- The training table had the two video rows swapped. Correct: `video` 3,950 updates, `best.pt` = epoch 1
+  (0.1493); `video25` 4,100 updates, `best.pt` = epoch 2 (0.1507). Three sentences that repeated the swap are fixed.
+- "Nothing was tuned on val / test" was not true for the Kubric gate (see above).
+- The trainer does not restrict the video loss to cubes: about 72 % of the supervised object-frames are spheres
+  and cylinders treated as boxes (section 1).
+
+Reproducibility of the comparison: `scripts/eval_video_ft.py` was re-run on the same checkpoints (one GPU, 8 GB
+cap). CLEVRER, I.AM., ContactNets and the video-derived rows came out identical to three decimals. Held-out Kubric
+and Physion moved by up to 0.005 m and 0.024 m (GPU rollouts are not bit-reproducible), which is enough to change
+one starred cell: `video25 - control`, Kubric floor, was -0.018 [-0.036, -0.002] `*` and is -0.014 [-0.033, +0.002]
+on the re-run. The Kubric cells of the decision table are therefore at the edge of what this 91-episode set can
+resolve; the outcome of the rule (no arm passes) does not depend on that cell.
+
+### Update-matched comparison (epoch 10 = 3,900 updates in every arm; supplementary, chosen after the results)
+
+The arms were matched by wall-clock, not by updates. `epoch_010.pt` is the last checkpoint at which all three arms
+have the same number of updates. Files: `models/runs/video_ft_review_compare_e10.json`,
+`models/runs/video_ft_review_sim_<arm>_e10.json`. Model + projection.
+
+| Arm (epoch 10) | Sim chaotic @2s (m) | Sim gentle @2s (m) | Penetration (mm) | Fall P / R | CLEVRER slab / floor (m) | Kubric held-out slab / floor (m) | I.AM. slab / floor (m) | ContactNets slab (m) |
+|---|---|---|---|---|---|---|---|---|
+| shipped | 0.1214 | 0.00294 | 0.056 | 0.915 / 0.943 | 0.676 / 1.022 | 0.784 / 0.821 | 0.515 / 0.288 | 0.082 |
+| control | 0.1246 | 0.00237 | 0.057 | 0.916 / 0.938 | 0.665 / 1.022 | 0.778 / 0.828 | 0.549 / 0.299 | 0.077 |
+| video | 0.1226 | 0.00258 | 0.056 | 0.913 / 0.940 | 0.528 / 1.012 | 0.752 / 0.831 | 0.551 / 0.291 | 0.079 |
+| video25 | 0.1230 | 0.00236 | 0.056 | 0.917 / 0.943 | 0.525 / 1.014 | 0.734 / 0.828 | 0.533 / 0.287 | 0.079 |
+
+Paired differences in rest position error (m; negative = video arm better; `*` = 95% CI excludes 0):
+
+| Dataset, mode | video - shipped | video - control | video25 - shipped | video25 - control |
+|---|---|---|---|---|
+| CLEVRER slab | -0.147 [-0.163, -0.132] * | -0.137 [-0.152, -0.121] * | -0.151 [-0.165, -0.135] * | -0.140 [-0.155, -0.125] * |
+| CLEVRER floor | -0.010 [-0.010, -0.009] * | -0.010 [-0.011, -0.010] * | -0.008 [-0.008, -0.007] * | -0.008 [-0.009, -0.008] * |
+| Kubric held-out slab | -0.032 [-0.057, -0.007] * | -0.026 [-0.050, +0.000] | -0.050 [-0.077, -0.025] * | -0.044 [-0.076, -0.014] * |
+| Kubric held-out slab, cubes only | -0.029 [-0.085, +0.038] | -0.012 [-0.064, +0.050] | -0.014 [-0.045, +0.015] | +0.003 [-0.040, +0.046] |
+| Kubric held-out floor | +0.010 [-0.014, +0.033] | +0.003 [-0.019, +0.024] | +0.008 [-0.010, +0.026] | +0.000 [-0.024, +0.024] |
+| I.AM. slab (real) | +0.036 [+0.024, +0.050] * | +0.001 [-0.027, +0.022] | +0.018 [+0.010, +0.027] * | -0.017 [-0.042, +0.001] |
+| I.AM. floor (real) | +0.002 [+0.002, +0.003] * | -0.008 [-0.009, -0.007] * | -0.001 [-0.002, +0.000] | -0.011 [-0.013, -0.010] * |
+| ContactNets slab (real) | -0.003 [-0.004, -0.002] * | +0.002 [+0.001, +0.002] * | -0.002 [-0.003, -0.001] * | +0.002 [+0.001, +0.003] * |
+| Video-derived Kubric test, slab | -0.031 [-0.040, -0.022] * | -0.030 [-0.039, -0.022] * | -0.032 [-0.041, -0.023] * | -0.031 [-0.040, -0.023] * |
+| Video-derived CLEVRER test, slab | -0.058 [-0.116, +0.010] | -0.061 [-0.118, +0.006] | -0.058 [-0.117, +0.011] | -0.060 [-0.119, +0.008] |
+
+Sim tolerances at epoch 10: `video` fails the gentle tolerance against its control (+8.9 %; 0.21 mm), as in the
+main table; `video25` is inside every tolerance against both references (chaotic +1.3 % vs shipped, -1.3 % vs
+control; gentle -19.8 % / -0.6 %).
+
+Reading:
+
+- With equal updates the effect of video-derived training is larger and clearer than at the selected
+  checkpoints: about -0.14 m on unseen CLEVRER ground truth, and at 25 % video -0.04 to -0.05 m on held-out
+  Kubric in slab mode against both references. In floor mode Kubric does not move, and the Kubric slab gain is
+  not visible on cubes alone (it sits in the spheres and cylinders that the model treats as boxes).
+- `video25` at epoch 10 would satisfy the keep rule in the "at least one floor mode" reading that
+  `scripts/video_ft_report.py` encodes. This review did **not** count it as a pass: the rule was fixed on `best.pt` (chosen by the
+  simulator validation score), epoch 10 was picked here after seeing test results, it is one seed, and on the
+  real I.AM. box toss in slab mode it is still 1.8 cm worse than shipped (significant), although no worse than
+  its own control. Treat it as the hypothesis for a properly pre-registered re-run (fixed update count, cubes-only
+  video loss, more than one seed), not as a result.
+- Nothing in either comparison shows a gain on the simulator ship metrics or on real box data relative to the
+  shipped model.
+
+## 7. The checkpoint that is now the default (`video25`, last epoch)
+
+Since commit `206adc8` the default model is `models/runs/video_ft_video25/epoch_011.pt`: the 25 % video arm after
+all 4,100 updates (34 minutes). It is the row `video25_last` of the supplementary table in section 5. It is not the
+checkpoint the keep rule was written for (`best.pt`), and it was chosen after its test results were known; it is
+one run with one seed. All numbers below are from `models/runs/video_ft_compare.json` and
+`models/runs/video_ft_sim_video25_last.json` (measured before the replacement; model + projection).
+
+| Metric | Simulation-only (previous default) | Control, last epoch (no video, 5,320 updates) | **New default** (`video25` last epoch) | New default - simulation-only, paired [95% CI] | New default - control, paired [95% CI] |
+|---|---|---|---|---|---|
+| Sim chaotic pos err @2s (m) | 0.1214 | 0.1232 | 0.1223 | +0.8 % (run-to-run noise is about 0.5 %) | -0.7 % |
+| Sim gentle pos err @2s (m) | 0.00294 | 0.00252 | 0.00289 | -1.7 % | +14.7 % (0.37 mm) |
+| Sim penetration (mm) | 0.056 | 0.056 | 0.056 | 0.000 | 0.000 |
+| Sim fall precision / recall | 0.915 / 0.943 | 0.914 / 0.939 | 0.916 / 0.945 | +0.001 / +0.002 | +0.002 / +0.006 |
+| CLEVRER 10000-10999, slab (m) | 0.676 | 0.658 | 0.524 | -0.152 [-0.166, -0.137] * | -0.134 [-0.148, -0.119] * |
+| CLEVRER, slab, cubes only (m) | 0.559 | - | - | -0.085 [-0.109, -0.058] * | - |
+| CLEVRER, floor (m) | 1.022 | 1.021 | 1.014 | -0.008 [-0.008, -0.007] * | -0.007 [-0.008, -0.007] * |
+| Kubric held-out (91), slab (m) | 0.786 | 0.776 | 0.742 | -0.044 [-0.070, -0.020] * | -0.033 [-0.062, -0.004] * |
+| Kubric held-out, slab, cubes only | 0.680 | - | - | -0.006 [-0.040, +0.027] | - |
+| Kubric held-out, floor (m) | 0.823 | 0.830 | 0.832 | +0.009 [-0.012, +0.029] | +0.002 [-0.016, +0.021] |
+| Kubric held-out, floor, cubes only | 0.694 | - | - | +0.026 [+0.003, +0.049] * (worse) | - |
+| REAL I.AM. box toss (49), slab (m) | 0.515 | 0.521 | 0.541 | +0.026 [+0.016, +0.036] * (worse) | +0.020 [-0.001, +0.041] |
+| REAL I.AM., slab, rest-face accuracy | 0.551 | - | 0.510 | - | - |
+| REAL I.AM. box toss, floor (m) | 0.288 | 0.294 | 0.288 | -0.000 [-0.001, +0.001] | -0.007 [-0.008, -0.006] * |
+| REAL ContactNets (570), slab (m) | 0.082 | 0.079 | 0.079 | -0.002 [-0.003, -0.001] * | +0.000 [-0.000, +0.001] |
+| REAL ContactNets, floor (m) | 0.110 | 0.106 | 0.109 | -0.001 [-0.002, +0.000] | +0.003 [+0.002, +0.004] * |
+
+The sim row was re-measured after the replacement for `models/contact_eval.json` (chaotic 0.1217, gentle 0.00269,
+penetration 0.054 mm, fall 0.916 / 0.943): the same within the GPU run-to-run noise.
+
+What this supports and what it does not:
+
+- Supported: the simulator ship metrics are level with the simulation-only model (all inside the tolerances of the
+  keep rule against it); rest error on unseen CLEVRER ground truth is 0.15 m lower in slab mode (0.085 m on cubes);
+  held-out Kubric is 0.04 m lower in slab mode.
+- Not supported: any gain on real boxes. I.AM. in slab (table) mode is 2.6 cm worse, significantly; floor mode is
+  level; ContactNets moves by 1-2 mm. The Kubric gain is in slab mode only and not in cubes (in floor mode cubes
+  are 2.6 cm worse, significantly). Against the matched no-video control the gentle sim error is 15 % (0.37 mm)
+  higher, which is outside the 2 % tolerance of the keep rule (it is level with the simulation-only model).
+- The video sources are rendered simulator clips (plus one static real desk clip); about 72 % of the supervised
+  video object-frames are spheres and cylinders treated as boxes; no orientation is supervised from video.
+- Licence consequence: the default weights are now trained on data derived from Kubric MOVi-A frames, whose only
+  licence is the repository's Apache-2.0 (no dedicated data licence), and from CLEVRER videos (explicit CC0). See
+  `DATA_LICENSES.md`; re-check the Kubric point before any public release of the weights.

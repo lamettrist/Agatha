@@ -689,7 +689,8 @@
       "what": "25% of fine-tune batches were video-derived trajectories: 1,109 clips tracked from pixels (median position noise about 2.7 cm).",
       "sources": "Kubric MOVi-A (rendered, synthetic), CLEVRER (rendered, synthetic), one team-recorded desk clip (real; contributes objects-at-rest only). No real-world video of moving objects was used.",
       "effect": "Simulation metrics unchanged within noise versus the simulation-only checkpoint (models/contact_gnn_sim_only.pt). Rest-position error improved on CLEVRER ground truth (0.676 -> 0.524 m) and held-out Kubric (0.786 -> 0.742 m); slightly worse on real I.AM. box tosses in slab mode (0.515 -> 0.541 m), unchanged in floor mode; ContactNets real cube tosses 0.082 -> 0.079 m.",
-      "details": "docs/video-training.md, models/runs/video_ft_report_with_last.md"
+      "details": "docs/video-training.md, models/runs/video_ft_report_with_last.md",
+      "selection_caveat": "This checkpoint is the last epoch of the 25%-video fine-tune. It was chosen after its test results were known, not by the pre-set keep rule (no best.pt arm passed that rule). Arms were matched by wall-clock: the video arm ran 4,100 updates versus 5,320 for the no-video control. 71-72% of video-supervised object-frames are spheres/cylinders treated as boxes. Kubric-derived data has a repository-level licence only."
     },
     "full_eval": "models/contact_eval.json",
     "previous_default": "models/mlp_multistep.pt",
