@@ -11,7 +11,7 @@ from .scene_reconstruction.pipeline import reconstruct
 from .storage import Store
 
 app=FastAPI(title='Agatha · Foresight',version='0.1.0')
-app.add_middleware(CORSMiddleware,allow_origins=[o.strip() for o in os.getenv('CORS_ORIGINS','http://localhost:8017,http://127.0.0.1:8017,http://localhost:8000,http://127.0.0.1:8000').split(',') if o.strip()],allow_methods=['GET','POST'],allow_headers=['*'])
+app.add_middleware(CORSMiddleware,allow_origins=[o.strip() for o in os.getenv('CORS_ORIGINS','http://localhost:8017,http://127.0.0.1:8017,http://localhost:8000,http://127.0.0.1:8000,https://precognition.base44.app').split(',') if o.strip()],allow_methods=['GET','POST'],allow_headers=['*'])
 store=Store()
 
 @app.on_event('startup')
@@ -34,7 +34,17 @@ def demo(scenario: str = 'desk'):
 def get_scene(scene_id: str): return get_record(scene_id)
 
 @app.post('/api/scenes')
-async def from_image(image: UploadFile = File(...), table_width_m: float | None = Form(None), distance_reference: str | None = Form(None)):
+async def from_image(image: UploadFile | None = File(None), table_width_m: float | None = Form(None), distance_reference: str | None = Form(None), file: UploadFile | None = File(None), video: UploadFile | None = File(None)):
+    # Keep the original image field while accepting clients that send all media
+    # through the established /api/scenes endpoint with a generic file field.
+    image=image or file or video
+    if image is None: raise HTTPException(422,'Provide a multipart image, file, or video field')
+    from pathlib import Path
+    suffix=Path(image.filename or '').suffix.lower()
+    if (image.content_type or '').startswith('video/') or suffix in ('.mp4','.mov','.m4v','.webm','.avi','.mkv'):
+        return await from_video(image,table_width_m)
+    if suffix in ('.ply','.obj','.usdz'):
+        return await from_scan(image)
     data=await image.read(10*1024*1024+1)
     if len(data)>10*1024*1024: raise HTTPException(413,'Image exceeds 10 MB')
     try:
@@ -175,17 +185,25 @@ def edit_scene_object(scene_id: str, object_id: str, edit: ObjectEdit):
 
 
 @app.post('/api/scenes/video')
-async def from_video(file: UploadFile = File(...), table_width_m: float | None = Form(None)):
+async def from_video(file: UploadFile | None = File(None), table_width_m: float | None = Form(None), image: UploadFile | None = File(None), video: UploadFile | None = File(None)):
     from .scene_reconstruction.video import reconstruct_video
     from starlette.concurrency import run_in_threadpool
     import tempfile
     from pathlib import Path
+    file=file or image or video
+    if file is None:raise HTTPException(422,'Provide a multipart file, image, or video field')
     data=await file.read(100*1024*1024+1)
     if len(data)>100*1024*1024: raise HTTPException(413,'Video exceeds 100 MB')
     with tempfile.TemporaryDirectory(prefix='agatha-video-') as tmp:
         path=Path(tmp)/'input.mp4';path.write_bytes(data)
         try: scene,report=await run_in_threadpool(reconstruct_video,path,table_width_m)
         except (ValueError,RuntimeError) as exc: raise HTTPException(422,str(exc))
+    if not scene.objects:
+        status=503 if report.get('detector')=='unavailable' else 422
+        raise HTTPException(status,detail={
+            'message':'No physical bodies were reconstructed from this video. Inspect the report instead of displaying a successful zero-object result.',
+            'report':report,
+        })
     return store.add(scene,report)
 
 @app.post('/api/scenes/scan')
@@ -203,3 +221,21 @@ async def from_scan(file: UploadFile = File(...)):
         try:scene,report=await run_in_threadpool(reconstruct_scan,path)
         except (ValueError,RuntimeError,ImportError) as exc:raise HTTPException(422,str(exc))
     return store.add(scene,report)
+
+
+@app.get('/api/health')
+def reconstruction_health():
+    from .scene_reconstruction.models import registry
+    models=registry()
+    return {
+        'status':'ok',
+        'reconstruction_api_version':2,
+        'media_types':['photo','video','ply','obj','usdz'],
+        'photo_endpoint':'/api/scenes',
+        'video_endpoint':'/api/scenes/video',
+        'scan_endpoint':'/api/scenes/scan',
+        'objects_field':'scene.objects',
+        'loaded_models':list(models.models),
+        'model_load_failures':dict(models.failures),
+        'cuda_available':torch.cuda.is_available(),
+    }

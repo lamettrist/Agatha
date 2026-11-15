@@ -107,7 +107,7 @@ def resolve_overlaps(world, iterations=80):
     return {k:v.tolist() for k,v in corrections.items() if np.linalg.norm(v)>1e-8}
 
 
-def settle(scene: Scene, seconds=2.):
+def settle(scene: Scene, seconds=2., *, extend_support=True):
     """Snap actual collision bottoms to declared support, damp, simulate, save poses.
 
     Never relocates overlapping objects to invented stacks. Remaining failures are reported.
@@ -134,7 +134,7 @@ def settle(scene: Scene, seconds=2.):
             lo,hi=aabb(world,obj.id)
             required=np.maximum(required,[2*max(abs(lo[0]),abs(hi[0]))+.004,2*max(abs(lo[1]),abs(hi[1]))+.004])
         original=np.array(world.scene.support.size)
-        if np.any(required>original+.001):
+        if extend_support and np.any(required>original+.001):
             result.support.size=tuple(required);world.scene.support.size=tuple(required)
             p.removeBody(world.bodies.pop('support'),physicsClientId=world.client)
             world._box('support',(required[0],world.scene.support.thickness,required[1]),
@@ -148,7 +148,7 @@ def settle(scene: Scene, seconds=2.):
             obj.rotation_euler=tuple(p.getEulerFromQuaternion(quat_from_bullet(q)))
         metrics=contact_metrics(world)
         metrics['horizontal_corrections_m']=corrections
-        metrics['inferred_support_extension_m']=(required-original).tolist()
+        metrics['inferred_support_extension_m']=(required-original).tolist() if extend_support else [0.,0.]
     return result,metrics
 
 

@@ -1,26 +1,26 @@
 {
-  "pipeline": "video_multiview_v1",
+  "pipeline": "video_multiview_v5",
   "input": "video",
   "image_size": [
     518,
-    518
+    294
   ],
   "cache_hit": false,
-  "run_id": "c78f309711f2b277ffff6fcb2ebcc788234ded43c61a48276d45740755ce25ae",
+  "run_id": "1157ec2a2594bf92da360d620a781d630378c510e5b9271039e7b3a9ddf767b9",
   "stages": {
     "input": {
       "status": "ok",
       "original_size": [
         518,
-        518
+        294
       ],
       "camera": {
-        "fx": 314.88037109375,
-        "fy": 315.1337585449219,
+        "fx": 314.716796875,
+        "fy": 314.9442443847656,
         "cx": 259.0,
-        "cy": 259.0,
+        "cy": 147.0,
         "width": 518,
-        "height": 518,
+        "height": 294,
         "source": "VGGT_predicted"
       },
       "duration_s": 0.0
@@ -30,81 +30,79 @@
       "depth_model": "VGGT-1B",
       "detector": "IDEA-Research/grounding-dino-tiny",
       "detected_count": 43,
-      "duration_s": 0.0007
+      "duration_s": 0.0012
     },
     "depth_cleanup": {
       "status": "ok",
-      "edge_pixels": 25622,
+      "edge_pixels": 21933,
       "dark_pixels": 360,
-      "clipped_pixels": 116075,
-      "valid_fraction": 0.4855883185999016,
+      "clipped_pixels": 43,
+      "valid_fraction": 0.8538268589288998,
       "confidence_method": "image_and_depth_gradient_heuristic",
-      "duration_s": 0.1172
+      "duration_s": 0.0378
     },
     "segmentation": {
       "status": "ok",
-      "raw_masks": 44,
+      "raw_masks": 32,
       "duration_s": 0.0
     },
     "structure": {
       "status": "ok",
       "vertical_alignment_fallback": "Need three independent vertical silhouettes",
       "normal_camera": [
-        0.03058112613787516,
-        -0.909261793472619,
-        -0.41509972976996234
+        0.034412543650595505,
+        -0.9097026935656735,
+        -0.41383183318692873
       ],
-      "inlier_ratio": 0.8225,
-      "rms_m": 0.003376410816426992,
+      "inlier_ratio": 0.6716666666666666,
+      "rms_m": 0.0044235888295469,
       "gravity_source": "table_plane_normal",
       "world_basis": [
         [
-          0.9995322879848051,
-          0.027819261001160844,
-          0.012700157212016035
+          0.9994077130178133,
+          0.03132373629263262,
+          0.01424944578479285
         ],
         [
-          0.03058112613787516,
-          -0.909261793472619,
-          -0.41509972976996234
+          0.034412543650595505,
+          -0.9097026935656735,
+          -0.41383183318692873
         ],
         [
-          -1.734723475976807e-18,
-          0.41529396774851624,
-          -0.9096872651365931
+          1.734723475976807e-18,
+          0.41407708565438367,
+          -0.9102418179450843
         ]
       ],
-      "duration_s": 0.051
+      "duration_s": 0.3279,
+      "floor_height_correction_m": -0.2727539150952361,
+      "support_height_m": 1.022753915095236
     },
     "instances": {
       "status": "ok",
-      "kept": 28,
+      "kept": 24,
       "dropped": [
         {
-          "label": "cup",
+          "label": "keyboard",
           "reason": "belongs_to_structure"
         },
         {
-          "label": "tumbler",
-          "reason": "duplicate_or_part_mask"
-        },
-        {
           "label": "chair",
-          "reason": "automatic_structure_mask"
+          "reason": "belongs_to_structure"
         }
       ],
-      "duration_s": 0.4134
+      "duration_s": 0.2741
     },
     "scale": {
       "status": "ok",
       "bottle_camera_height": {
-        "factor": 0.45198766824160375,
+        "factor": 0.4364976136940431,
         "references": [
           {
-            "id": 3,
+            "id": 1,
             "label": "plastic water bottle",
             "reference_m": 0.21,
-            "observed_m": 0.4646144458254277
+            "observed_m": 0.4811022865000049
           }
         ],
         "rejected": [],
@@ -112,71 +110,83 @@
         "source": "assumed_reference_median",
         "all_ratio_disagreement": 0.0
       },
-      "factor": 0.7817162804565456,
+      "factor": 2.4686148510766746,
       "references": [
         {
           "id": "camera_height_from_bottles",
           "label": "bottle_silhouette",
-          "reference_m": 0.45198766824160375,
-          "observed_m": 0.5781991235715719
+          "reference_m": 0.4364976136940431,
+          "observed_m": 0.17681883972449844
         }
       ],
       "rejected": [],
       "disagreement": 0.0,
       "source": "assumed_reference_median",
       "all_ratio_disagreement": 0.0,
-      "duration_s": 0.007
+      "duration_s": 0.0084
     },
     "lift": {
       "status": "ok",
-      "body_count": 31,
-      "duration_s": 0.121
+      "body_count": 29,
+      "duration_s": 0.3015,
+      "support_assignments": {
+        "object_000": "support",
+        "object_001": "support",
+        "object_005": "support",
+        "object_007": "support",
+        "object_008": "support",
+        "object_009": "table_3",
+        "object_010": "support",
+        "object_014": "support",
+        "object_022": "support",
+        "object_023": "support"
+      }
     },
     "silhouette_refinement": {
       "status": "ok",
       "objects": [
         {
           "id": "object_000",
-          "initial_iou_proxy": 0.7647058823529411,
-          "optimized_iou_proxy": 0.9366515837104072,
+          "initial_iou_proxy": 0.45476190476190476,
+          "optimized_iou_proxy": 0.5807453416149069,
+          "accepted": true,
+          "evaluations": 114,
+          "method": "bounded_Powell_on_projected_primitives"
+        },
+        {
+          "id": "object_001",
+          "initial_iou_proxy": 0.34182590233545646,
+          "optimized_iou_proxy": 0.4353932584269663,
+          "accepted": true,
+          "evaluations": 137,
+          "method": "bounded_Powell_on_projected_primitives"
+        },
+        {
+          "id": "object_005",
+          "initial_iou_proxy": 0.3868312757201646,
+          "optimized_iou_proxy": 0.40652173913043477,
+          "accepted": true,
+          "evaluations": 138,
+          "method": "bounded_Powell_on_projected_primitives"
+        },
+        {
+          "id": "object_007",
+          "initial_iou_proxy": 0.14606741573033707,
+          "optimized_iou_proxy": 0.3670886075949367,
+          "accepted": true,
+          "evaluations": 154,
+          "method": "bounded_Powell_on_projected_primitives"
+        },
+        {
+          "id": "object_008",
+          "initial_iou_proxy": 0.3413173652694611,
+          "optimized_iou_proxy": 0.4206896551724138,
           "accepted": true,
           "evaluations": 230,
           "method": "bounded_Powell_on_projected_primitives"
         },
         {
-          "id": "object_003",
-          "initial_iou_proxy": 0.75,
-          "optimized_iou_proxy": 0.8633879781420765,
-          "accepted": true,
-          "evaluations": 92,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_006",
-          "initial_iou_proxy": 0.0,
-          "optimized_iou_proxy": 0.0,
-          "accepted": false,
-          "evaluations": 35,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_007",
-          "initial_iou_proxy": 0.0,
-          "optimized_iou_proxy": 0.0,
-          "accepted": false,
-          "evaluations": 35,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_008",
-          "initial_iou_proxy": 0.12076271186440678,
-          "optimized_iou_proxy": 0.19623655913978494,
-          "accepted": true,
-          "evaluations": 142,
-          "method": "bounded_Powell_on_projected_primitives"
-        },
-        {
-          "id": "object_017",
+          "id": "object_009",
           "initial_iou_proxy": 0.0,
           "optimized_iou_proxy": 0.0,
           "accepted": false,
@@ -184,345 +194,243 @@
           "method": "bounded_Powell_on_projected_primitives"
         },
         {
-          "id": "object_018",
-          "initial_iou_proxy": 0.0,
-          "optimized_iou_proxy": 0.0,
-          "accepted": false,
-          "evaluations": 37,
+          "id": "object_010",
+          "initial_iou_proxy": 0.15555555555555556,
+          "optimized_iou_proxy": 0.20689655172413793,
+          "accepted": true,
+          "evaluations": 147,
           "method": "bounded_Powell_on_projected_primitives"
         }
       ],
-      "duration_s": 0.326
+      "duration_s": 0.4776
     },
     "irregular_meshes": {
       "status": "ok",
       "objects": [
         {
-          "id": "object_008",
+          "id": "object_005",
           "status": "fallback",
-          "method": "occlusion_completed_box_template_silhouette_refined",
+          "method": "gravity_aligned_obb_silhouette_refined",
           "surface": null,
           "alignment": {
-            "fused_points": 9035
+            "fused_points": 179
           },
-          "vertices": 1910,
+          "vertices": 451,
           "convex_hulls": 8,
-          "duration_s": 5.511476254090667,
-          "baseline_silhouette_iou_proxy": 0.15154929577464787,
-          "candidate_silhouette_iou_proxy": 0.0,
-          "reason": "Generated mesh silhouette is worse than the completed box; kept the better fit"
-        },
-        {
-          "id": "object_017",
-          "status": "fallback",
-          "method": "occlusion_completed_box_template",
-          "surface": null,
-          "alignment": {
-            "fused_points": 581
-          },
-          "vertices": 365,
-          "convex_hulls": 4,
-          "duration_s": 1.7819694094359875,
-          "baseline_silhouette_iou_proxy": 0.0,
-          "candidate_silhouette_iou_proxy": 0.0,
-          "reason": "Generated mesh silhouette is worse than the completed box; kept the better fit"
-        },
-        {
-          "id": "object_018",
-          "status": "fallback",
-          "method": "occlusion_completed_box_template",
-          "surface": null,
-          "alignment": {
-            "fused_points": 581
-          },
-          "vertices": 365,
-          "convex_hulls": 4,
-          "duration_s": 1.493679178878665,
-          "baseline_silhouette_iou_proxy": 0.0,
-          "candidate_silhouette_iou_proxy": 0.0,
+          "duration_s": 3.354739271104336,
+          "baseline_silhouette_iou_proxy": 0.3573667711598746,
+          "candidate_silhouette_iou_proxy": 0.3026315789473684,
           "reason": "Generated mesh silhouette is worse than the completed box; kept the better fit"
         }
       ],
       "workers": 7,
-      "duration_s": 5.5398
+      "duration_s": 3.3603
     },
     "settle": {
       "status": "ok",
-      "float_count": 0,
-      "floating_ids": [],
-      "penetration_count": 2,
-      "penetrations": [
-        {
-          "ids": [
-            "object_011",
-            "wall_2"
-          ],
-          "depth_m": 0.13485628832716365
-        },
-        {
-          "ids": [
-            "object_011",
-            "support"
-          ],
-          "depth_m": 0.09040043434438085
-        }
+      "float_count": 7,
+      "floating_ids": [
+        "object_005",
+        "object_007",
+        "object_008",
+        "object_010",
+        "object_014",
+        "object_022",
+        "object_023"
       ],
+      "penetration_count": 0,
+      "penetrations": [],
       "support_distance_m": {
-        "object_000": -1.1864545568026838e-05,
-        "object_001": -1.0078605982509134e-05,
-        "object_002": -1.3350709512678291e-05,
-        "object_003": -1.2484703440012943e-05,
-        "object_004": -1.149018954986307e-05,
-        "object_005": -1.4827929664186154e-05,
-        "object_006": -1.0000000000598072e-05,
-        "object_007": -3.164886063930332e-05,
-        "object_008": -1.0001537099178434e-05,
-        "object_009": -1.4158634644189858e-05,
-        "object_010": -9.999999999983546e-06,
-        "object_011": -0.09040043434438085,
-        "object_012": -1.4558462267539804e-05,
-        "object_013": -1.4317177474137618e-05,
-        "object_014": -1.0033934251361606e-05,
-        "object_015": -1.0033934251389362e-05,
-        "object_016": -1.0000000000584628e-05,
-        "object_017": -1.8424549046177838e-05,
-        "object_018": -1.0000000000591133e-05,
-        "object_019": -1.137303561066054e-05,
-        "object_020": -1.4315182273389945e-05,
-        "object_021": -1.431518227336219e-05,
-        "object_022": -1.0355367941734459e-05,
-        "object_023": -1.115970769128942e-05,
-        "object_024": -1.4117488203525472e-05,
-        "object_025": -1.000067940041139e-05,
-        "object_026": -1.0657507576795552e-05,
-        "object_027": -9.999999999986582e-06
+        "object_000": -1.3188581491336768e-05,
+        "object_001": -1.0456715746181774e-05,
+        "object_002": -2.0341901031051962e-05,
+        "object_003": -9.870952428057793e-06,
+        "object_004": -1.9201469165305504e-05,
+        "object_005": 1.2380403866457594,
+        "object_006": -1.1115506594260374e-05,
+        "object_007": 1.921306769711952,
+        "object_008": 3.1014015529087624,
+        "object_009": -1.3561210788632684e-05,
+        "object_010": 2.233086877424885,
+        "object_011": -1.023566249352438e-05,
+        "object_012": -1.1136372381028922e-05,
+        "object_013": -1.093192483927509e-05,
+        "object_014": 1.0588566141522981,
+        "object_015": -1.0821569668409067e-05,
+        "object_016": -1.346438768184445e-05,
+        "object_017": -1.0512717292800525e-05,
+        "object_018": -1.248180574531417e-05,
+        "object_019": -2.635424931489959e-05,
+        "object_020": -1.1098344177834854e-05,
+        "object_021": -1.1333737218783071e-05,
+        "object_022": 0.6742500733670665,
+        "object_023": 1.693651499296675
       },
       "tolerance_m": 0.005,
       "horizontal_corrections_m": {
         "object_001": [
-          -0.9234000028800591,
-          0.0,
-          0.5631645469509172
-        ],
-        "object_002": [
-          -0.2957434049623017,
+          0.1919942311219779,
           0.0,
           0.0
         ],
-        "object_004": [
-          0.20492229302262244,
+        "object_003": [
+          -0.017599471186181315,
           0.0,
-          0.03222497213707476
+          0.2507771312976808
         ],
         "object_005": [
-          1.1381053958318346,
           0.0,
-          0.0
+          0.0,
+          -0.18935186526518355
         ],
         "object_006": [
-          -0.02622488388175384,
           0.0,
-          -0.11382200233159719
-        ],
-        "object_007": [
-          0.1295281673498409,
           0.0,
-          -0.06410632622421383
-        ],
-        "object_008": [
-          -0.05813164092086803,
-          0.0,
-          -0.040036810085883064
-        ],
-        "object_009": [
-          -0.6495718946267464,
-          0.0,
-          0.0
-        ],
-        "object_010": [
-          0.13610028672537605,
-          0.0,
-          0.5256667710977012
+          0.5506338164159159
         ],
         "object_011": [
-          0.00025791224782516914,
+          0.06820865443487367,
           0.0,
-          0.01087389057118145
+          -0.6638790782947379
         ],
         "object_012": [
-          1.0262924564672211,
+          -0.7343006402098657,
           0.0,
           0.0
         ],
         "object_013": [
-          0.7041522578607635,
+          0.7385933860202039,
           0.0,
-          0.0
-        ],
-        "object_014": [
-          -2.2368566139137376,
-          0.0,
-          -0.382572700294335
+          0.041377965703778885
         ],
         "object_015": [
-          -1.428770404575456,
+          -0.058423554406731235,
           0.0,
-          -0.18059184665658223
+          0.23482365625102136
         ],
-        "object_017": [
-          0.27844946672958093,
+        "object_016": [
           0.0,
-          0.06897968216992699
-        ],
-        "object_018": [
-          -0.012201220183956182,
           0.0,
-          0.012177997668402746
-        ],
-        "object_019": [
-          0.2181837937034006,
-          0.0,
-          0.0
+          -0.23482365625102136
         ],
         "object_020": [
-          1.2189289619679298,
+          -0.27213917579793534,
           0.0,
           0.0
         ],
         "object_021": [
-          0.6228283404149499,
+          0.25806132995945485,
           0.0,
-          0.0
+          0.07186729617504312
         ],
         "object_022": [
-          0.30025649022608764,
+          0.1471739778184557,
           0.0,
-          0.0
+          -0.40687832996276996
         ],
         "object_023": [
-          -0.6717838737100954,
-          0.0,
-          0.0
-        ],
-        "object_024": [
-          0.8062595740038676,
-          0.0,
-          0.0
-        ],
-        "object_025": [
-          0.0,
-          0.0,
-          -0.020136834391076757
-        ],
-        "object_026": [
-          -0.03380336883028162,
-          0.0,
-          -0.03222497213707476
-        ],
-        "object_027": [
-          -0.655893623761488,
+          -0.7358698890922786,
           0.0,
           0.0
         ]
       },
       "inferred_support_extension_m": [
-        2.786589547841081,
-        0.11209380422214554
+        0.0,
+        0.0
       ],
-      "duration_s": 0.5412
+      "duration_s": 0.4567
     },
     "stability": {
       "status": "ok",
-      "duration_s": 1.4804,
-      "max_drift_m": 0.33715837788015063,
+      "duration_s": 1.4572,
+      "max_drift_m": 0.02583454533408653,
       "per_object_max_drift_m": {
-        "object_000": 7.094344833269984e-05,
-        "object_001": 6.134522184148269e-08,
-        "object_002": 2.8632991488756e-06,
-        "object_003": 6.669002555297079e-05,
-        "object_004": 1.155572902458482e-06,
-        "object_005": 8.105449602255353e-06,
-        "object_006": 9.794671407668036e-12,
-        "object_007": 0.0006460651968959384,
-        "object_008": 1.3341965642690563e-06,
-        "object_009": 6.36130844132456e-06,
-        "object_010": 0.33715837788015063,
-        "object_011": 0.24795275000229672,
-        "object_012": 3.440485375583522e-06,
-        "object_013": 1.4294928099226888e-05,
-        "object_014": 2.7136348932251523e-08,
-        "object_015": 2.7136348932251523e-08,
-        "object_016": 3.7514966496547654e-11,
-        "object_017": 0.0008263439502270755,
-        "object_018": 2.285933392479782e-10,
-        "object_019": 6.886675830201338e-07,
-        "object_020": 2.7602796047447175e-06,
-        "object_021": 2.7602796046275783e-06,
-        "object_022": 4.7676325314424737e-07,
-        "object_023": 5.23801983966545e-05,
-        "object_024": 4.4541381421304066e-06,
-        "object_025": 5.759868457342939e-05,
-        "object_026": 3.6812386612241324e-07,
-        "object_027": 0.0
+        "object_000": 6.070828337962321e-05,
+        "object_001": 7.872134530243818e-05,
+        "object_002": 0.008018216869740889,
+        "object_003": 0.02583454533408653,
+        "object_004": 0.005083637121863874,
+        "object_005": 0.0007888050985520547,
+        "object_006": 5.0932446338327524e-05,
+        "object_007": 6.210591240907932e-05,
+        "object_008": 0.00020097074741574314,
+        "object_009": 6.674271525649864e-07,
+        "object_010": 0.00025368611334678864,
+        "object_011": 0.00010875347517245785,
+        "object_012": 5.0932202824988676e-05,
+        "object_013": 5.093415858116895e-05,
+        "object_014": 0.00011677524684426734,
+        "object_015": 5.0935365608147475e-05,
+        "object_016": 4.349126636220152e-05,
+        "object_017": 3.961627346943834e-05,
+        "object_018": 0.00016023046529968567,
+        "object_019": 0.0006165514617703382,
+        "object_020": 5.093255275250836e-05,
+        "object_021": 5.093050688206745e-05,
+        "object_022": 0.00023595895150597452,
+        "object_023": 5.521542486354823e-06
       },
       "passed": false,
       "final_contacts": {
-        "float_count": 0,
-        "floating_ids": [],
+        "float_count": 7,
+        "floating_ids": [
+          "object_005",
+          "object_007",
+          "object_008",
+          "object_010",
+          "object_014",
+          "object_022",
+          "object_023"
+        ],
         "penetration_count": 0,
         "penetrations": [],
         "support_distance_m": {
-          "object_000": -1.2497233236567415e-05,
-          "object_001": -1.0000000000147044e-05,
-          "object_002": -1.0000017368573186e-05,
-          "object_003": -1.2191400084715295e-05,
-          "object_004": -1.0000000066531442e-05,
-          "object_005": -1.0000204669553467e-05,
-          "object_006": -1.0000000000581592e-05,
-          "object_007": -1.0231500840637495e-05,
-          "object_008": -1.0001562347967605e-05,
-          "object_009": -1.000193101509221e-05,
-          "object_010": -1.045202766152345e-05,
-          "object_011": 3.310059455565069e-05,
-          "object_012": -1.0000604167460445e-05,
-          "object_013": -1.0008234139204271e-05,
-          "object_014": -1.0000000000147044e-05,
-          "object_015": -1.0000000000160922e-05,
-          "object_016": -1.0000000000573786e-05,
-          "object_017": -1.2742050751513717e-05,
-          "object_018": -1.0000000000592868e-05,
-          "object_019": -1.0000000018070207e-05,
-          "object_020": -1.0001375508840102e-05,
-          "object_021": -1.0001375508840102e-05,
-          "object_022": -1.0000000000077655e-05,
-          "object_023": -2.2706639128384706e-05,
-          "object_024": -1.0000034033567223e-05,
-          "object_025": -1.000073663259566e-05,
-          "object_026": -1.0000000000689579e-05,
-          "object_027": -9.999999999980077e-06
+          "object_000": -1.0039712677883603e-05,
+          "object_001": -1.0002270503182628e-05,
+          "object_002": -1.1446139317798643e-05,
+          "object_003": -1.4222909381546127e-05,
+          "object_004": -2.0292521853862086e-05,
+          "object_005": 1.2373671044212133,
+          "object_006": -1.0209037030998666e-05,
+          "object_007": 1.9213818792855135,
+          "object_008": 3.1015111445314054,
+          "object_009": -1.3305897038379689e-05,
+          "object_010": 2.2333393721551604,
+          "object_011": -1.1264801804628313e-05,
+          "object_012": -1.0227624422804935e-05,
+          "object_013": -1.026821674256738e-05,
+          "object_014": 1.0588056338505816,
+          "object_015": -1.0280052527287739e-05,
+          "object_016": -1.1024961487872062e-05,
+          "object_017": -1.2057710949557252e-05,
+          "object_018": -1.3807465249147596e-05,
+          "object_019": -2.4647569959358392e-05,
+          "object_020": -1.019579093576757e-05,
+          "object_021": -1.0302191972280314e-05,
+          "object_022": 0.6742888331497331,
+          "object_023": 1.6936513910749411
         },
         "tolerance_m": 0.005
       }
     },
     "visual_assets": {
       "status": "ok",
-      "duration_s": 0.0671
+      "duration_s": 0.1443
     },
     "debug_and_metrics": {
       "status": "ok",
-      "duration_s": 0.7016
+      "duration_s": 1.5933
     }
   },
   "warnings": [
-    "object_008 mesh fallback: Generated mesh silhouette is worse than the completed box; kept the better fit",
-    "object_017 mesh fallback: Generated mesh silhouette is worse than the completed box; kept the better fit",
-    "object_018 mesh fallback: Generated mesh silhouette is worse than the completed box; kept the better fit"
+    "Wall candidate 0 rejected: its observed plane is not vertical.",
+    "object_005 mesh fallback: Generated mesh silhouette is worse than the completed box; kept the better fit",
+    "Video scene needs review: contacts, stability, reprojection checks did not pass. See measured metrics."
   ],
   "estimated": [
     "mass, friction and restitution priors",
     "hidden surfaces",
-    "support height .75 m",
-    "hidden table bounds expanded to include observed object contact rays"
+    "support height .75 m"
   ],
   "models": {
     "depth": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
@@ -532,275 +440,204 @@
   },
   "metrics": {
     "contacts_after_settle": {
-      "float_count": 0,
-      "floating_ids": [],
-      "penetration_count": 2,
-      "penetrations": [
-        {
-          "ids": [
-            "object_011",
-            "wall_2"
-          ],
-          "depth_m": 0.13485628832716365
-        },
-        {
-          "ids": [
-            "object_011",
-            "support"
-          ],
-          "depth_m": 0.09040043434438085
-        }
+      "float_count": 7,
+      "floating_ids": [
+        "object_005",
+        "object_007",
+        "object_008",
+        "object_010",
+        "object_014",
+        "object_022",
+        "object_023"
       ],
+      "penetration_count": 0,
+      "penetrations": [],
       "support_distance_m": {
-        "object_000": -1.1864545568026838e-05,
-        "object_001": -1.0078605982509134e-05,
-        "object_002": -1.3350709512678291e-05,
-        "object_003": -1.2484703440012943e-05,
-        "object_004": -1.149018954986307e-05,
-        "object_005": -1.4827929664186154e-05,
-        "object_006": -1.0000000000598072e-05,
-        "object_007": -3.164886063930332e-05,
-        "object_008": -1.0001537099178434e-05,
-        "object_009": -1.4158634644189858e-05,
-        "object_010": -9.999999999983546e-06,
-        "object_011": -0.09040043434438085,
-        "object_012": -1.4558462267539804e-05,
-        "object_013": -1.4317177474137618e-05,
-        "object_014": -1.0033934251361606e-05,
-        "object_015": -1.0033934251389362e-05,
-        "object_016": -1.0000000000584628e-05,
-        "object_017": -1.8424549046177838e-05,
-        "object_018": -1.0000000000591133e-05,
-        "object_019": -1.137303561066054e-05,
-        "object_020": -1.4315182273389945e-05,
-        "object_021": -1.431518227336219e-05,
-        "object_022": -1.0355367941734459e-05,
-        "object_023": -1.115970769128942e-05,
-        "object_024": -1.4117488203525472e-05,
-        "object_025": -1.000067940041139e-05,
-        "object_026": -1.0657507576795552e-05,
-        "object_027": -9.999999999986582e-06
+        "object_000": -1.3188581491336768e-05,
+        "object_001": -1.0456715746181774e-05,
+        "object_002": -2.0341901031051962e-05,
+        "object_003": -9.870952428057793e-06,
+        "object_004": -1.9201469165305504e-05,
+        "object_005": 1.2380403866457594,
+        "object_006": -1.1115506594260374e-05,
+        "object_007": 1.921306769711952,
+        "object_008": 3.1014015529087624,
+        "object_009": -1.3561210788632684e-05,
+        "object_010": 2.233086877424885,
+        "object_011": -1.023566249352438e-05,
+        "object_012": -1.1136372381028922e-05,
+        "object_013": -1.093192483927509e-05,
+        "object_014": 1.0588566141522981,
+        "object_015": -1.0821569668409067e-05,
+        "object_016": -1.346438768184445e-05,
+        "object_017": -1.0512717292800525e-05,
+        "object_018": -1.248180574531417e-05,
+        "object_019": -2.635424931489959e-05,
+        "object_020": -1.1098344177834854e-05,
+        "object_021": -1.1333737218783071e-05,
+        "object_022": 0.6742500733670665,
+        "object_023": 1.693651499296675
       },
       "tolerance_m": 0.005,
       "horizontal_corrections_m": {
         "object_001": [
-          -0.9234000028800591,
-          0.0,
-          0.5631645469509172
-        ],
-        "object_002": [
-          -0.2957434049623017,
+          0.1919942311219779,
           0.0,
           0.0
         ],
-        "object_004": [
-          0.20492229302262244,
+        "object_003": [
+          -0.017599471186181315,
           0.0,
-          0.03222497213707476
+          0.2507771312976808
         ],
         "object_005": [
-          1.1381053958318346,
           0.0,
-          0.0
+          0.0,
+          -0.18935186526518355
         ],
         "object_006": [
-          -0.02622488388175384,
           0.0,
-          -0.11382200233159719
-        ],
-        "object_007": [
-          0.1295281673498409,
           0.0,
-          -0.06410632622421383
-        ],
-        "object_008": [
-          -0.05813164092086803,
-          0.0,
-          -0.040036810085883064
-        ],
-        "object_009": [
-          -0.6495718946267464,
-          0.0,
-          0.0
-        ],
-        "object_010": [
-          0.13610028672537605,
-          0.0,
-          0.5256667710977012
+          0.5506338164159159
         ],
         "object_011": [
-          0.00025791224782516914,
+          0.06820865443487367,
           0.0,
-          0.01087389057118145
+          -0.6638790782947379
         ],
         "object_012": [
-          1.0262924564672211,
+          -0.7343006402098657,
           0.0,
           0.0
         ],
         "object_013": [
-          0.7041522578607635,
+          0.7385933860202039,
           0.0,
-          0.0
-        ],
-        "object_014": [
-          -2.2368566139137376,
-          0.0,
-          -0.382572700294335
+          0.041377965703778885
         ],
         "object_015": [
-          -1.428770404575456,
+          -0.058423554406731235,
           0.0,
-          -0.18059184665658223
+          0.23482365625102136
         ],
-        "object_017": [
-          0.27844946672958093,
+        "object_016": [
           0.0,
-          0.06897968216992699
-        ],
-        "object_018": [
-          -0.012201220183956182,
           0.0,
-          0.012177997668402746
-        ],
-        "object_019": [
-          0.2181837937034006,
-          0.0,
-          0.0
+          -0.23482365625102136
         ],
         "object_020": [
-          1.2189289619679298,
+          -0.27213917579793534,
           0.0,
           0.0
         ],
         "object_021": [
-          0.6228283404149499,
+          0.25806132995945485,
           0.0,
-          0.0
+          0.07186729617504312
         ],
         "object_022": [
-          0.30025649022608764,
+          0.1471739778184557,
           0.0,
-          0.0
+          -0.40687832996276996
         ],
         "object_023": [
-          -0.6717838737100954,
-          0.0,
-          0.0
-        ],
-        "object_024": [
-          0.8062595740038676,
-          0.0,
-          0.0
-        ],
-        "object_025": [
-          0.0,
-          0.0,
-          -0.020136834391076757
-        ],
-        "object_026": [
-          -0.03380336883028162,
-          0.0,
-          -0.03222497213707476
-        ],
-        "object_027": [
-          -0.655893623761488,
+          -0.7358698890922786,
           0.0,
           0.0
         ]
       },
       "inferred_support_extension_m": [
-        2.786589547841081,
-        0.11209380422214554
+        0.0,
+        0.0
       ]
     },
     "stability": {
       "duration_s": 5,
-      "max_drift_m": 0.33715837788015063,
+      "max_drift_m": 0.02583454533408653,
       "per_object_max_drift_m": {
-        "object_000": 7.094344833269984e-05,
-        "object_001": 6.134522184148269e-08,
-        "object_002": 2.8632991488756e-06,
-        "object_003": 6.669002555297079e-05,
-        "object_004": 1.155572902458482e-06,
-        "object_005": 8.105449602255353e-06,
-        "object_006": 9.794671407668036e-12,
-        "object_007": 0.0006460651968959384,
-        "object_008": 1.3341965642690563e-06,
-        "object_009": 6.36130844132456e-06,
-        "object_010": 0.33715837788015063,
-        "object_011": 0.24795275000229672,
-        "object_012": 3.440485375583522e-06,
-        "object_013": 1.4294928099226888e-05,
-        "object_014": 2.7136348932251523e-08,
-        "object_015": 2.7136348932251523e-08,
-        "object_016": 3.7514966496547654e-11,
-        "object_017": 0.0008263439502270755,
-        "object_018": 2.285933392479782e-10,
-        "object_019": 6.886675830201338e-07,
-        "object_020": 2.7602796047447175e-06,
-        "object_021": 2.7602796046275783e-06,
-        "object_022": 4.7676325314424737e-07,
-        "object_023": 5.23801983966545e-05,
-        "object_024": 4.4541381421304066e-06,
-        "object_025": 5.759868457342939e-05,
-        "object_026": 3.6812386612241324e-07,
-        "object_027": 0.0
+        "object_000": 6.070828337962321e-05,
+        "object_001": 7.872134530243818e-05,
+        "object_002": 0.008018216869740889,
+        "object_003": 0.02583454533408653,
+        "object_004": 0.005083637121863874,
+        "object_005": 0.0007888050985520547,
+        "object_006": 5.0932446338327524e-05,
+        "object_007": 6.210591240907932e-05,
+        "object_008": 0.00020097074741574314,
+        "object_009": 6.674271525649864e-07,
+        "object_010": 0.00025368611334678864,
+        "object_011": 0.00010875347517245785,
+        "object_012": 5.0932202824988676e-05,
+        "object_013": 5.093415858116895e-05,
+        "object_014": 0.00011677524684426734,
+        "object_015": 5.0935365608147475e-05,
+        "object_016": 4.349126636220152e-05,
+        "object_017": 3.961627346943834e-05,
+        "object_018": 0.00016023046529968567,
+        "object_019": 0.0006165514617703382,
+        "object_020": 5.093255275250836e-05,
+        "object_021": 5.093050688206745e-05,
+        "object_022": 0.00023595895150597452,
+        "object_023": 5.521542486354823e-06
       },
       "passed": false,
       "final_contacts": {
-        "float_count": 0,
-        "floating_ids": [],
+        "float_count": 7,
+        "floating_ids": [
+          "object_005",
+          "object_007",
+          "object_008",
+          "object_010",
+          "object_014",
+          "object_022",
+          "object_023"
+        ],
         "penetration_count": 0,
         "penetrations": [],
         "support_distance_m": {
-          "object_000": -1.2497233236567415e-05,
-          "object_001": -1.0000000000147044e-05,
-          "object_002": -1.0000017368573186e-05,
-          "object_003": -1.2191400084715295e-05,
-          "object_004": -1.0000000066531442e-05,
-          "object_005": -1.0000204669553467e-05,
-          "object_006": -1.0000000000581592e-05,
-          "object_007": -1.0231500840637495e-05,
-          "object_008": -1.0001562347967605e-05,
-          "object_009": -1.000193101509221e-05,
-          "object_010": -1.045202766152345e-05,
-          "object_011": 3.310059455565069e-05,
-          "object_012": -1.0000604167460445e-05,
-          "object_013": -1.0008234139204271e-05,
-          "object_014": -1.0000000000147044e-05,
-          "object_015": -1.0000000000160922e-05,
-          "object_016": -1.0000000000573786e-05,
-          "object_017": -1.2742050751513717e-05,
-          "object_018": -1.0000000000592868e-05,
-          "object_019": -1.0000000018070207e-05,
-          "object_020": -1.0001375508840102e-05,
-          "object_021": -1.0001375508840102e-05,
-          "object_022": -1.0000000000077655e-05,
-          "object_023": -2.2706639128384706e-05,
-          "object_024": -1.0000034033567223e-05,
-          "object_025": -1.000073663259566e-05,
-          "object_026": -1.0000000000689579e-05,
-          "object_027": -9.999999999980077e-06
+          "object_000": -1.0039712677883603e-05,
+          "object_001": -1.0002270503182628e-05,
+          "object_002": -1.1446139317798643e-05,
+          "object_003": -1.4222909381546127e-05,
+          "object_004": -2.0292521853862086e-05,
+          "object_005": 1.2373671044212133,
+          "object_006": -1.0209037030998666e-05,
+          "object_007": 1.9213818792855135,
+          "object_008": 3.1015111445314054,
+          "object_009": -1.3305897038379689e-05,
+          "object_010": 2.2333393721551604,
+          "object_011": -1.1264801804628313e-05,
+          "object_012": -1.0227624422804935e-05,
+          "object_013": -1.026821674256738e-05,
+          "object_014": 1.0588056338505816,
+          "object_015": -1.0280052527287739e-05,
+          "object_016": -1.1024961487872062e-05,
+          "object_017": -1.2057710949557252e-05,
+          "object_018": -1.3807465249147596e-05,
+          "object_019": -2.4647569959358392e-05,
+          "object_020": -1.019579093576757e-05,
+          "object_021": -1.0302191972280314e-05,
+          "object_022": 0.6742888331497331,
+          "object_023": 1.6936513910749411
         },
         "tolerance_m": 0.005
       }
     },
-    "reprojection_mean_iou": 0.014000027683903349,
-    "depth_mae_m": 0.9866640369097391,
+    "reprojection_mean_iou": 0.08731148720368825,
+    "depth_mae_m": 0.4656281783245504,
     "per_object": [
       {
         "id": "object_000",
         "label": "black insulated bottle",
-        "shape_method": "silhouette_cylinder_metric_reference_silhouette_refined",
-        "reprojection_iou": 0.08958837772397095,
-        "depth_mae_m": 1.6030240058898926,
-        "depth_compared_pixels": 37
+        "shape_method": "template_cylinder_silhouette_refined",
+        "reprojection_iou": 0.5678233438485805,
+        "depth_mae_m": 0.05350538715720177,
+        "depth_compared_pixels": 360
       },
       {
         "id": "object_001",
-        "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "label": "plastic water bottle",
+        "shape_method": "template_cylinder_silhouette_refined",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
@@ -808,79 +645,79 @@
       {
         "id": "object_002",
         "label": "chair",
-        "shape_method": "gravity_aligned_obb",
-        "reprojection_iou": 0.04862972892463509,
-        "depth_mae_m": 0.8704763054847717,
-        "depth_compared_pixels": 1306
+        "shape_method": "compound_chair_from_points",
+        "reprojection_iou": 0.44391971664698937,
+        "depth_mae_m": 0.23343999683856964,
+        "depth_compared_pixels": 10528
       },
       {
         "id": "object_003",
-        "label": "bottle plastic water bottle",
-        "shape_method": "silhouette_cylinder_metric_reference_silhouette_refined",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
+        "label": "chair",
+        "shape_method": "compound_chair_from_points",
+        "reprojection_iou": 0.19424117627037882,
+        "depth_mae_m": 0.6083772778511047,
+        "depth_compared_pixels": 5707
       },
       {
         "id": "object_004",
         "label": "chair",
-        "shape_method": "gravity_aligned_obb",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
+        "shape_method": "compound_chair_from_points",
+        "reprojection_iou": 0.03264828303850156,
+        "depth_mae_m": 0.3572750687599182,
+        "depth_compared_pixels": 251
       },
       {
         "id": "object_005",
-        "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "label": "gray backpack black backpack",
+        "shape_method": "gravity_aligned_obb_silhouette_refined",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
         "id": "object_006",
-        "label": "open laptop closed laptop",
-        "shape_method": "closed_laptop_template",
+        "label": "chair",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
         "id": "object_007",
-        "label": "open laptop closed laptop",
-        "shape_method": "closed_laptop_template",
+        "label": "partially visible laptop",
+        "shape_method": "box_closed_laptop_silhouette_refined",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
         "id": "object_008",
-        "label": "gray backpack black backpack",
-        "shape_method": "occlusion_completed_box_template_silhouette_refined",
-        "reprojection_iou": 0.25378266850068776,
-        "depth_mae_m": 0.4864917993545532,
-        "depth_compared_pixels": 369
-      },
-      {
-        "id": "object_009",
-        "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "label": "open laptop closed laptop",
+        "shape_method": "compound_laptop_template_silhouette_refined",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
+        "id": "object_009",
+        "label": "partially visible laptop",
+        "shape_method": "compound_laptop_template",
+        "reprojection_iou": 0.28125,
+        "depth_mae_m": 0.07703901827335358,
+        "depth_compared_pixels": 54
+      },
+      {
         "id": "object_010",
-        "label": "keyboard",
-        "shape_method": "gravity_aligned_obb",
+        "label": "open laptop closed laptop monitor",
+        "shape_method": "box_closed_laptop_silhouette_refined",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
         "id": "object_011",
-        "label": "can box",
-        "shape_method": "gravity_aligned_obb",
+        "label": "chair",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
@@ -888,7 +725,7 @@
       {
         "id": "object_012",
         "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
@@ -896,15 +733,15 @@
       {
         "id": "object_013",
         "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
         "id": "object_014",
-        "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "label": "can",
+        "shape_method": "template_cylinder",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
@@ -912,39 +749,39 @@
       {
         "id": "object_015",
         "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
         "id": "object_016",
-        "label": "keyboard",
-        "shape_method": "gravity_aligned_obb",
+        "label": "chair",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
         "id": "object_017",
-        "label": "jacket",
-        "shape_method": "occlusion_completed_box_template",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
+        "label": "chair",
+        "shape_method": "compound_chair_from_points",
+        "reprojection_iou": 0.1485148514851485,
+        "depth_mae_m": 0.24259568750858307,
+        "depth_compared_pixels": 45
       },
       {
         "id": "object_018",
-        "label": "jacket",
-        "shape_method": "occlusion_completed_box_template",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
+        "label": "chair",
+        "shape_method": "compound_chair_from_points",
+        "reprojection_iou": 0.035754189944134075,
+        "depth_mae_m": 1.5814564228057861,
+        "depth_compared_pixels": 32
       },
       {
         "id": "object_019",
         "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
@@ -952,7 +789,7 @@
       {
         "id": "object_020",
         "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
@@ -960,53 +797,21 @@
       {
         "id": "object_021",
         "label": "chair",
-        "shape_method": "gravity_aligned_obb",
+        "shape_method": "compound_chair_from_points",
         "reprojection_iou": 0.0,
         "depth_mae_m": null,
         "depth_compared_pixels": 0
       },
       {
         "id": "object_022",
-        "label": "chair",
+        "label": "monitor",
         "shape_method": "gravity_aligned_obb",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
+        "reprojection_iou": 0.39132413165478536,
+        "depth_mae_m": 0.571336567401886,
+        "depth_compared_pixels": 7740
       },
       {
         "id": "object_023",
-        "label": "chair",
-        "shape_method": "gravity_aligned_obb",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_024",
-        "label": "chair",
-        "shape_method": "gravity_aligned_obb",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_025",
-        "label": "can",
-        "shape_method": "silhouette_cylinder_metric_reference",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_026",
-        "label": "chair",
-        "shape_method": "gravity_aligned_obb",
-        "reprojection_iou": 0.0,
-        "depth_mae_m": null,
-        "depth_compared_pixels": 0
-      },
-      {
-        "id": "object_027",
         "label": "keyboard",
         "shape_method": "gravity_aligned_obb",
         "reprojection_iou": 0.0,
@@ -1014,331 +819,315 @@
         "depth_compared_pixels": 0
       }
     ],
-    "mask_pixel_assignment_fraction": 0.11478660127308776,
+    "mask_pixel_assignment_fraction": 0.28518241273343314,
     "coverage_nonplane_pixels": null,
     "coverage_note": "Independent foreground annotation unavailable; mask union/image fraction is not foreground coverage."
   },
-  "debug_url": "/api/reconstructions/c78f309711f2b277ffff6fcb2ebcc788234ded43c61a48276d45740755ce25ae",
+  "debug_url": "/api/reconstructions/1157ec2a2594bf92da360d620a781d630378c510e5b9271039e7b3a9ddf767b9",
   "objects": [
     {
       "id": "object_000",
       "label": "black insulated bottle",
-      "shape_method": "silhouette_cylinder_metric_reference",
-      "valid_points": 4238,
-      "fallback": null,
-      "residual_m": 0.0026427141586426875,
+      "shape_method": "template_cylinder_silhouette_refined",
+      "valid_points": 5271,
+      "fallback": "Cylinder fit has poor consensus",
+      "residual_m": 0.018722311975672846,
       "details": null,
-      "fused_multiview_points": 4238,
-      "initial_shape_method": "ransac_cylinder"
+      "fused_multiview_points": 5271,
+      "initial_shape_method": "template_cylinder"
     },
     {
       "id": "object_001",
-      "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 23820,
-      "fallback": null,
-      "residual_m": 0.053835115115588715,
+      "label": "plastic water bottle",
+      "shape_method": "template_cylinder_silhouette_refined",
+      "valid_points": 3117,
+      "fallback": "Cylinder fit has poor consensus",
+      "residual_m": 0.028589044997538587,
       "details": null,
-      "fused_multiview_points": 23820,
-      "initial_shape_method": "gravity_aligned_obb"
+      "fused_multiview_points": 3117,
+      "initial_shape_method": "template_cylinder"
     },
     {
       "id": "object_002",
       "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 82981,
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 49224,
       "fallback": null,
-      "residual_m": 0.04488456086837231,
-      "details": null,
-      "fused_multiview_points": 82981,
-      "initial_shape_method": "gravity_aligned_obb"
+      "residual_m": 0.08918662870913559,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 49224,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_003",
-      "label": "bottle plastic water bottle",
-      "shape_method": "silhouette_cylinder_metric_reference",
-      "valid_points": 3570,
+      "label": "chair",
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 23424,
       "fallback": null,
-      "residual_m": 0.005176520093661846,
-      "details": null,
-      "fused_multiview_points": 3570,
-      "initial_shape_method": "ransac_cylinder"
+      "residual_m": 0.13616242151991692,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 23424,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_004",
       "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 68112,
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 61512,
       "fallback": null,
-      "residual_m": 0.04241508713673596,
-      "details": null,
-      "fused_multiview_points": 68112,
-      "initial_shape_method": "gravity_aligned_obb"
+      "residual_m": 0.11686874947654821,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 61512,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_005",
-      "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 5567,
-      "fallback": null,
-      "residual_m": 0.037576028760893616,
+      "label": "gray backpack black backpack",
+      "shape_method": "gravity_aligned_obb_silhouette_refined",
+      "valid_points": 179,
+      "fallback": "image_to_3d_unavailable; gravity_aligned_obb",
+      "residual_m": 0.019330157683834885,
       "details": null,
-      "fused_multiview_points": 5567,
+      "fused_multiview_points": 179,
       "initial_shape_method": "gravity_aligned_obb"
     },
     {
       "id": "object_006",
-      "label": "open laptop closed laptop",
-      "shape_method": "closed_laptop_template",
-      "valid_points": 244,
-      "fallback": null,
-      "residual_m": 0.01719181731180494,
+      "label": "chair",
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 5585,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.12894342594928804,
       "details": {
-        "hinge_angle_rad": 1.1344640137963142,
-        "hinge_measured": false,
-        "base_depth_estimated": true
+        "seat_back_and_stand": "class completion of observed bounds"
       },
-      "fused_multiview_points": 244,
-      "initial_shape_method": "compound_laptop_template"
+      "fused_multiview_points": 5585,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_007",
+      "label": "partially visible laptop",
+      "shape_method": "box_closed_laptop_silhouette_refined",
+      "valid_points": 332,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.09280274549256437,
+      "details": null,
+      "fused_multiview_points": 332,
+      "initial_shape_method": "box_closed_laptop"
+    },
+    {
+      "id": "object_008",
       "label": "open laptop closed laptop",
-      "shape_method": "closed_laptop_template",
-      "valid_points": 388,
+      "shape_method": "compound_laptop_template_silhouette_refined",
+      "valid_points": 601,
       "fallback": null,
-      "residual_m": 0.01695850856458798,
+      "residual_m": 0.032622701906490165,
       "details": {
         "hinge_angle_rad": 1.1344640137963142,
         "hinge_measured": false,
         "base_depth_estimated": true
       },
-      "fused_multiview_points": 388,
+      "fused_multiview_points": 601,
       "initial_shape_method": "compound_laptop_template"
     },
     {
-      "id": "object_008",
-      "label": "gray backpack black backpack",
-      "shape_method": "occlusion_completed_box_template",
-      "valid_points": 9035,
-      "fallback": "image_to_3d_unavailable; gravity_aligned_obb",
-      "residual_m": 0.013605704513471598,
-      "details": null,
-      "fused_multiview_points": 9035,
-      "initial_shape_method": "gravity_aligned_obb"
-    },
-    {
       "id": "object_009",
-      "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 1053,
+      "label": "partially visible laptop",
+      "shape_method": "compound_laptop_template",
+      "valid_points": 218,
       "fallback": null,
-      "residual_m": 0.03762173390209075,
-      "details": null,
-      "fused_multiview_points": 1053,
-      "initial_shape_method": "gravity_aligned_obb"
+      "residual_m": 0.029018289896543925,
+      "details": {
+        "hinge_angle_rad": 1.8325957145940461,
+        "hinge_measured": false,
+        "base_depth_estimated": true
+      },
+      "fused_multiview_points": 218,
+      "initial_shape_method": "compound_laptop_template"
     },
     {
       "id": "object_010",
-      "label": "keyboard",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 12802,
-      "fallback": "thin_object_thickness_prior",
-      "residual_m": 0.0358541463589155,
+      "label": "open laptop closed laptop monitor",
+      "shape_method": "box_closed_laptop_silhouette_refined",
+      "valid_points": 439,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.05700407164609911,
       "details": null,
-      "fused_multiview_points": 12802,
-      "initial_shape_method": "gravity_aligned_obb"
+      "fused_multiview_points": 439,
+      "initial_shape_method": "box_closed_laptop"
     },
     {
       "id": "object_011",
-      "label": "can box",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 470,
+      "label": "chair",
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 3045,
       "fallback": null,
-      "residual_m": 0.02531908701762674,
-      "details": null,
-      "fused_multiview_points": 470,
-      "initial_shape_method": "gravity_aligned_obb"
+      "residual_m": 0.13713361735562685,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 3045,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_012",
       "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 2113,
-      "fallback": null,
-      "residual_m": 0.030800116928947602,
-      "details": null,
-      "fused_multiview_points": 2113,
-      "initial_shape_method": "gravity_aligned_obb"
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 4306,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.12334903188278,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 4306,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_013",
       "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 60,
-      "fallback": null,
-      "residual_m": 0.0077049213460068395,
-      "details": null,
-      "fused_multiview_points": 60,
-      "initial_shape_method": "gravity_aligned_obb"
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 4306,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.12334903188278,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 4306,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_014",
-      "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 7023,
-      "fallback": null,
-      "residual_m": 0.08764130453002597,
+      "label": "can",
+      "shape_method": "template_cylinder",
+      "valid_points": 194,
+      "fallback": "cylinder_extent_outside_plausible_range",
+      "residual_m": 0.04090157602355508,
       "details": null,
-      "fused_multiview_points": 7023,
-      "initial_shape_method": "gravity_aligned_obb"
+      "fused_multiview_points": 194,
+      "initial_shape_method": "template_cylinder"
     },
     {
       "id": "object_015",
       "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 7023,
-      "fallback": null,
-      "residual_m": 0.08764130453002597,
-      "details": null,
-      "fused_multiview_points": 7023,
-      "initial_shape_method": "gravity_aligned_obb"
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 2527,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.2182035425722068,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 2527,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_016",
-      "label": "keyboard",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 284,
-      "fallback": null,
-      "residual_m": 0.008819290663356127,
-      "details": null,
-      "fused_multiview_points": 284,
-      "initial_shape_method": "gravity_aligned_obb"
+      "label": "chair",
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 2527,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.2182035425722068,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 2527,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_017",
-      "label": "jacket",
-      "shape_method": "occlusion_completed_box_template",
-      "valid_points": 581,
-      "fallback": "image_to_3d_unavailable; gravity_aligned_obb",
-      "residual_m": 0.030370613392412406,
-      "details": null,
-      "fused_multiview_points": 581,
-      "initial_shape_method": "gravity_aligned_obb"
+      "label": "chair",
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 46,
+      "fallback": null,
+      "residual_m": 0.023985698029405637,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 46,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_018",
-      "label": "jacket",
-      "shape_method": "occlusion_completed_box_template",
-      "valid_points": 581,
-      "fallback": "image_to_3d_unavailable; gravity_aligned_obb",
-      "residual_m": 0.030370613392412406,
-      "details": null,
-      "fused_multiview_points": 581,
-      "initial_shape_method": "gravity_aligned_obb"
+      "label": "chair",
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 3636,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.19999187754121325,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 3636,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_019",
       "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 3382,
-      "fallback": null,
-      "residual_m": 0.04546230280867915,
-      "details": null,
-      "fused_multiview_points": 3382,
-      "initial_shape_method": "gravity_aligned_obb"
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 200,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.046316918952824804,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 200,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_020",
       "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 3351,
-      "fallback": null,
-      "residual_m": 0.03061615386134553,
-      "details": null,
-      "fused_multiview_points": 3351,
-      "initial_shape_method": "gravity_aligned_obb"
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 4183,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.12030689728647695,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 4183,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_021",
       "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 3351,
-      "fallback": null,
-      "residual_m": 0.03061615386134553,
-      "details": null,
-      "fused_multiview_points": 3351,
-      "initial_shape_method": "gravity_aligned_obb"
+      "shape_method": "compound_chair_from_points",
+      "valid_points": 4183,
+      "fallback": "unreliable_depth_extent",
+      "residual_m": 0.12030689728647695,
+      "details": {
+        "seat_back_and_stand": "class completion of observed bounds"
+      },
+      "fused_multiview_points": 4183,
+      "initial_shape_method": "compound_chair_from_points"
     },
     {
       "id": "object_022",
-      "label": "chair",
+      "label": "monitor",
       "shape_method": "gravity_aligned_obb",
-      "valid_points": 503,
+      "valid_points": 89761,
       "fallback": null,
-      "residual_m": 0.03986650007672238,
+      "residual_m": 0.2521478710154969,
       "details": null,
-      "fused_multiview_points": 503,
+      "fused_multiview_points": 89761,
       "initial_shape_method": "gravity_aligned_obb"
     },
     {
       "id": "object_023",
-      "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 3983,
-      "fallback": null,
-      "residual_m": 0.1331405021285002,
-      "details": null,
-      "fused_multiview_points": 3983,
-      "initial_shape_method": "gravity_aligned_obb"
-    },
-    {
-      "id": "object_024",
-      "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 955,
-      "fallback": null,
-      "residual_m": 0.022395311364576252,
-      "details": null,
-      "fused_multiview_points": 955,
-      "initial_shape_method": "gravity_aligned_obb"
-    },
-    {
-      "id": "object_025",
-      "label": "can",
-      "shape_method": "silhouette_cylinder_metric_reference",
-      "valid_points": 1151,
-      "fallback": "cylinder_extent_outside_plausible_range",
-      "residual_m": 0.05234852394592865,
-      "details": null,
-      "fused_multiview_points": 1151,
-      "initial_shape_method": "template_cylinder"
-    },
-    {
-      "id": "object_026",
-      "label": "chair",
-      "shape_method": "gravity_aligned_obb",
-      "valid_points": 1090,
-      "fallback": null,
-      "residual_m": 0.019565518196058753,
-      "details": null,
-      "fused_multiview_points": 1090,
-      "initial_shape_method": "gravity_aligned_obb"
-    },
-    {
-      "id": "object_027",
       "label": "keyboard",
       "shape_method": "gravity_aligned_obb",
-      "valid_points": 2382,
+      "valid_points": 809,
       "fallback": "thin_object_thickness_prior",
-      "residual_m": 0.02905401152782905,
+      "residual_m": 0.0663677543134651,
       "details": null,
-      "fused_multiview_points": 2382,
+      "fused_multiview_points": 809,
       "initial_shape_method": "gravity_aligned_obb"
     }
   ],
   "detected_count": 43,
-  "kept_count": 28,
+  "kept_count": 24,
   "detector": "grounding_dino",
   "depth": "metric_depth",
   "detections": [
@@ -1346,37 +1135,37 @@
       "label": "bottle",
       "detector_label": "black insulated bottle",
       "bbox": [
-        245.49029541015625,
-        145.11703491210938,
-        258.1064758300781,
-        183.08204650878906
+        245.8653564453125,
+        32.9774169921875,
+        257.7526550292969,
+        71.5964584350586
       ],
-      "confidence": 0.729275107383728,
-      "mask_score": 0.9227685928344727,
+      "confidence": 0.8396255970001221,
+      "mask_score": 0.9001234769821167,
       "mask_source": "sam2_box",
-      "median_depth_m": 0.8730795383453369,
+      "median_depth_m": 0.8956093192100525,
       "track_id": 0,
-      "classifier_label": "tumbler",
-      "classifier_confidence": 0.14869019389152527,
+      "classifier_label": "phone",
+      "classifier_confidence": 0.13663722574710846,
       "label_disagreement": true,
       "object_id": "object_000"
     },
     {
-      "label": "chair",
-      "detector_label": "chair",
+      "label": "bottle",
+      "detector_label": "plastic water bottle",
       "bbox": [
-        65.02899932861328,
-        173.05029296875,
-        202.24497985839844,
-        376.5305480957031
+        192.31199645996094,
+        37.92366027832031,
+        205.8203887939453,
+        73.09262084960938
       ],
-      "confidence": 0.5556982755661011,
-      "mask_score": 0.9418853521347046,
+      "confidence": 0.5915800333023071,
+      "mask_score": 0.916372537612915,
       "mask_source": "sam2_box",
-      "median_depth_m": 0.6876336932182312,
+      "median_depth_m": 0.8435588479042053,
       "track_id": 1,
-      "classifier_label": "monitor",
-      "classifier_confidence": 0.8307088613510132,
+      "classifier_label": "laptop",
+      "classifier_confidence": 0.16775603592395782,
       "label_disagreement": true,
       "object_id": "object_001"
     },
@@ -1384,37 +1173,37 @@
       "label": "chair",
       "detector_label": "chair",
       "bbox": [
-        170.81716918945312,
-        183.2146453857422,
-        311.0356750488281,
-        405.6650085449219
+        170.92449951171875,
+        71.36988830566406,
+        314.69403076171875,
+        293.2342834472656
       ],
-      "confidence": 0.5477217435836792,
-      "mask_score": 0.9506238102912903,
+      "confidence": 0.5350183844566345,
+      "mask_score": 0.940472424030304,
       "mask_source": "sam2_box",
-      "median_depth_m": 0.5871758460998535,
+      "median_depth_m": 0.5996086597442627,
       "track_id": 2,
       "classifier_label": "chair",
-      "classifier_confidence": 0.978931188583374,
+      "classifier_confidence": 0.9725160002708435,
       "label_disagreement": false,
       "object_id": "object_002"
     },
     {
-      "label": "bottle",
-      "detector_label": "bottle plastic water bottle",
+      "label": "chair",
+      "detector_label": "chair",
       "bbox": [
-        192.0819091796875,
-        150.20892333984375,
-        205.4956817626953,
-        184.45669555664062
+        65.57537841796875,
+        61.09389114379883,
+        201.78732299804688,
+        264.7886962890625
       ],
-      "confidence": 0.518591046333313,
-      "mask_score": 0.921027421951294,
+      "confidence": 0.49545347690582275,
+      "mask_score": 0.9248030185699463,
       "mask_source": "sam2_box",
-      "median_depth_m": 0.8220067024230957,
+      "median_depth_m": 0.7044507265090942,
       "track_id": 3,
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.18115003407001495,
+      "classifier_label": "monitor",
+      "classifier_confidence": 0.5143475532531738,
       "label_disagreement": true,
       "object_id": "object_003"
     },
@@ -1422,172 +1211,175 @@
       "label": "chair",
       "detector_label": "chair",
       "bbox": [
-        268.04815673828125,
-        155.24632263183594,
-        338.3424987792969,
-        276.1673583984375
+        267.3067626953125,
+        50.818565368652344,
+        337.7189636230469,
+        166.40151977539062
       ],
-      "confidence": 0.4864636957645416,
-      "mask_score": 0.7610464692115784,
+      "confidence": 0.49398696422576904,
+      "mask_score": 0.7555094361305237,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.1455566883087158,
+      "median_depth_m": 1.183427333831787,
       "track_id": 4,
-      "classifier_label": "monitor",
-      "classifier_confidence": 0.41240832209587097,
-      "label_disagreement": true,
-      "object_id": "object_004"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        360.5089416503906,
-        143.253662109375,
-        403.9126281738281,
-        226.8873748779297
-      ],
-      "confidence": 0.4245204031467438,
-      "mask_score": 0.8092153072357178,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.9487634897232056,
-      "track_id": 5,
       "classifier_label": "chair",
-      "classifier_confidence": 0.8488913774490356,
+      "classifier_confidence": 0.3694286048412323,
       "label_disagreement": false,
-      "object_id": "object_005"
-    },
-    {
-      "label": "laptop",
-      "detector_label": "open laptop closed laptop",
-      "bbox": [
-        232.07472229003906,
-        143.77651977539062,
-        249.088134765625,
-        155.22740173339844
-      ],
-      "confidence": 0.4243990182876587,
-      "mask_score": 0.8864582180976868,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.4705185890197754,
-      "track_id": 6,
-      "classifier_label": "tumbler",
-      "classifier_confidence": 0.17235897481441498,
-      "label_disagreement": true,
-      "object_id": "object_006",
-      "image_axis_fit": null
-    },
-    {
-      "label": "laptop",
-      "detector_label": "open laptop closed laptop",
-      "bbox": [
-        258.05902099609375,
-        145.77212524414062,
-        273.1265563964844,
-        157.3280029296875
-      ],
-      "confidence": 0.38054025173187256,
-      "mask_score": 0.9051638841629028,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.5774121284484863,
-      "track_id": 7,
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.21972167491912842,
-      "label_disagreement": false,
-      "object_id": "object_007",
-      "image_axis_fit": null
+      "object_id": "object_004"
     },
     {
       "label": "backpack",
       "detector_label": "gray backpack black backpack",
       "bbox": [
-        190.9789581298828,
-        112.11082458496094,
-        213.51010131835938,
-        136.42369079589844
+        191.77346801757812,
+        0.32749617099761963,
+        213.64488220214844,
+        24.110063552856445
       ],
-      "confidence": 0.3787126839160919,
-      "mask_score": 0.8352046012878418,
+      "confidence": 0.488664835691452,
+      "mask_score": 0.8107965588569641,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.5949509143829346,
-      "track_id": 8,
+      "median_depth_m": 1.737209439277649,
+      "track_id": 5,
       "classifier_label": "tumbler",
-      "classifier_confidence": 0.19521260261535645,
+      "classifier_confidence": 0.18058624863624573,
       "label_disagreement": true,
-      "object_id": "object_008"
+      "object_id": "object_005"
     },
     {
       "label": "chair",
       "detector_label": "chair",
       "bbox": [
-        271.5151672363281,
-        148.32968139648438,
-        289.4504089355469,
-        177.38259887695312
+        360.3304443359375,
+        31.14261817932129,
+        404.4200439453125,
+        114.75279998779297
       ],
-      "confidence": 0.37291938066482544,
-      "mask_score": 0.7922461628913879,
+      "confidence": 0.4297526180744171,
+      "mask_score": 0.8200141787528992,
       "mask_source": "sam2_box",
-      "median_depth_m": 2.5638585090637207,
-      "track_id": 9,
+      "median_depth_m": 2.0013480186462402,
+      "track_id": 6,
       "classifier_label": "monitor",
-      "classifier_confidence": 0.19132918119430542,
+      "classifier_confidence": 0.49581336975097656,
       "label_disagreement": true,
+      "object_id": "object_006"
+    },
+    {
+      "label": "laptop",
+      "detector_label": "partially visible laptop",
+      "bbox": [
+        232.49776649475098,
+        32.43012809753418,
+        248.50425338745117,
+        43.67502403259277
+      ],
+      "confidence": 0.4158227741718292,
+      "original_detector_label": "monitor",
+      "refinement": "single_class_crop_query",
+      "mask_score": 0.8696120977401733,
+      "mask_source": "sam2_box",
+      "median_depth_m": 2.5189709663391113,
+      "track_id": 7,
+      "classifier_label": "laptop",
+      "classifier_confidence": 0.22361135482788086,
+      "label_disagreement": false,
+      "object_id": "object_007"
+    },
+    {
+      "label": "laptop",
+      "detector_label": "open laptop closed laptop",
+      "bbox": [
+        330.810546875,
+        27.20358657836914,
+        353.4532470703125,
+        37.50083923339844
+      ],
+      "confidence": 0.41128602623939514,
+      "mask_score": 0.9231047034263611,
+      "mask_source": "sam2_box",
+      "median_depth_m": 2.305152416229248,
+      "track_id": 8,
+      "classifier_label": "monitor",
+      "classifier_confidence": 0.2353045791387558,
+      "label_disagreement": true,
+      "object_id": "object_008"
+    },
+    {
+      "label": "laptop",
+      "detector_label": "partially visible laptop",
+      "bbox": [
+        273.0607376098633,
+        36.57885551452637,
+        285.98851013183594,
+        44.2626895904541
+      ],
+      "confidence": 0.39265623688697815,
+      "original_detector_label": "monitor",
+      "refinement": "single_class_crop_query",
+      "mask_score": 0.8827835321426392,
+      "mask_source": "sam2_box",
+      "median_depth_m": 2.7550106048583984,
+      "track_id": 9,
+      "classifier_label": "laptop",
+      "classifier_confidence": 0.19102448225021362,
+      "label_disagreement": false,
       "object_id": "object_009"
     },
     {
-      "label": "keyboard",
-      "detector_label": "keyboard",
+      "label": "laptop",
+      "detector_label": "open laptop closed laptop monitor",
       "bbox": [
-        218.9071807861328,
-        165.3484344482422,
-        237.9405517578125,
-        171.74496459960938
+        258.1127624511719,
+        33.56511306762695,
+        272.86883544921875,
+        45.4071044921875
       ],
-      "confidence": 0.3291529417037964,
-      "mask_score": 0.8203142881393433,
+      "confidence": 0.37993183732032776,
+      "mask_score": 0.9036796689033508,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.077000617980957,
+      "median_depth_m": 2.639512777328491,
       "track_id": 10,
-      "classifier_label": "can",
-      "classifier_confidence": 0.17465411126613617,
-      "label_disagreement": true,
+      "classifier_label": "laptop",
+      "classifier_confidence": 0.24034787714481354,
+      "label_disagreement": false,
       "object_id": "object_010"
     },
     {
-      "label": "box",
-      "detector_label": "can box",
+      "label": "chair",
+      "detector_label": "chair",
       "bbox": [
-        87.67804718017578,
-        236.18243408203125,
-        98.82707977294922,
-        250.78897094726562
+        338.6204833984375,
+        32.607078552246094,
+        384.3597717285156,
+        75.56763458251953
       ],
-      "confidence": 0.3226562440395355,
-      "mask_score": 0.8979606032371521,
+      "confidence": 0.376242071390152,
+      "mask_score": 0.760221004486084,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.0372365713119507,
+      "median_depth_m": 1.9888205528259277,
       "track_id": 11,
-      "classifier_label": "bag",
-      "classifier_confidence": 0.1532467156648636,
-      "label_disagreement": true,
+      "classifier_label": "chair",
+      "classifier_confidence": 0.47629258036613464,
+      "label_disagreement": false,
       "object_id": "object_011"
     },
     {
       "label": "chair",
       "detector_label": "chair",
       "bbox": [
-        308.69378662109375,
-        141.94052124023438,
-        330.4850158691406,
-        165.5065460205078
+        310.0,
+        52.0,
+        338.0,
+        72.0
       ],
-      "confidence": 0.31343692541122437,
-      "mask_score": 0.8881016969680786,
+      "confidence": 0.3243390917778015,
+      "mask_score": 0.9050503969192505,
       "mask_source": "sam2_box",
-      "median_depth_m": 2.1199934482574463,
-      "track_id": 12,
+      "median_depth_m": 1.98703134059906,
+      "track_id": 13,
+      "split_reason": "disconnected_depth_clusters",
       "classifier_label": "keyboard",
-      "classifier_confidence": 0.1609034538269043,
+      "classifier_confidence": 0.12478666752576828,
       "label_disagreement": true,
       "object_id": "object_012"
     },
@@ -1595,38 +1387,38 @@
       "label": "chair",
       "detector_label": "chair",
       "bbox": [
-        500.4731140136719,
-        145.99020385742188,
-        518.02294921875,
-        234.17062377929688
+        309.0,
+        31.0,
+        340.0,
+        54.0
       ],
-      "confidence": 0.30525335669517517,
-      "mask_score": 0.8220092058181763,
+      "confidence": 0.3243390917778015,
+      "mask_score": 0.9050503969192505,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.9693336486816406,
+      "median_depth_m": 1.98703134059906,
       "track_id": 13,
-      "classifier_label": "monitor",
-      "classifier_confidence": 0.2478826642036438,
+      "split_reason": "disconnected_depth_clusters",
+      "classifier_label": "laptop",
+      "classifier_confidence": 0.19019919633865356,
       "label_disagreement": true,
       "object_id": "object_013"
     },
     {
-      "label": "chair",
-      "detector_label": "chair",
+      "label": "can",
+      "detector_label": "can",
       "bbox": [
-        209.0,
-        158.0,
-        226.0,
-        169.0
+        87.57537841796875,
+        124.31603240966797,
+        99.15013885498047,
+        139.25450134277344
       ],
-      "confidence": 0.3022300899028778,
-      "mask_score": 0.7647608518600464,
+      "confidence": 0.31384071707725525,
+      "mask_score": 0.9037373065948486,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.173040509223938,
+      "median_depth_m": 1.0632941722869873,
       "track_id": 14,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "phone",
-      "classifier_confidence": 0.22433876991271973,
+      "classifier_label": "bag",
+      "classifier_confidence": 0.18695096671581268,
       "label_disagreement": true,
       "object_id": "object_014"
     },
@@ -1634,78 +1426,77 @@
       "label": "chair",
       "detector_label": "chair",
       "bbox": [
-        210.0,
-        150.0,
-        225.0,
-        159.0
+        207.0,
+        46.0,
+        237.0,
+        59.0
       ],
-      "confidence": 0.3022300899028778,
-      "mask_score": 0.7647608518600464,
+      "confidence": 0.31088757514953613,
+      "mask_score": 0.8284772634506226,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.173040509223938,
-      "track_id": 14,
+      "median_depth_m": 1.8379030227661133,
+      "track_id": 15,
       "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.15456002950668335,
+      "classifier_label": "keyboard",
+      "classifier_confidence": 0.20767903327941895,
       "label_disagreement": true,
       "object_id": "object_015"
     },
     {
-      "label": "keyboard",
-      "detector_label": "keyboard",
+      "label": "chair",
+      "detector_label": "chair",
       "bbox": [
-        331.45562744140625,
-        145.8520050048828,
-        353.0517272949219,
-        150.30262756347656
+        208.0,
+        37.0,
+        237.0,
+        53.0
       ],
-      "confidence": 0.2758064568042755,
-      "mask_score": 0.8354632258415222,
+      "confidence": 0.31088757514953613,
+      "mask_score": 0.8284772634506226,
       "mask_source": "sam2_box",
-      "median_depth_m": 2.1731514930725098,
+      "median_depth_m": 1.8379030227661133,
       "track_id": 15,
-      "classifier_label": "keyboard",
-      "classifier_confidence": 0.28051894903182983,
-      "label_disagreement": false,
+      "split_reason": "disconnected_depth_clusters",
+      "classifier_label": "unknown object",
+      "classifier_confidence": 0.30064937472343445,
+      "label_disagreement": true,
       "object_id": "object_016"
     },
     {
-      "label": "jacket",
-      "detector_label": "jacket",
+      "label": "chair",
+      "detector_label": "chair",
       "bbox": [
-        244.0,
-        141.0,
-        257.0,
-        154.0
+        500.4676208496094,
+        85.21642303466797,
+        517.9738159179688,
+        121.81319427490234
       ],
-      "confidence": 0.2747514843940735,
-      "mask_score": 0.7744964361190796,
+      "confidence": 0.26751455664634705,
+      "mask_score": 0.8225359916687012,
       "mask_source": "sam2_box",
-      "median_depth_m": 2.294583320617676,
+      "median_depth_m": 2.0282130241394043,
       "track_id": 16,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "mouse",
-      "classifier_confidence": 0.19259311258792877,
+      "classifier_label": "keyboard",
+      "classifier_confidence": 0.20540884137153625,
       "label_disagreement": true,
       "object_id": "object_017"
     },
     {
-      "label": "jacket",
-      "detector_label": "jacket",
+      "label": "chair",
+      "detector_label": "chair",
       "bbox": [
-        233.0,
-        142.0,
-        246.0,
-        155.0
+        258.128173828125,
+        36.1007194519043,
+        289.2411193847656,
+        65.41464233398438
       ],
-      "confidence": 0.2747514843940735,
-      "mask_score": 0.7744964361190796,
+      "confidence": 0.25740566849708557,
+      "mask_score": 0.7853434085845947,
       "mask_source": "sam2_box",
-      "median_depth_m": 2.294583320617676,
-      "track_id": 16,
-      "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "monitor",
-      "classifier_confidence": 0.31233108043670654,
+      "median_depth_m": 2.5463614463806152,
+      "track_id": 17,
+      "classifier_label": "box",
+      "classifier_confidence": 0.6934919953346252,
       "label_disagreement": true,
       "object_id": "object_018"
     },
@@ -1713,19 +1504,19 @@
       "label": "chair",
       "detector_label": "chair",
       "bbox": [
-        338.0552673339844,
-        143.9493408203125,
-        383.8724670410156,
-        187.93283081054688
+        204.53456115722656,
+        44.193199157714844,
+        216.5619354248047,
+        57.20137023925781
       ],
-      "confidence": 0.26919612288475037,
-      "mask_score": 0.748769998550415,
+      "confidence": 0.23413942754268646,
+      "mask_score": 0.8542342185974121,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.9450905323028564,
-      "track_id": 17,
-      "classifier_label": "chair",
-      "classifier_confidence": 0.3430812358856201,
-      "label_disagreement": false,
+      "median_depth_m": 1.114810585975647,
+      "track_id": 18,
+      "classifier_label": "laptop",
+      "classifier_confidence": 0.14952082931995392,
+      "label_disagreement": true,
       "object_id": "object_019"
     },
     {
@@ -1733,18 +1524,18 @@
       "detector_label": "chair",
       "bbox": [
         310.0,
-        163.0,
+        52.0,
         337.0,
-        184.0
+        72.0
       ],
-      "confidence": 0.26633596420288086,
-      "mask_score": 0.953400194644928,
+      "confidence": 0.2263115793466568,
+      "mask_score": 0.9375393390655518,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.254671335220337,
-      "track_id": 18,
+      "median_depth_m": 1.8088622093200684,
+      "track_id": 19,
       "split_reason": "disconnected_depth_clusters",
-      "classifier_label": "bag",
-      "classifier_confidence": 0.17340175807476044,
+      "classifier_label": "keyboard",
+      "classifier_confidence": 0.1277933567762375,
       "label_disagreement": true,
       "object_id": "object_020"
     },
@@ -1753,145 +1544,68 @@
       "detector_label": "chair",
       "bbox": [
         309.0,
-        143.0,
+        31.0,
         337.0,
-        165.0
+        54.0
       ],
-      "confidence": 0.26633596420288086,
-      "mask_score": 0.953400194644928,
+      "confidence": 0.2263115793466568,
+      "mask_score": 0.9375393390655518,
       "mask_source": "sam2_box",
-      "median_depth_m": 1.254671335220337,
-      "track_id": 18,
+      "median_depth_m": 1.8088622093200684,
+      "track_id": 19,
       "split_reason": "disconnected_depth_clusters",
       "classifier_label": "monitor",
-      "classifier_confidence": 0.23511521518230438,
+      "classifier_confidence": 0.18826459348201752,
       "label_disagreement": true,
       "object_id": "object_021"
     },
     {
-      "label": "chair",
-      "detector_label": "chair",
+      "label": "monitor",
       "bbox": [
-        210.2318878173828,
-        148.88174438476562,
-        218.1648712158203,
-        158.46849060058594
+        46.0,
+        0.0,
+        195.0,
+        193.0
       ],
-      "confidence": 0.26291388273239136,
-      "mask_score": 0.8840088248252869,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.2806997299194336,
-      "track_id": 19,
+      "confidence": 0.84718918800354,
+      "mask_score": 0.934160053730011,
+      "mask_source": "sam2_automatic",
       "classifier_label": "monitor",
-      "classifier_confidence": 0.3196254372596741,
-      "label_disagreement": true,
-      "object_id": "object_022"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        203.96084594726562,
-        155.74012756347656,
-        216.87203979492188,
-        169.11119079589844
-      ],
-      "confidence": 0.23977354168891907,
-      "mask_score": 0.8842023611068726,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.1171014308929443,
-      "track_id": 20,
-      "classifier_label": "laptop",
-      "classifier_confidence": 0.2985779345035553,
-      "label_disagreement": true,
-      "object_id": "object_023"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        312.33624267578125,
-        152.34120178222656,
-        336.5680847167969,
-        165.8072052001953
-      ],
-      "confidence": 0.2359991818666458,
-      "mask_score": 0.8088023066520691,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.1251940727233887,
+      "classifier_confidence": 0.8471886515617371,
+      "label_disagreement": false,
+      "median_depth_m": 0.9723345041275024,
       "track_id": 21,
-      "classifier_label": "keyboard",
-      "classifier_confidence": 0.3124193549156189,
-      "label_disagreement": true,
-      "object_id": "object_024"
-    },
-    {
-      "label": "can",
-      "detector_label": "can",
-      "bbox": [
-        62.3458137512207,
-        225.04995727539062,
-        71.14047241210938,
-        234.36167907714844
-      ],
-      "confidence": 0.22818392515182495,
-      "mask_score": 0.8781841993331909,
-      "mask_source": "sam2_box",
-      "median_depth_m": 1.4977713823318481,
-      "track_id": 22,
-      "classifier_label": "mouse",
-      "classifier_confidence": 0.3384400010108948,
-      "label_disagreement": true,
-      "object_id": "object_025"
-    },
-    {
-      "label": "chair",
-      "detector_label": "chair",
-      "bbox": [
-        329.2135009765625,
-        138.73080444335938,
-        354.4621887207031,
-        164.4812774658203
-      ],
-      "confidence": 0.22077873349189758,
-      "mask_score": 0.7510805726051331,
-      "mask_source": "sam2_box",
-      "median_depth_m": 2.1948161125183105,
-      "track_id": 23,
-      "classifier_label": "keyboard",
-      "classifier_confidence": 0.25192129611968994,
-      "label_disagreement": true,
-      "object_id": "object_026"
+      "object_id": "object_022"
     },
     {
       "label": "keyboard",
       "bbox": [
         0.0,
-        218.0,
-        69.0,
-        242.0
+        106.0,
+        70.0,
+        129.0
       ],
-      "confidence": 0.40388837456703186,
-      "mask_score": 0.8811882138252258,
+      "confidence": 0.37327879667282104,
+      "mask_score": 0.8886790871620178,
       "mask_source": "sam2_automatic",
       "classifier_label": "keyboard",
-      "classifier_confidence": 0.4038884937763214,
+      "classifier_confidence": 0.37327840924263,
       "label_disagreement": false,
-      "median_depth_m": 1.5370128154754639,
-      "track_id": 25,
-      "object_id": "object_027"
+      "median_depth_m": 1.5754735469818115,
+      "track_id": 22,
+      "object_id": "object_023"
     }
   ],
   "scale_confidence": "medium",
   "scale_basis": "assumed_reference_median",
   "scale": {
-    "factor": 0.7817162804565456,
+    "factor": 2.4686148510766746,
     "references": [
       {
         "id": "camera_height_from_bottles",
         "label": "bottle_silhouette",
-        "reference_m": 0.45198766824160375,
-        "observed_m": 0.5781991235715719
+        "reference_m": 0.4364976136940431,
+        "observed_m": 0.17681883972449844
       }
     ],
     "rejected": [],
@@ -1900,40 +1614,41 @@
     "all_ratio_disagreement": 0.0
   },
   "camera": {
-    "fx": 314.88037109375,
-    "fy": 315.1337585449219,
+    "fx": 314.716796875,
+    "fy": 314.9442443847656,
     "cx": 259.0,
-    "cy": 259.0,
+    "cy": 147.0,
     "width": 518,
-    "height": 518,
+    "height": 294,
     "source": "VGGT_predicted"
   },
   "camera_pose": {
     "origin_world": [
-      -0.0574387699555768,
-      1.2019876682416037,
-      1.372484198181132
+      -0.1904830886856518,
+      1.459251528789279,
+      2.119303825638472
     ],
     "world_to_camera": [
       [
-        0.9995322879848051,
-        0.03058112613787516,
-        -1.734723475976807e-18
+        0.9994077130178133,
+        0.034412543650595505,
+        1.734723475976807e-18
       ],
       [
-        0.027819261001160844,
-        -0.909261793472619,
-        0.41529396774851624
+        0.03132373629263262,
+        -0.9097026935656735,
+        0.41407708565438367
       ],
       [
-        0.012700157212016035,
-        -0.41509972976996234,
-        -0.9096872651365931
+        0.01424944578479285,
+        -0.41383183318692873,
+        -0.9102418179450843
       ]
     ]
   },
-  "duration_s": 169.14463850297034,
-  "photo_latency_pass": true,
+  "body_count": 29,
+  "dynamic_body_count": 24,
+  "duration_s": 92.18128324300051,
   "acceptance_pass": false,
   "acceptance_note": "Requires independent object inventory, metric references and fixture annotations; not inferred from model confidence.",
   "video": {
@@ -2019,571 +1734,571 @@
         {
           "frame": 49,
           "time_s": 1.6460773251866938,
-          "laplacian_variance": 158.2257786583213,
+          "laplacian_variance": 158.68077409148503,
           "accepted": true
         },
         {
           "frame": 53,
           "time_s": 1.7804509843856076,
-          "laplacian_variance": 101.44851594269163,
+          "laplacian_variance": 85.83345931016001,
           "accepted": false
         },
         {
           "frame": 57,
           "time_s": 1.9148246435845213,
-          "laplacian_variance": 79.20726821839045,
+          "laplacian_variance": 66.18969658775801,
           "accepted": false
         },
         {
           "frame": 61,
           "time_s": 2.0491983027834353,
-          "laplacian_variance": 53.13912787208505,
+          "laplacian_variance": 43.45765428669411,
           "accepted": false
         },
         {
           "frame": 65,
           "time_s": 2.183571961982349,
-          "laplacian_variance": 68.53177919622328,
-          "accepted": false
+          "laplacian_variance": 52.4296950157655,
+          "accepted": true
         },
         {
           "frame": 70,
           "time_s": 2.3515390359809913,
-          "laplacian_variance": 87.72329468426115,
-          "accepted": true
+          "laplacian_variance": 113.24484690390173,
+          "accepted": false
         },
         {
           "frame": 74,
           "time_s": 2.485912695179905,
-          "laplacian_variance": 66.72022361057527,
+          "laplacian_variance": 67.18927081712427,
           "accepted": false
         },
         {
           "frame": 78,
           "time_s": 2.620286354378819,
-          "laplacian_variance": 67.61395058846786,
-          "accepted": false
+          "laplacian_variance": 130.95330245192952,
+          "accepted": true
         },
         {
           "frame": 82,
           "time_s": 2.7546600135777326,
-          "laplacian_variance": 117.49656215611184,
+          "laplacian_variance": 115.70782007887514,
           "accepted": false
         },
         {
           "frame": 86,
           "time_s": 2.8890336727766464,
-          "laplacian_variance": 121.48005208324028,
+          "laplacian_variance": 95.71019286252036,
           "accepted": false
         },
         {
           "frame": 90,
           "time_s": 3.02340733197556,
-          "laplacian_variance": 127.30638873403205,
+          "laplacian_variance": 136.29052641835614,
           "accepted": true
         },
         {
           "frame": 94,
           "time_s": 3.157780991174474,
-          "laplacian_variance": 123.64393950935438,
+          "laplacian_variance": 111.13122051897206,
           "accepted": false
         },
         {
           "frame": 98,
           "time_s": 3.2921546503733876,
-          "laplacian_variance": 105.01195700801556,
-          "accepted": false
+          "laplacian_variance": 104.2166396086814,
+          "accepted": true
         },
         {
           "frame": 102,
           "time_s": 3.4265283095723014,
-          "laplacian_variance": 75.39357635600935,
+          "laplacian_variance": 61.79080745848681,
           "accepted": false
         },
         {
           "frame": 107,
           "time_s": 3.5944953835709437,
-          "laplacian_variance": 75.83329833174665,
+          "laplacian_variance": 91.50008202838846,
           "accepted": false
         },
         {
           "frame": 111,
           "time_s": 3.7288690427698574,
-          "laplacian_variance": 106.34025458938234,
-          "accepted": true
+          "laplacian_variance": 89.78987955812515,
+          "accepted": false
         },
         {
           "frame": 115,
           "time_s": 3.863242701968771,
-          "laplacian_variance": 72.96041534487644,
-          "accepted": false
+          "laplacian_variance": 86.44765971498467,
+          "accepted": true
         },
         {
           "frame": 119,
           "time_s": 3.997616361167685,
-          "laplacian_variance": 74.45869369873456,
+          "laplacian_variance": 69.96234828526282,
           "accepted": false
         },
         {
           "frame": 123,
           "time_s": 4.131990020366599,
-          "laplacian_variance": 76.65914697621359,
-          "accepted": true
+          "laplacian_variance": 63.045495732949526,
+          "accepted": false
         },
         {
           "frame": 127,
           "time_s": 4.266363679565512,
-          "laplacian_variance": 51.4699043731387,
-          "accepted": false
+          "laplacian_variance": 85.15067256577916,
+          "accepted": true
         },
         {
           "frame": 131,
           "time_s": 4.400737338764427,
-          "laplacian_variance": 73.36721754918979,
+          "laplacian_variance": 53.055125329506126,
           "accepted": false
         },
         {
           "frame": 135,
           "time_s": 4.53511099796334,
-          "laplacian_variance": 58.64915040505911,
+          "laplacian_variance": 70.64508673366039,
           "accepted": false
         },
         {
           "frame": 140,
           "time_s": 4.703078071961983,
-          "laplacian_variance": 86.85272550939838,
-          "accepted": true
+          "laplacian_variance": 69.74234534856477,
+          "accepted": false
         },
         {
           "frame": 144,
           "time_s": 4.837451731160896,
-          "laplacian_variance": 75.88560174176716,
-          "accepted": false
+          "laplacian_variance": 87.3767238034765,
+          "accepted": true
         },
         {
           "frame": 148,
           "time_s": 4.97182539035981,
-          "laplacian_variance": 93.20835501394366,
-          "accepted": true
+          "laplacian_variance": 86.05522384952499,
+          "accepted": false
         },
         {
           "frame": 152,
           "time_s": 5.1061990495587235,
-          "laplacian_variance": 92.01063026450319,
-          "accepted": false
+          "laplacian_variance": 102.23268065819805,
+          "accepted": true
         },
         {
           "frame": 156,
           "time_s": 5.240572708757638,
-          "laplacian_variance": 73.44214159423566,
+          "laplacian_variance": 66.74780474054783,
           "accepted": false
         },
         {
           "frame": 160,
           "time_s": 5.374946367956551,
-          "laplacian_variance": 52.40876535493828,
-          "accepted": true
+          "laplacian_variance": 66.64517166334075,
+          "accepted": false
         },
         {
           "frame": 164,
           "time_s": 5.509320027155465,
-          "laplacian_variance": 63.70145637213727,
+          "laplacian_variance": 90.08288568457019,
           "accepted": false
         },
         {
           "frame": 168,
           "time_s": 5.6436936863543785,
-          "laplacian_variance": 66.1090875133029,
+          "laplacian_variance": 89.96511959446387,
           "accepted": false
         },
         {
           "frame": 172,
           "time_s": 5.778067345553293,
-          "laplacian_variance": 106.3061263285738,
+          "laplacian_variance": 101.58439426974672,
           "accepted": true
         },
         {
           "frame": 177,
           "time_s": 5.946034419551935,
-          "laplacian_variance": 67.64305900835369,
+          "laplacian_variance": 55.90450409087553,
           "accepted": false
         },
         {
           "frame": 181,
           "time_s": 6.080408078750849,
-          "laplacian_variance": 121.20429723816338,
-          "accepted": true
+          "laplacian_variance": 90.90611565348493,
+          "accepted": false
         },
         {
           "frame": 185,
           "time_s": 6.214781737949762,
-          "laplacian_variance": 120.08532963775275,
+          "laplacian_variance": 56.97379761551152,
           "accepted": false
         },
         {
           "frame": 189,
           "time_s": 6.349155397148676,
-          "laplacian_variance": 89.00995361545438,
+          "laplacian_variance": 64.52312306934665,
           "accepted": false
         },
         {
           "frame": 193,
           "time_s": 6.48352905634759,
-          "laplacian_variance": 110.40281387745397,
-          "accepted": false
+          "laplacian_variance": 116.72855617426468,
+          "accepted": true
         },
         {
           "frame": 197,
           "time_s": 6.617902715546504,
-          "laplacian_variance": 82.14781440212751,
+          "laplacian_variance": 85.88397182346664,
           "accepted": true
         },
         {
           "frame": 201,
           "time_s": 6.752276374745417,
-          "laplacian_variance": 73.84634633271833,
+          "laplacian_variance": 75.21575680214629,
           "accepted": false
         },
         {
           "frame": 205,
           "time_s": 6.886650033944331,
-          "laplacian_variance": 53.4426443564742,
+          "laplacian_variance": 46.296238405549225,
           "accepted": false
         },
         {
           "frame": 209,
           "time_s": 7.0210236931432455,
-          "laplacian_variance": 55.86690966863855,
-          "accepted": true
+          "laplacian_variance": 55.73428027289794,
+          "accepted": false
         },
         {
           "frame": 214,
           "time_s": 7.188990767141887,
-          "laplacian_variance": 82.97672258239011,
+          "laplacian_variance": 83.01502314158417,
           "accepted": false
         },
         {
           "frame": 218,
           "time_s": 7.323364426340801,
-          "laplacian_variance": 83.1515817572439,
+          "laplacian_variance": 74.6678536778496,
           "accepted": false
         },
         {
           "frame": 222,
           "time_s": 7.457738085539715,
-          "laplacian_variance": 64.20099962848279,
+          "laplacian_variance": 88.25287477732631,
           "accepted": false
         },
         {
           "frame": 226,
           "time_s": 7.592111744738629,
-          "laplacian_variance": 92.74076537730949,
+          "laplacian_variance": 90.98799687547627,
           "accepted": true
         },
         {
           "frame": 230,
           "time_s": 7.726485403937542,
-          "laplacian_variance": 88.78659808616598,
+          "laplacian_variance": 71.56435375397935,
           "accepted": false
         },
         {
           "frame": 234,
           "time_s": 7.8608590631364565,
-          "laplacian_variance": 97.41574828954951,
+          "laplacian_variance": 96.32885044027552,
           "accepted": true
         },
         {
           "frame": 238,
           "time_s": 7.99523272233537,
-          "laplacian_variance": 83.39037675992235,
+          "laplacian_variance": 67.48744140922688,
           "accepted": false
         },
         {
           "frame": 242,
           "time_s": 8.129606381534284,
-          "laplacian_variance": 44.4778445966221,
+          "laplacian_variance": 41.25697433073989,
           "accepted": false
         },
         {
           "frame": 247,
           "time_s": 8.297573455532927,
-          "laplacian_variance": 149.8345907683326,
+          "laplacian_variance": 138.6783045573772,
           "accepted": false
         },
         {
           "frame": 251,
           "time_s": 8.43194711473184,
-          "laplacian_variance": 154.79914633128942,
+          "laplacian_variance": 155.1527337770062,
           "accepted": true
         },
         {
           "frame": 255,
           "time_s": 8.566320773930753,
-          "laplacian_variance": 129.76374816623266,
+          "laplacian_variance": 141.85680382881787,
           "accepted": false
         },
         {
           "frame": 259,
           "time_s": 8.700694433129668,
-          "laplacian_variance": 97.09267104123425,
+          "laplacian_variance": 77.01620484797937,
           "accepted": false
         },
         {
           "frame": 263,
           "time_s": 8.835068092328582,
-          "laplacian_variance": 53.608522375590624,
+          "laplacian_variance": 62.40167759057724,
           "accepted": false
         },
         {
           "frame": 267,
           "time_s": 8.969441751527494,
-          "laplacian_variance": 94.03334289578318,
+          "laplacian_variance": 101.76115736716012,
           "accepted": true
         },
         {
           "frame": 271,
           "time_s": 9.103815410726408,
-          "laplacian_variance": 90.54583510290077,
+          "laplacian_variance": 70.74112691454103,
           "accepted": false
         },
         {
           "frame": 275,
           "time_s": 9.238189069925323,
-          "laplacian_variance": 58.925231355500316,
+          "laplacian_variance": 60.37510798128859,
           "accepted": false
         },
         {
           "frame": 280,
           "time_s": 9.406156143923965,
-          "laplacian_variance": 39.850100866622924,
+          "laplacian_variance": 34.88959996021412,
           "accepted": false
         },
         {
           "frame": 284,
           "time_s": 9.540529803122878,
-          "laplacian_variance": 26.185004296037754,
+          "laplacian_variance": 26.816530941358028,
           "accepted": false
         },
         {
           "frame": 288,
           "time_s": 9.674903462321792,
-          "laplacian_variance": 33.7939394432976,
+          "laplacian_variance": 38.53188376003429,
           "accepted": false
         },
         {
           "frame": 292,
           "time_s": 9.809277121520706,
-          "laplacian_variance": 42.65427140033422,
+          "laplacian_variance": 46.11558182154433,
           "accepted": false
         },
         {
           "frame": 296,
           "time_s": 9.94365078071962,
-          "laplacian_variance": 61.79071176295282,
+          "laplacian_variance": 62.18534527227874,
           "accepted": false
         },
         {
           "frame": 300,
           "time_s": 10.078024439918533,
-          "laplacian_variance": 59.60838320419665,
+          "laplacian_variance": 73.04230691537528,
           "accepted": false
         },
         {
           "frame": 304,
           "time_s": 10.212398099117447,
-          "laplacian_variance": 80.83483197391179,
-          "accepted": false
+          "laplacian_variance": 111.6028275219455,
+          "accepted": true
         },
         {
           "frame": 308,
           "time_s": 10.346771758316361,
-          "laplacian_variance": 122.02733785793893,
-          "accepted": true
+          "laplacian_variance": 88.15784650181945,
+          "accepted": false
         },
         {
           "frame": 312,
           "time_s": 10.481145417515275,
-          "laplacian_variance": 138.76018500179504,
+          "laplacian_variance": 150.35192318270586,
           "accepted": true
         },
         {
           "frame": 317,
           "time_s": 10.649112491513916,
-          "laplacian_variance": 121.61703556949922,
+          "laplacian_variance": 116.26900054641952,
           "accepted": false
         },
         {
           "frame": 321,
           "time_s": 10.78348615071283,
-          "laplacian_variance": 81.66335066627948,
+          "laplacian_variance": 73.28505785316406,
           "accepted": false
         },
         {
           "frame": 325,
           "time_s": 10.917859809911745,
-          "laplacian_variance": 94.35477019404657,
+          "laplacian_variance": 84.11332728498284,
           "accepted": false
         },
         {
           "frame": 329,
           "time_s": 11.052233469110659,
-          "laplacian_variance": 78.05697251139176,
-          "accepted": true
+          "laplacian_variance": 78.43023260911646,
+          "accepted": false
         },
         {
           "frame": 333,
           "time_s": 11.186607128309571,
-          "laplacian_variance": 61.67427292157479,
+          "laplacian_variance": 64.53859319844163,
           "accepted": false
         },
         {
           "frame": 337,
           "time_s": 11.320980787508486,
-          "laplacian_variance": 63.59095845336076,
+          "laplacian_variance": 68.40025042317708,
           "accepted": false
         },
         {
           "frame": 341,
           "time_s": 11.4553544467074,
-          "laplacian_variance": 61.8768557026725,
-          "accepted": false
+          "laplacian_variance": 79.72566334394288,
+          "accepted": true
         },
         {
           "frame": 345,
           "time_s": 11.589728105906314,
-          "laplacian_variance": 70.89766965782657,
+          "laplacian_variance": 68.77044365944359,
           "accepted": false
         },
         {
           "frame": 349,
           "time_s": 11.724101765105228,
-          "laplacian_variance": 96.16440729202014,
+          "laplacian_variance": 97.98284799352578,
           "accepted": true
         },
         {
           "frame": 354,
           "time_s": 11.89206883910387,
-          "laplacian_variance": 94.32826140498408,
+          "laplacian_variance": 83.19993585425182,
           "accepted": false
         },
         {
           "frame": 358,
           "time_s": 12.026442498302783,
-          "laplacian_variance": 65.59940390300146,
+          "laplacian_variance": 59.1326851699436,
           "accepted": false
         },
         {
           "frame": 362,
           "time_s": 12.160816157501698,
-          "laplacian_variance": 51.37820184755028,
-          "accepted": true
+          "laplacian_variance": 46.404193342391956,
+          "accepted": false
         },
         {
           "frame": 366,
           "time_s": 12.295189816700612,
-          "laplacian_variance": 47.503501968961956,
+          "laplacian_variance": 47.71632805605193,
           "accepted": false
         },
         {
           "frame": 370,
           "time_s": 12.429563475899524,
-          "laplacian_variance": 46.80088917091392,
+          "laplacian_variance": 46.8687981810984,
           "accepted": false
         },
         {
           "frame": 374,
           "time_s": 12.563937135098438,
-          "laplacian_variance": 46.77159702537663,
+          "laplacian_variance": 45.55590076392089,
           "accepted": false
         },
         {
           "frame": 378,
           "time_s": 12.698310794297353,
-          "laplacian_variance": 39.39717765396602,
+          "laplacian_variance": 38.226866993255456,
           "accepted": false
         },
         {
           "frame": 382,
           "time_s": 12.832684453496267,
-          "laplacian_variance": 32.77475668901402,
+          "laplacian_variance": 37.3299362933812,
           "accepted": false
         },
         {
           "frame": 387,
           "time_s": 13.000651527494908,
-          "laplacian_variance": 46.75826509422019,
+          "laplacian_variance": 46.54525194374412,
           "accepted": false
         },
         {
           "frame": 391,
           "time_s": 13.135025186693822,
-          "laplacian_variance": 48.795192755353014,
-          "accepted": false
+          "laplacian_variance": 50.2637073101828,
+          "accepted": true
         },
         {
           "frame": 395,
           "time_s": 13.269398845892736,
-          "laplacian_variance": 40.858433236748745,
+          "laplacian_variance": 43.31728557312728,
           "accepted": false
         },
         {
           "frame": 399,
           "time_s": 13.40377250509165,
-          "laplacian_variance": 53.246689164651336,
+          "laplacian_variance": 54.56985814078561,
           "accepted": false
         },
         {
           "frame": 403,
           "time_s": 13.538146164290563,
-          "laplacian_variance": 64.49305991332244,
+          "laplacian_variance": 64.69436703528888,
           "accepted": true
         },
         {
           "frame": 407,
           "time_s": 13.672519823489477,
-          "laplacian_variance": 45.8590480176384,
+          "laplacian_variance": 35.56409783413292,
           "accepted": false
         },
         {
           "frame": 411,
           "time_s": 13.806893482688391,
-          "laplacian_variance": 37.582692380743566,
+          "laplacian_variance": 35.419328613147286,
           "accepted": false
         },
         {
           "frame": 415,
           "time_s": 13.941267141887305,
-          "laplacian_variance": 41.63256847658928,
+          "laplacian_variance": 40.63774880156759,
           "accepted": false
         },
         {
           "frame": 419,
           "time_s": 14.075640801086218,
-          "laplacian_variance": 40.65674968848536,
+          "laplacian_variance": 39.98082640010797,
           "accepted": false
         },
         {
           "frame": 424,
           "time_s": 14.24360787508486,
-          "laplacian_variance": 49.96609899971184,
+          "laplacian_variance": 37.18252837210634,
           "accepted": false
         },
         {
           "frame": 428,
           "time_s": 14.377981534283775,
-          "laplacian_variance": 38.24020931337506,
+          "laplacian_variance": 38.032309553954605,
           "accepted": false
         },
         {
           "frame": 432,
           "time_s": 14.512355193482689,
-          "laplacian_variance": 44.1635273532611,
+          "laplacian_variance": 42.660311884051936,
           "accepted": false
         },
         {
           "frame": 436,
           "time_s": 14.646728852681601,
-          "laplacian_variance": 52.89865659239968,
+          "laplacian_variance": 57.96499015980066,
           "accepted": true
         },
         {
@@ -2673,18 +2388,18 @@
         "alignments": [
           {
             "overlap_frame": 8,
-            "scale": 0.8887940287635997,
-            "median_residual": 0.007499691779137204
+            "scale": 0.9771487216878171,
+            "median_residual": 0.011607029159135862
           },
           {
             "overlap_frame": 16,
-            "scale": 0.8730187168463134,
-            "median_residual": 0.017569839151768355
+            "scale": 0.87867468197784,
+            "median_residual": 0.02240721849546713
           },
           {
             "overlap_frame": 24,
-            "scale": 0.9109615561783032,
-            "median_residual": 0.07548034431304053
+            "scale": 1.0344201605489487,
+            "median_residual": 0.06805188690050186
           }
         ],
         "frames": 30,
@@ -2692,16 +2407,62 @@
       },
       "tracking": {
         "method": "SAM2_video_propagation",
-        "tracks": 28,
-        "observations": 840
+        "tracks": 23,
+        "observations": 690,
+        "workers": 7,
+        "status": "ok",
+        "reference_frame_fallback_tracks": [],
+        "fused_point_counts": {
+          "0": 5271,
+          "7": 332,
+          "14": 194,
+          "21": 89761,
+          "1": 3117,
+          "8": 601,
+          "15": 2527,
+          "22": 809,
+          "2": 49224,
+          "9": 218,
+          "16": 46,
+          "3": 23424,
+          "10": 439,
+          "17": 3636,
+          "4": 61512,
+          "11": 3045,
+          "18": 200,
+          "5": 179,
+          "12": 824,
+          "19": 4183,
+          "6": 5585,
+          "13": 4306,
+          "20": 243041
+        },
+        "point_filter": "reference_frame_spatial_consistency"
       },
       "fusion": {
-        "points": 1701529,
+        "points": 1378119,
         "voxel_size_unscaled": 0.006,
         "scale_note": "VGGT units; scene scale solved separately"
       }
     },
-    "warnings": []
+    "warnings": [],
+    "timings_s": {
+      "sampling": 1.2151724938303232,
+      "geometry": 37.09338232502341,
+      "detection_and_masks": 4.882244965061545,
+      "tracking": 35.26281109638512,
+      "fusion": 4.990594362840056,
+      "scene_lift_and_validation": 8.542452497407794
+    }
   },
-  "video_latency_pass": true
+  "photo_run_id": "830d51264ef3453cc3e82af98369b81253b81f5ca7747b869cd76135a10c98dd",
+  "video_latency_pass": true,
+  "quality_checks": {
+    "tracking": true,
+    "contacts": false,
+    "stability": false,
+    "reprojection": false
+  },
+  "quality_status": "needs_review",
+  "status": "complete"
 }

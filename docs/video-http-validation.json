@@ -1,0 +1,38 @@
+[
+  {
+    "scene_id": "6196e6f1297044d484e9ce44d9314fd3",
+    "bodies": 29,
+    "cache_hit": false,
+    "http_seconds": 92.5072966888547,
+    "duration_s": 92.18128324300051,
+    "tracks": 23,
+    "observations": 690,
+    "workers": 7,
+    "tracking_status": "ok",
+    "tracking_fallbacks": [],
+    "float_count": 7,
+    "penetration_count": 0,
+    "max_drift_m": 0.02583454533408653,
+    "iou": 0.08731148720368825,
+    "quality_status": "needs_review",
+    "cors_origin": "https://precognition.base44.app"
+  },
+  {
+    "scene_id": "6a87a2dfc6994fcbaa87d0fedd6c8972",
+    "bodies": 29,
+    "cache_hit": true,
+    "http_seconds": 0.44681786373257637,
+    "duration_s": 92.18128324300051,
+    "tracks": 23,
+    "observations": 690,
+    "workers": 7,
+    "tracking_status": "ok",
+    "tracking_fallbacks": [],
+    "float_count": 7,
+    "penetration_count": 0,
+    "max_drift_m": 0.02583454533408653,
+    "iou": 0.08731148720368825,
+    "quality_status": "needs_review",
+    "cors_origin": "https://precognition.base44.app"
+  }
+]

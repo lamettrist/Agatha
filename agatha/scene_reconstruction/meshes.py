@@ -99,7 +99,9 @@ def job(index,image,inst,obj,observed,directory,fused=None):
     start=time.perf_counter();result=dict(id=obj.id)
     try:
         if fused is not None and len(fused)>100:
-            mesh=point_mesh(fused);mesh.vertices-=np.asarray(obj.position)
+            from .assets import rotation
+            mesh=point_mesh(fused)
+            mesh.vertices=(mesh.vertices-np.asarray(obj.position))@rotation(obj.rotation_euler)
             method='fused_multiview_poisson';alignment={'fused_points':len(fused)}
         else:
             device=registry().device(index%7);model=load_model(device)

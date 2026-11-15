@@ -1,6 +1,7 @@
 """Sharp-frame sampling, chunked VGGT geometry, SAM 2 propagation and TSDF fusion."""
 from __future__ import annotations
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
 from threading import RLock
@@ -15,6 +16,42 @@ from .geometry import backproject
 from .segmentation import deduplicate
 
 VIDEO_LOCK=RLock()
+TRACKER_INIT_LOCK=RLock()
+VIDEO_VERSION='video_multiview_v5'
+
+
+def crop_padding(images,depths,clouds,confidence,cameras,source_size):
+    """Undo VGGT's documented 518-square padding without changing camera rays."""
+    width,height=source_size
+    side=images[0].width
+    if width>=height:
+        content_w=side;content_h=round(height*(side/width)/14)*14
+    else:
+        content_h=side;content_w=round(width*(side/height)/14)*14
+    left=(side-content_w)//2;top=(side-content_h)//2
+    box=(left,top,left+content_w,top+content_h)
+    cropped=[im.crop(box) for im in images]
+    adjusted=[]
+    for camera in cameras:
+        camera=dict(camera);k=np.array(camera['intrinsics'],copy=True)
+        k[0,2]-=left;k[1,2]-=top;camera['intrinsics']=k.tolist()
+        adjusted.append(camera)
+    region=(slice(None),slice(top,top+content_h),slice(left,left+content_w))
+    return cropped,depths[region].copy(),clouds[region].copy(),confidence[region].copy(),adjusted
+
+
+def fuse_track_points(chunks):
+    """Reject tracking jumps outside the first observed object's 3D neighborhood."""
+    if not chunks:return np.empty((0,3))
+    reference=np.asarray(chunks[0]);reference=reference[np.isfinite(reference).all(1)]
+    if len(reference)<12:return reference
+    lower,upper=np.percentile(reference,[1,99],axis=0)
+    margin=np.clip((upper-lower)*.5,.035,.20)
+    kept=[]
+    for chunk in chunks:
+        valid=np.isfinite(chunk).all(1)&(chunk>=lower-margin).all(1)&(chunk<=upper+margin).all(1)
+        kept.append(chunk[valid])
+    return np.concatenate(kept)
 
 
 def sample_frames(path, directory, count=30, min_variance=50.):
@@ -23,8 +60,13 @@ def sample_frames(path, directory, count=30, min_variance=50.):
     if total/fps>60: raise ValueError('Video must be at most 60 seconds')
     candidates=np.unique(np.linspace(0,total-1,min(total,count*4)).astype(int))
     frames=[];records=[];directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
-    for index in candidates:
-        capture.set(cv2.CAP_PROP_POS_FRAMES,int(index));ok,frame=capture.read()
+    wanted=set(map(int,candidates));last=int(candidates[-1])
+    # H.264 random seeks repeatedly decode whole GOPs. Decode once in order and
+    # materialize only candidate frames, preserving the same sampling positions.
+    for index in range(last+1):
+        if not capture.grab():break
+        if index not in wanted:continue
+        ok,frame=capture.retrieve()
         if not ok:continue
         h,w=frame.shape[:2];ratio=min(1,960/max(w,h))
         frame=cv2.resize(frame,(round(w*ratio),round(h*ratio)))
@@ -92,7 +134,7 @@ def vggt_geometry(paths,directory):
     from vggt.utils.load_fn import load_and_preprocess_images
     from vggt.utils.pose_enc import pose_encoding_to_extri_intri
     model=multiview_model();chunk=int(os.getenv('RECON_VIDEO_CHUNK','10'))
-    if chunk<2:raise ValueError('RECON_VIDEO_CHUNK must be at least two')
+    if chunk<3:raise ValueError('RECON_VIDEO_CHUNK must be at least three with two overlapping views')
     tensors=load_and_preprocess_images([str(p) for p in paths],mode='pad')
     images=[Image.fromarray(np.uint8(t.permute(1,2,0).numpy()*255)) for t in tensors]
     depths=[];clouds=[];confidences=[];cameras=[];alignments=[]
@@ -128,42 +170,79 @@ def vggt_geometry(paths,directory):
     for camera in cameras:
         camera['center']=((np.array(camera['center'])-origin)@rotation).tolist()
         camera['camera_to_world']=(rotation.T@np.array(camera['camera_to_world'])).tolist()
-    np.savez_compressed(Path(directory)/'multiview.npz',depth=np.array(depths),confidence=np.array(confidences),points=np.array(clouds))
+    with Image.open(paths[0]) as source:
+        images,depths,clouds,confidences,cameras=crop_padding(images,np.array(depths),np.array(clouds),np.array(confidences),cameras,source.size)
+    np.savez_compressed(Path(directory)/'multiview.npz',depth=depths,confidence=confidences,points=clouds)
     (Path(directory)/'cameras.json').write_text(json.dumps(cameras,indent=2))
     return images,np.array(depths),np.array(clouds),np.array(confidences),cameras,alignments
 
 
-@lru_cache(1)
-def tracker_model():
+@lru_cache(7)
+def tracker_model(device=None):
     from transformers import Sam2VideoProcessor,Sam2VideoModel
     path=Path(os.getenv('RECON_MODEL_DIR','models/vision/reconstruction'))/'sam'
-    return (Sam2VideoProcessor.from_pretrained(str(path),local_files_only=True),
-            Sam2VideoModel.from_pretrained(str(path),local_files_only=True).to(registry().device(2)).eval())
+    # Transformers' initialization contexts affect global module state. Concurrent
+    # checkpoint loads can leave meta tensors; inference itself stays parallel.
+    with TRACKER_INIT_LOCK:
+        return (Sam2VideoProcessor.from_pretrained(str(path),local_files_only=True),
+                Sam2VideoModel.from_pretrained(str(path),local_files_only=True).to(device or registry().device(2)).eval())
 
 
 @torch.inference_mode()
-def track_instances(images,instances,clouds,confidence):
-    processor,model=tracker_model()
+def track_group(images,instances,clouds,confidence,device):
+    processor,model=tracker_model(device)
     session=processor.init_video_session(video=images,inference_device=str(model.device),
         processing_device='cpu',video_storage_device='cpu',inference_state_device='cpu')
     # Seed actual SAM 2 masks, rather than repeating box detections independently.
-    for index,inst in enumerate(instances):inst['track_id']=index
     if not instances:raise ValueError('No masks available for video tracking')
-    processor.add_inputs_to_inference_session(session,frame_idx=0,obj_ids=list(range(len(instances))),
+    ids=[inst['track_id'] for inst in instances]
+    # The processor retains this list as mutable pending-input state and the
+    # model removes IDs after conditioning. Keep our output mapping independent.
+    processor.add_inputs_to_inference_session(session,frame_idx=0,obj_ids=ids.copy(),
         input_masks=[inst['mask'] for inst in instances],original_size=images[0].size[::-1])
-    fused={i:[] for i in range(len(instances))};track_report=[]
+    fused={i:[] for i in ids};track_report=[]
     model(inference_session=session,frame_idx=0)
     for output in model.propagate_in_video_iterator(session,start_frame_idx=0):
         frame=int(output.frame_idx)
         masks=processor.post_process_masks(output.pred_masks.unsqueeze(0).cpu(),[images[frame].size[::-1]])[0]
         threshold=float(np.percentile(confidence[frame],25))
         valid=(confidence[frame]>=threshold)&np.isfinite(clouds[frame]).all(-1)
-        for index,mask in enumerate(masks):
+        for index,mask in zip(ids,masks):
             mask=np.asarray(mask[0],bool)
             points=clouds[frame][mask&valid][::3]
             if len(points):fused[index].append(points)
-            track_report.append(dict(frame=frame,track_id=index,pixels=int(mask.sum()),fused_points=len(points)))
-    return {i:np.concatenate(chunks) if chunks else np.empty((0,3)) for i,chunks in fused.items()},track_report
+            track_report.append(dict(frame=frame,track_id=index,pixels=int(mask.sum()),sampled_points=len(points)))
+    if not track_report:raise RuntimeError('SAM2 returned no object observations')
+    return {i:fuse_track_points(chunks) for i,chunks in fused.items()},track_report
+
+
+def track_instances(images,instances,clouds,confidence):
+    """Independent object memories can propagate concurrently on separate GPUs."""
+    if not instances:raise ValueError('No masks available for video tracking')
+    for index,inst in enumerate(instances):inst['track_id']=index
+    workers=min(len(instances),len(registry().devices),max(1,int(os.getenv('RECON_TRACK_WORKERS','7')))) if torch.cuda.is_available() else 1
+    groups=[instances[index::workers] for index in range(workers)]
+    fused={};observations=[]
+    # VGGT activation buffers are no longer needed when propagation starts.
+    if torch.cuda.is_available():torch.cuda.empty_cache()
+    with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='video-track') as pool:
+        futures=[pool.submit(track_group,images,group,clouds,confidence,registry().device(index))
+                 for index,group in enumerate(groups)]
+        for group,future in zip(groups,futures):
+            try:
+                points,records=future.result()
+            except Exception as exc:
+                # A worker failure cannot discard objects tracked on other GPUs.
+                points={};records=[]
+                for inst in group:
+                    mask=inst['mask']&np.isfinite(clouds[0]).all(-1)
+                    selected=clouds[0][mask][::3];track=inst['track_id']
+                    points[track]=selected
+                    records.append(dict(frame=0,track_id=track,pixels=int(mask.sum()),sampled_points=len(selected),
+                        fallback='reference_frame_only',reason=f'{type(exc).__name__}: {str(exc)[:250]}'))
+            fused.update(points);observations.extend(records)
+    observations.sort(key=lambda item:(item['frame'],item['track_id']))
+    return fused,observations
 
 
 def tsdf_fuse(images,depths,cameras,directory):
@@ -182,12 +261,33 @@ def tsdf_fuse(images,depths,cameras,directory):
     return dict(points=len(cloud.points),voxel_size_unscaled=.006,scale_note='VGGT units; scene scale solved separately')
 
 
-def reconstruct_video(path,table_width_m=None):
-    start=time.perf_counter();digest=sha256(Path(path).read_bytes()+str(table_width_m).encode()+b'video-v1').hexdigest()
-    work=root_dir()/('video_'+digest);work.mkdir(parents=True,exist_ok=True)
+def reconstruct_video(path,table_width_m=None,*,use_cache=True):
+    """Return a saved multi-view scene; degraded/empty runs never block a retry."""
+    from .pipeline import VERSION as photo_version
+    start=time.perf_counter()
+    if table_width_m is not None and not .3<=table_width_m<=3:
+        raise ValueError('table_width_m must be between 0.3 and 3')
+    config=dict(version=VIDEO_VERSION,photo_version=photo_version,table_width_m=table_width_m,
+                chunk=os.getenv('RECON_VIDEO_CHUNK','10'),mesh=os.getenv('RECON_MESH','1'),
+                threshold=os.getenv('RECON_DETECTION_THRESHOLD','.22'),auto_grid=os.getenv('RECON_AUTO_GRID','12'))
+    digest=sha256(Path(path).read_bytes()+json.dumps(config,sort_keys=True).encode()).hexdigest()
+    work=root_dir()/digest;work.mkdir(parents=True,exist_ok=True)
     with VIDEO_LOCK:
+        from agatha.schema import Scene
+        report_path=work/'reconstruction_report.json';scene_path=work/'scene.json'
+        if use_cache and report_path.exists() and scene_path.exists():
+            cached=json.loads(report_path.read_text())
+            cached_scene=Scene.model_validate_json(scene_path.read_text())
+            cached_tracking=cached.get('video',{}).get('stages',{}).get('tracking',{})
+            if (cached.get('status')=='complete' and cached_scene.objects and cached_tracking.get('status')=='ok'
+                    and cached_tracking.get('observations',0)>0 and any(cached_tracking.get('fused_point_counts',{}).values())):
+                cached['cache_hit']=True;cached['request_duration_s']=time.perf_counter()-start
+                return cached_scene,cached
+        stage_start=time.perf_counter()
         paths,sampling=sample_frames(path,work/'frames')
-        video_report=dict(sampling=sampling,stages={},warnings=[])
+        video_report=dict(sampling=sampling,stages={},warnings=[],timings_s={'sampling':time.perf_counter()-stage_start})
+        stage_start=time.perf_counter()
+        if sampling['warning']:video_report['warnings'].append(sampling['warning'])
         try:
             images,depths,clouds,confidence,cameras,alignments=vggt_geometry(paths,work)
             video_report['stages']['geometry']=dict(method='VGGT-1B',alignments=alignments,frames=len(images),metric_scale=False)
@@ -204,29 +304,91 @@ def reconstruct_video(path,table_width_m=None):
                 report['warnings']=[*report.get('warnings',[]),*video_report['warnings'],'Multi-view geometry unavailable; reconstructed one sharp frame only.']
                 report['duration_s']=time.perf_counter()-start;report['video_latency_pass']=report['duration_s']<180
                 return scene,report
+        video_report['timings_s']['geometry']=time.perf_counter()-stage_start
+        stage_start=time.perf_counter()
         model=registry();detections=model.detect(images[0]);masks=model.segment(images[0],detections)
         model.classify(images[0],[m for m in masks if m['label']=='unknown object'])
         instances,dropped=deduplicate(masks,depths[0])
         instances=[inst for inst in instances if inst['mask_source']!='sam2_automatic' or
                    (inst['label'] not in ('table','wall','floor','unknown object') and inst.get('classifier_confidence',0)>=.35)]
+        # Automatic masks often describe a seat/leg within an already detected chair.
+        # Track independent pieces, rather than assigning another whole chair to each part.
+        retained=[]
+        for inst in instances:
+            if inst['mask_source']=='sam2_automatic':
+                nested=False
+                for other in instances:
+                    if other is inst or other['mask_source']!='sam2_box' or other['label']!=inst['label']:continue
+                    overlap=(inst['mask']&other['mask']).sum()/max(inst['mask'].sum(),1)
+                    if overlap>.65:nested=True;break
+                if nested:continue
+            retained.append(inst)
+        instances=retained
+        video_report['timings_s']['detection_and_masks']=time.perf_counter()-stage_start
+        stage_start=time.perf_counter()
         try:
             fused,tracking=track_instances(images,instances,clouds,confidence)
-            video_report['stages']['tracking']=dict(method='SAM2_video_propagation',tracks=len(fused),observations=len(tracking))
+            video_report['stages']['tracking']=dict(method='SAM2_video_propagation',tracks=len(fused),observations=len(tracking),
+                workers=min(len(instances),len(registry().devices),max(1,int(os.getenv('RECON_TRACK_WORKERS','7')))) if torch.cuda.is_available() else 1)
+            failed_tracks=[row['track_id'] for row in tracking if row.get('fallback')]
+            empty_tracks=[track for track,points in fused.items() if not len(points)]
+            failed_tracks=sorted(set(failed_tracks)|set(empty_tracks))
+            video_report['stages']['tracking']['status']='partial' if failed_tracks else 'ok'
+            video_report['stages']['tracking']['reference_frame_fallback_tracks']=failed_tracks
+            video_report['stages']['tracking']['fused_point_counts']={str(track):len(points) for track,points in fused.items()}
+            video_report['stages']['tracking']['point_filter']='reference_frame_spatial_consistency'
+            if failed_tracks:video_report['warnings'].append(f'{len(failed_tracks)} tracks fell back to reference-frame points after a worker failure.')
             (work/'tracks.json').write_text(json.dumps(tracking))
             np.savez_compressed(work/'object_points.npz',**{str(i):p for i,p in fused.items()})
         except Exception as exc:
             fused={};video_report['stages']['tracking']=dict(status='failed',reason=f'{type(exc).__name__}: {str(exc)[:300]}')
+            video_report['warnings'].append('Video tracking failed; body fits use the reference frame only.')
+        video_report['timings_s']['tracking']=time.perf_counter()-stage_start
+        stage_start=time.perf_counter()
         try: video_report['stages']['fusion']=tsdf_fuse(images,depths,cameras,work)
-        except Exception as exc:video_report['stages']['fusion']=dict(status='failed',reason=f'{type(exc).__name__}: {str(exc)[:300]}')
+        except Exception as exc:
+            video_report['stages']['fusion']=dict(status='failed',reason=f'{type(exc).__name__}: {str(exc)[:300]}')
+            video_report['warnings'].append('TSDF fusion failed; raw multi-view geometry is retained.')
+        video_report['timings_s']['fusion']=time.perf_counter()-stage_start
         k=np.array(cameras[0]['intrinsics']);camera=dict(fx=k[0,0],fy=k[1,1],cx=k[0,2],cy=k[1,2],
             width=images[0].width,height=images[0].height,source='VGGT_predicted')
         override=dict(depth=depths[0],camera=camera,method='VGGT-1B',hash=digest,
                       detections=detections,masks=[*instances,*[m for m in masks if m['label'] in ('table','wall','floor')]],fused=fused)
-        scene,report=reconstruct(images[0],table_width_m,geometry_override=override)
-        report.update(input='video',pipeline='video_multiview_v1',video=video_report,duration_s=time.perf_counter()-start)
+        stage_start=time.perf_counter()
+        scene,report=reconstruct(images[0],table_width_m,geometry_override=override,use_cache=False)
+        video_report['timings_s']['scene_lift_and_validation']=time.perf_counter()-stage_start
+        # Publish one complete, reloadable video bundle. Photo-stage assets keep their
+        # exact geometry/texture contents while their URLs move into this run directory.
+        photo_run=report.get('run_id')
+        if photo_run:
+            source=root_dir()/photo_run
+            for asset in source.iterdir():
+                if asset.is_file() and asset.name not in ('scene.json','reconstruction_report.json'):
+                    shutil.copy2(asset,work/asset.name)
+        report.update(input='video',pipeline=VIDEO_VERSION,video=video_report,run_id=digest,
+                      photo_run_id=photo_run,debug_url=f'/api/reconstructions/{digest}',cache_hit=False)
+        for obj in scene.objects:
+            if obj.visual_mesh_url:obj.visual_mesh_url=f"{report['debug_url']}/{obj.id}.glb"
+        report.pop('photo_latency_pass',None)
+        report['duration_s']=time.perf_counter()-start
         report['video_latency_pass']=report['duration_s']<180
         report['warnings'].extend(video_report['warnings'])
-        (work/'reconstruction_report.json').write_text(json.dumps(report,indent=2,allow_nan=False))
+        metrics=report.get('metrics',{});contacts=metrics.get('contacts_after_settle',{})
+        iou=metrics.get('reprojection_mean_iou')
+        report['quality_checks']={
+            'tracking':video_report['stages'].get('tracking',{}).get('status')=='ok',
+            'contacts':contacts.get('float_count')==0 and contacts.get('penetration_count')==0,
+            'stability':metrics.get('stability',{}).get('max_drift_m',float('inf'))<.01,
+            'reprojection':iou is not None and iou>=.75,
+        }
+        report['quality_status']='passed_measured_checks' if all(report['quality_checks'].values()) else 'needs_review'
+        if report['quality_status']=='needs_review':
+            failed=', '.join(name for name,passed in report['quality_checks'].items() if not passed)
+            report['warnings'].append(f'Video scene needs review: {failed} checks did not pass. See measured metrics.')
+        report['status']='complete'
+        scene_path.write_text(scene.model_dump_json(indent=2))
+        temporary=work/'reconstruction_report.tmp';temporary.write_text(json.dumps(report,indent=2,allow_nan=False))
+        temporary.replace(report_path)
         return scene,report
 
 

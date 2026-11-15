@@ -1,0 +1,38 @@
+........................................................................ [ 30%]
+........................................................................ [ 60%]
+......................................s................................. [ 90%]
+.......................                                                  [100%]
+=============================== warnings summary ===============================
+.venv-reconstruction/lib/python3.12/site-packages/dash/testing/plugin.py:104
+  /home/chintd2/agatha/.venv-reconstruction/lib/python3.12/site-packages/dash/testing/plugin.py:104: PytestRemovedIn10Warning: The hookimpl pytest_addhooks uses old-style configuration options (marks or attributes).
+  Please use the pytest.hookimpl(tryfirst=True) decorator instead
+   to configure the hooks.
+   See https://docs.pytest.org/en/latest/deprecations.html#configuring-hook-specs-impls-using-markers
+    @pytest.mark.tryfirst
+
+agatha/main.py:17
+  /home/chintd2/agatha/agatha/main.py:17: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event('startup')
+
+.venv/lib/python3.12/site-packages/fastapi/applications.py:4723
+  /home/chintd2/agatha/.venv/lib/python3.12/site-packages/fastapi/applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+tests/test_contact_data.py: 8 warnings
+tests/test_joint_data.py: 4 warnings
+tests/test_soft_data.py: 4 warnings
+  /home/chintd2/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=2438041) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+238 passed, 1 skipped, 19 warnings in 89.09s (0:01:29)

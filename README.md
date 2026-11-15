@@ -1,5 +1,14 @@
 # Agatha / Foresight
 
+The video backend now accepts multipart video through both `POST /api/scenes` and
+`POST /api/scenes/video` (`file`, `image`, or `video` fields). Bodies are returned in
+`scene.objects`; `GET /api/health` reports supported endpoints and model status.
+See [video integration](docs/video-upload-integration.md) and the
+[measured video report](docs/video-reconstruction-report.json). The real fixture
+returns nonempty scenes within the three-minute budget, but **geometry accuracy
+and stability still fail the acceptance targets**. The report flags those failures.
+
+
 Photo → approximate 3D boxes → poke the scene → compare PyBullet with a genuine small learned world model → ask an OpenAI agent grounded in Exa product specs.
 
 Built for a 3-minute Hack the Nest demo. No auth, database, scene history, or cloud service is needed for the offline desk. All dimensions, positions and unsourced masses are **estimates**; predictions are **not guaranteed real-world outcomes**.

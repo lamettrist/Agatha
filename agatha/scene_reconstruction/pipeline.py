@@ -18,7 +18,7 @@ from .segmentation import deduplicate,split_depth_clusters
 from .bodies import settle,stability
 from .assets import write_debug,export_visual
 
-VERSION='metric-photo-v11'
+VERSION='metric-photo-v14'
 RUN_LOCK=RLock()
 # kg, friction, rigid approximation, dimensions used ONLY when geometry fails.
 PRIORS={
@@ -54,6 +54,27 @@ def timed(report,stage):
 
 def safe_report_instances(instances):
     return [{k:v for k,v in item.items() if k!='mask'} for item in instances]
+
+
+def assign_video_supports(objects,support):
+    """Choose a support from measured world bounds, including secondary tables."""
+    from .assets import object_mesh,rotation
+    tables=[o for o in objects if o.is_static and o.label=='table']
+    assigned={}
+    for obj in objects:
+        if obj.is_static or obj.supported_by=='floor':continue
+        vertices=object_mesh(obj).vertices@rotation(obj.rotation_euler).T+obj.position
+        bottom=float(vertices[:,1].min());x,_,z=obj.position
+        candidates=[]
+        if abs(x)<=support.size[0]/2+.03 and abs(z)<=support.size[1]/2+.03:
+            candidates.append((abs(bottom-support.height),'support'))
+        for table in tables:
+            local=rotation(table.rotation_euler).T@(np.array(obj.position)-table.position)
+            if abs(local[0])<=table.size[0]/2+.03 and abs(local[2])<=table.size[2]/2+.03:
+                candidates.append((abs(bottom-(table.position[1]+table.size[1]/2)),table.id))
+        if candidates:obj.supported_by=min(candidates)[1]
+        assigned[obj.id]=obj.supported_by
+    return assigned
 
 
 def build_laptop(points,inst,fit):
@@ -115,6 +136,21 @@ def lift(inst,cloud_world,valid,index,support_height,points_override=None):
         if 'radius' not in fit: method='symmetry_cylinder_from_obb' if fallback is None else 'template_cylinder'
     elif label=='laptop':
         shape,collision,method,extra=build_laptop(points,inst,fit);size=fit['size']
+    elif label=='chair':
+        # A solid OBB fills the air between the seat, back and stand and collides
+        # with nearby tables. Complete those rigid parts separately in one body.
+        w,h,d=map(float,size)
+        h=max(h,.55);w=max(w,.25);d=max(d,.25);size=np.array([w,h,d])
+        seat_y=h*.10;seat_thickness=min(.045,h*.07)
+        stem_height=seat_y+h/2-seat_thickness/2-.025
+        collision=Collision(parts=[
+            CollisionPart(size=(w,seat_thickness,d),position=(0,seat_y,0)),
+            CollisionPart(size=(w,h*.36,.035),position=(0,h*.32,-d*.43)),
+            CollisionPart(type='cylinder',radius=min(w,d)*.40,height=.025,position=(0,-h/2+.0125,0)),
+            CollisionPart(type='cylinder',radius=min(w,d)*.06,height=stem_height,position=(0,-h/2+.025+stem_height/2,0)),
+        ])
+        shape='compound';method='compound_chair_from_points'
+        extra={'seat_back_and_stand':'class completion of observed bounds'}
     else:
         if label in ('phone','paper','keyboard') and size[1]>.08:
             size[1]=prior[1];fallback='thin_object_thickness_prior'
@@ -175,7 +211,7 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                        fallback_reason=str(exc)[:500])
             old['warnings'].append('Metric reconstruction unavailable; legacy approximate boxes used.')
             return scene,old
-        if not detections:
+        if not detections and not (geometry_override and any(m['label'] not in PLANE_LABELS for m in geometry_override.get('masks',[]))):
             from agatha.reconstruction import reconstruct as legacy
             scene,old=legacy(image,table_width_m)
             old['pipeline']='legacy_no_detections';old['stages']=report['stages']
@@ -197,7 +233,17 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
         try: model.classify(image,[m for m in masks if m['label']=='unknown object'])
         except Exception as exc: report['warnings'].append(f'Automatic-mask classification failed: {type(exc).__name__}: {str(exc)[:200]}')
         with timed(report,'structure') as stage:
-            table_masks=[m['mask'] for m in masks if m['label']=='table']
+            table_regions=[]
+            for region in sorted((m for m in masks if m['label']=='table'),key=lambda m:-m['confidence']):
+                count,components,stats,_=cv2.connectedComponentsWithStats(region['mask'].astype('uint8'),8)
+                for component in range(1,count):
+                    if stats[component,cv2.CC_STAT_AREA]<max(100,image.width*image.height*.001):continue
+                    mask=components==component
+                    if any((mask&old['mask']).sum()/max(min(mask.sum(),old['mask'].sum()),1)>.85 for old in table_regions):continue
+                    table_regions.append(dict(region,mask=mask))
+            # Disjoint tables must not become one room-sized slab between them.
+            primary_table=max(table_regions,key=lambda m:int(m['mask'].sum()),default=None)
+            table_masks=[primary_table['mask']] if primary_table is not None else []
             exclude=np.logical_or.reduce([m['mask'] for m in masks if m['label'] not in PLANE_LABELS]) if any(m['label'] not in PLANE_LABELS for m in masks) else np.zeros(depth.shape,bool)
             candidates=(np.logical_or.reduce(table_masks)&valid) if table_masks else ((np.indices(depth.shape)[0]>image.height*.55)&valid&~exclude)
             try:
@@ -219,11 +265,23 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
             except ValueError as exc: stage['vertical_alignment_fallback']=str(exc)
             basis=plane['basis'];origin=plane['center']
             cloud_world=(cloud-origin)@basis.T
-            surface=candidates
+            surface=candidates if geometry_override is None else candidates&(np.abs(cloud_world[:,:,1])<.025)
             extents=np.percentile(cloud_world[surface][:,[0,2]],[1,99],axis=0) if surface.sum()>30 else np.array([[-.6,-.4],[.6,.4]])
             center_xz=extents.mean(0);origin=origin+basis.T@np.array([center_xz[0],0,center_xz[1]])
             cloud_world=(cloud-origin)@basis.T
             plane_mask=valid & (np.abs(cloud_world[:,:,1])<.018)
+            if geometry_override is not None:
+                # Automatic masks can outline patches of a floor/wall and label
+                # them as furniture. Remove only pixels supported by an observed
+                # structural region AND its fitted plane, not arbitrary flat items.
+                for region in masks:
+                    if region['label'] not in PLANE_LABELS:continue
+                    observed=region['mask']&valid
+                    if observed.sum()<100:continue
+                    try:structure_plane=g.fit_plane(cloud_world[observed],threshold=.012)
+                    except ValueError:continue
+                    near=np.abs((cloud_world-structure_plane['center'])@structure_plane['normal'])<.018
+                    plane_mask|=observed&near
             stage.update(normal_camera=plane['normal'].tolist(),inlier_ratio=plane['inlier_ratio'],rms_m=plane['rms_m'],
                          gravity_source='table_plane_normal',world_basis=basis.tolist())
         with timed(report,'instances') as stage:
@@ -284,12 +342,16 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
             camera_pose=dict(origin_world=((-origin)@basis.T*factor+[0,.75,0]).tolist(),world_to_camera=basis.T.tolist())
         support_height=.75
         floor_masks=[m['mask'] for m in masks if m['label']=='floor']
+        if geometry_override is not None and not floor_masks:
+            lower=np.indices(depth.shape)[0]>image.height*.55
+            occupied=np.logical_or.reduce([m['mask'] for m in masks if m['label'] not in PLANE_LABELS]) if any(m['label'] not in PLANE_LABELS for m in masks) else np.zeros(depth.shape,bool)
+            floor_masks=[lower&~occupied]
         if floor_masks:
             floor_pixels=np.logical_or.reduce(floor_masks)&valid
             try:
                 floor=g.fit_plane(cloud_world[floor_pixels],threshold=.025,normal_hint=[0,1,0])
                 floor_y=float(floor['center'][1]);measured_height=.75-floor_y
-                if .2<measured_height<3:
+                if .2<measured_height<3 and abs(floor['normal'][1])>.95:
                     support_height=measured_height;cloud_world[:,:,1]-=floor_y
                     camera_pose['origin_world'][1]-=floor_y
                     report['stages']['structure']['floor_height_correction_m']=floor_y
@@ -315,15 +377,44 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
             for j,mask in enumerate([m for m in masks if m['label']=='wall'][:3]):
                 pts=cloud_world[mask['mask']&valid]
                 if len(pts)<30: continue
-                fitted=g.fit_box(pts);dims=fitted['size'];dims[int(np.argmin(dims))]=.03
+                try:
+                    wall_plane=g.fit_plane(pts,threshold=.015)
+                except ValueError:continue
+                if abs(wall_plane['normal'][1])>.35:
+                    report['warnings'].append(f'Wall candidate {j} rejected: its observed plane is not vertical.')
+                    continue
+                fitted=g.fit_box(pts);dims=fitted['size'];dims[2]=.03
                 objects.append(SceneObject(id=f'wall_{j}',label='wall',size=tuple(dims),position=tuple(fitted['center']),
                     rotation_euler=tuple(fitted['rotation_euler']),is_static=True,shape_method='plane_slab',confidence=mask['confidence']))
+            if geometry_override is not None:
+                for j,region in enumerate(table_regions):
+                    if region is primary_table:continue
+                    pts=cloud_world[region['mask']&valid]
+                    if len(pts)<30:continue
+                    try:
+                        tabletop=g.fit_plane(pts,threshold=.015,normal_hint=[0,1,0])
+                        if abs(tabletop['normal'][1])<.95:continue
+                        pts=pts[np.abs((pts-tabletop['center'])@tabletop['normal'])<.02]
+                        fitted=g.fit_box(pts)
+                    except ValueError:continue
+                    dims=fitted['size'];dims[1]=.03
+                    if min(dims[0],dims[2])<.1:continue
+                    center=fitted['center'];center[1]=float(np.median(pts[:,1]))-.015
+                    objects.append(SceneObject(id=f'table_{j}',label='table',size=tuple(dims),position=tuple(center),
+                        rotation_euler=tuple(fitted['rotation_euler']),is_static=True,shape_method='plane_slab',confidence=region['confidence']))
             stage['body_count']=len(objects)
         # Recenter/expand the slab using observed table bounds and contact anchors.
         # Hidden table extent is an estimate, recorded instead of dropping bodies off its edge.
         contact_points=[]
-        for inst,obj in zip(instances,objects):
-            if obj.is_static: continue
+        by_id={o.id:o for o in objects}
+        for inst in instances:
+            obj=by_id.get(inst.get('object_id'))
+            if obj is None or obj.is_static:continue
+            if obj.id in fused_world_by_id and len(fused_world_by_id[obj.id])>=100:
+                # Multi-view points already define a world position. Applying a
+                # photo contact ray or table-depth clamp here destroys that fit.
+                if obj.supported_by!='floor':contact_points.append(np.array(obj.position)[[0,2]])
+                continue
             try:
                 bottom,top=g.mask_anchor(inst)
                 if inst['label']=='laptop':bottom=g.horizontal_mask_anchor(inst)
@@ -362,7 +453,7 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                     projected_width=width_px*contact_depth/camera['fx']
                     height_px=inst['bbox'][3]-inst['bbox'][1]
                     projected_height=height_px*contact_depth/camera['fy']
-                    if camera_contact[2]>back_depth+.08:
+                    if obj.supported_by!='floor' and camera_contact[2]>back_depth+.08:
                         camera_contact=direction*(back_depth+.08)
                         world_contact=camera_contact@basis.T+np.array(camera_pose['origin_world'])
                     if label in ('backpack','bag','jacket','gloves'):
@@ -400,6 +491,10 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                 obj.position=(float(world_contact[0]),obj.position[1],float(world_contact[2]))
                 if obj.supported_by!='floor':contact_points.append(world_contact[[0,2]])
             except (ValueError,IndexError): continue
+        if geometry_override is not None:
+            report['stages']['lift']['support_assignments']=assign_video_supports(objects,support)
+            # Do not stretch the main tabletop to reach furniture on other tables.
+            contact_points=[]
         if contact_points:
             pts=np.array(contact_points)
             extent=np.vstack([-support_size/2,support_size/2,pts])
@@ -429,12 +524,18 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                     if item['status']=='fallback':report['warnings'].append(f"{item['id']} mesh fallback: {item['reason']}")
         scene=Scene(objects=objects,support=support)
         with timed(report,'settle') as stage:
-            scene,contacts=settle(scene);stage.update(contacts);report['metrics']['contacts_after_settle']=contacts
+            scene,contacts=settle(scene,extend_support=geometry_override is None);stage.update(contacts);report['metrics']['contacts_after_settle']=contacts
         with timed(report,'stability') as stage:
             measured=stability(scene);stage.update(measured);report['metrics']['stability']=measured
         report.update(detected_count=len(detections),kept_count=len(instances),detector='grounding_dino',depth='metric_depth',
             detections=safe_report_instances(instances),scale_confidence='medium' if scale['references'] or manual else 'low',
             scale_basis=scale['source'],scale=scale,camera=camera,camera_pose=camera_pose)
+        report['body_count']=len(scene.objects)
+        report['dynamic_body_count']=sum(not obj.is_static for obj in scene.objects)
+        final_objects={obj.id:obj for obj in scene.objects}
+        for details in report['objects']:
+            obj=final_objects.get(details['id'])
+            if obj is not None:details['shape_method']=obj.shape_method
         directory.mkdir(parents=True,exist_ok=True)
         with timed(report,'visual_assets') as stage:
             by_id={i.get('object_id'):i for i in instances}

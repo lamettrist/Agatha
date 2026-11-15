@@ -35,3 +35,19 @@
   `RUN_RECONSTRUCTION_FIXTURE=1 .venv-reconstruction/bin/python -m pytest tests/test_reconstruction_fixture.py -q -s`.
 - Focused geometry/physics/legacy/API suite: **23 passed**. The fixture test fails its
   actual acceptance assertion; no mocks or fabricated pass metrics are substituted.
+
+
+## Video backend repair: real HTTP validation
+
+- Both `/api/scenes` and `/api/scenes/video` accept multipart `file`, `image`, or `video`; filename routing handles octet-stream MP4 uploads.
+- Default CORS permits `https://precognition.base44.app`; `/api/health` documents the response field `scene.objects`. Empty video results return a useful error/report.
+- Removed VGGT padding with matching intrinsics, retained fused world positions, separated table regions, and preserved floor/secondary-table supports.
+- SAM 2 propagation runs on seven GPU workers. Checkpoint initialization is serialized to avoid meta tensors; object-ID lists are copied before the processor consumes pending inputs.
+- Empty or degraded tracking runs cannot populate a healthy cache. Completed runs save reloadable scene/report/debug assets; cached request time is separate from original reconstruction time.
+- Real `tests/images/deskspace.mp4`: **29 candidate bodies, 30 sharp frames, 23 tracks, 690 observations, no tracking fallbacks**. Actual multipart HTTP response: **92.51 s**; processing **92.18 s**. Repeat upload **0.45 s** with a cache hit.
+- Scene readback matched the uploaded result. Actual bundled desk load + physics simulation returned HTTP 200 and six frames. `scenes/demo_desk.json` is unchanged.
+- Final full suite: **238 passed, 1 opt-in fixture skipped**. Exact output: `docs/video-tests.txt`. Focused tests also cover world-to-body mesh conversion, independent track identities, sequential sharp-frame sampling, and table-bound preservation.
+- **Accuracy still fails**: silhouette IoU **0.08731**, **7 declared-support gaps**, **0 penetrations >5 mm**, five-second maximum drift **0.02583 m**. The API explicitly returns `quality_status=needs_review`; no accuracy pass is claimed.
+- Mesh fallback: the detected backpack (`object_005`) kept its completed box because the generated mesh had a worse projected silhouette. Other class-template completions and sparse-depth fallback reasons are listed per object in the full report.
+- Main remaining accuracy problems: incorrect/fragmented instance labels; support assignment for objects on secondary tables; incomplete or noisy geometry from sparse/occluded observations. Metric sizes have not been independently measured.
+- Reports: `docs/video-reconstruction-report.json`, `docs/video-http-validation.json`. The fixture profile ran while other GPU training work was active.
