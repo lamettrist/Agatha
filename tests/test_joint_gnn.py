@@ -743,3 +743,59 @@ def test_shared_rounds_keep_joint_free_scenes_on_the_box_model(checkpoint):
     assert model.config['shared_rounds'] == 4
     again = build_from_checkpoint(dict(kind='joint_gnn', config=model.config, state_dict=model.state_dict()))
     with torch.no_grad(): assert torch.equal(again(state, props, context, mask, joints, joint_mask), mixed)
+
+
+# ----------------------------------------------------------------------------- round 2
+def test_grow_rounds_is_the_identity_and_keeps_box_scenes(checkpoint):
+    tj = _trainer()
+    model = JointGNN(width=128, rounds=6, shared_rounds=4)
+    init_from_contact_gnn(model, checkpoint)
+    torch.manual_seed(0)
+    with torch.no_grad():
+        for name, parameter in model.named_parameters():
+            if name.startswith(('joint_', 'world_node', 'edge_updates.4', 'edge_updates.5', 'node_updates.4', 'node_updates.5')):
+                parameter.add_(torch.randn_like(parameter)*.1)
+    model.eval()
+    grown = tj.grow_rounds(model, 2)
+    assert grown.config['rounds'] == 8 and grown.config['shared_rounds'] == 4 and not grown.training
+    state, props, context, mask = random_boxes(batch=4, seed=11)
+    joints, joint_mask = random_joints(batch=4, seed=11)
+    with torch.no_grad():
+        assert torch.equal(grown(state, props, context, mask, joints, joint_mask), model(state, props, context, mask, joints, joint_mask))
+        for name, parameter in grown.named_parameters():      # train the new rounds: joint-free scenes must not notice
+            if name.startswith(('edge_updates.6', 'edge_updates.7', 'node_updates.6', 'node_updates.7', 'joint_updates.6', 'joint_updates.7')):
+                parameter.add_(torch.randn_like(parameter)*.3+.1)
+        box = cg.build_from_checkpoint(checkpoint)(state, props, context, mask)
+        assert torch.equal(grown(state, props, context, mask), box)
+        assert not torch.allclose(grown(state, props, context, mask, joints, joint_mask), model(state, props, context, mask, joints, joint_mask), atol=1e-4)
+    with pytest.raises(ValueError): tj.grow_rounds(JointGNN(width=32, rounds=2), 1)
+
+
+def test_joint_rest_flag_extends_the_rest_penalty_to_held_links():
+    tj = _trainer()
+    torch.manual_seed(0)
+    model = JointGNN(width=32, rounds=2)
+    state, props, context, mask = random_boxes(batch=4, seed=5)
+    joints, joint_mask = random_joints(batch=4, seed=5)
+    state[..., 7:] = 0                                      # everything truly still, no rest flag (no contact)
+    states = torch.stack((state, state, state), 1); rest = torch.zeros(4, 3, 12, dtype=torch.bool)
+    batch = (states, rest, props, context, mask, joints, joint_mask)
+    gen = lambda: torch.Generator().manual_seed(1)
+    index = tj.TERMS.index('rest')
+    _, off, _ = tj.unroll(model, *batch, 2, _train_args(tj), None, gen())
+    _, on, _ = tj.unroll(model, *batch, 2, _train_args(tj, '--joint-rest', '1'), None, gen())
+    _, val, _ = tj.unroll(model, *batch, 2, _train_args(tj, '--joint-rest', '1'), None, None)
+    assert float(off[index]) == 0 and float(on[index]) > 0 and float(val[index]) == 0     # train-only
+
+
+def test_solve_joints_round2_options():
+    state, props, context, mask, joints, joint_mask = hinge_pair(angle=.4)
+    broken = state.clone(); broken[0, 1, :3] += torch.tensor([.004, -.003, .002]); broken[0, 1, 7:10] = torch.tensor([.3, 0., 0.])
+    args = (props, context, mask, joints, joint_mask)
+    assert torch.equal(solve_joints(broken, *args, gap_free=.02), broken)                 # inside the dead band: untouched
+    fixed = solve_joints(broken, *args, gap_turn=False, velocity=False)
+    assert float(joint_violation(fixed, joints, joint_mask)['anchor_gap'].max()) < 1e-4
+    assert torch.allclose(fixed[..., 3:7], broken[..., 3:7], atol=1e-6) and torch.equal(fixed[..., 7:], broken[..., 7:])   # translation only
+    assert torch.allclose(joint_coordinates(fixed, joints, joint_mask), joint_coordinates(broken, joints, joint_mask), atol=1e-5)
+    default = project_joints(state, broken, *args)
+    assert float(joint_violation(default, joints, joint_mask)['anchor_gap'].max()) < 1e-4

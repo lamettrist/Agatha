@@ -131,6 +131,83 @@ Angles in rad at 0 / 0.5 / 1 / 2 / 4 s.
   only, eight articulation templates). No real-world or out-of-distribution articulated data was evaluated.
 - Latency at batch 1 on a shared CPU: about 8 ms/step raw, 20 ms/step projected (indicative only).
 
+## Round 2 (2026-11-15): diagnosis of the round-1 error tail, more data, training changes
+
+Round-1 files are kept as `models/joint_gnn_r1.pt`, `models/joint_eval_r1.json`, `models/joint_eval_r1.md`.
+Everything in this section was measured on `models/joint_gnn_r1.pt`; **round-2 results are not in this section**
+(see the top of `models/joint_eval.md` once the round-2 run has been evaluated on the same test set).
+
+### Diagnosis (raw model, `data/joints_v1`; scratch script, numbers reproducible from the checkpoint)
+
+- **Not a generalisation gap.** 4 s rollouts on 2,000 TRAIN episodes are as wrong as on test: position error at 2 s
+  0.096 m train / 0.095 val / 0.116 test; hinge error at 2 s 0.337 / 0.365 / 0.343 rad; hinges off by > 1 rad 11.4% /
+  12.8% / 11.5%; episodes off by > 30 cm 6.0% / 5.5% / 7.4%. The model is under-fitted / chaos-limited, not
+  data-starved: more data of the same mix cannot close a gap that is not there. Round 2 therefore also adds capacity
+  (two more joint-only rounds) and re-weights the data toward the failures.
+- **Where the > 30 cm episodes are** (147 of 1,996): ragdoll 56 (20.7% of ragdolls), chain 29 (10.9%), laptop 15,
+  box_lid 11, drawer 10, door 8; 93-100% are chaotic episodes. The first > 10 cm error appears early (median
+  0.40 s, 75% by 0.55 s, i.e. inside the 8-step training window). In 95 of 147 the worst body is an articulated
+  body that is not in contact itself 0.2 s before (falling / swinging link). False falls and missed falls are
+  balanced (bodies on the floor at 4 s: 2,265 true, 2,354 predicted; 216 false, 127 missed; 39 / 31 of the 147
+  episodes): edge decisions go wrong in both directions, there is no one-sided "falls off the table" bias.
+- **Hinges off by > 1 rad** (439 of 3,814): limited 11.6%, unlimited 11.0%; only 151 have the true angle at a limit
+  and 39 sit on the opposite stop. 66-96% of them (by kind) are in episodes that are NOT among the > 30 cm ones: a limb or
+  lid settled on the other side. Limits are not the dominant cause.
+- **The frozen contact trunk is not the cause of rest drift.** Teacher-forced one-step velocity predicted for
+  bodies truly at rest: free boxes 1.2 mm/s; articulated bodies 2.7 mm/s (0.014 rad/s) with the joint rounds, and
+  12.7 mm/s with the box model alone (joints ignored). The joint rounds already remove most of the trunk's error;
+  thin links (< 13 mm) are not worse (2.4 mm/s). What is missing is supervision: the dataset `rest` flag requires
+  a contact, so a lid on its stop or an arm link held by its joints was never asked to stand still.
+- **Projection.** On TRUE transitions `solve_joints` without limits is the identity, the limit clamp changes 0.4% of
+  hinge-frames by > 0.02 rad (Bullet's soft limits) and the contact projection edits velocities by 0.8 mm/s. On
+  rollouts of 600 jointed test episodes, hinge error at 2 s is 0.340 rad raw and 0.352-0.372 for every projection
+  variant tried (limits off, no articulation sleep, slop 0 / 5 mm, joints only, no snap, translation-only gap
+  closing, no velocity pass, 1-2 mm dead band); hinges > 1 rad 10.3% raw, 10.4-12.5% projected. No single component
+  is responsible: every per-step edit of a chaotic rollout tried flips up to 2% more hinges (600 episodes, about
+  1,150 hinges: differences between variants are within noise). Resting-hinge creep (hinges
+  truly still from 2 s; change between 3 s and 4 s) is the same raw (0.0141 rad) and projected (0.0142): the creep
+  is the model's, not the projection's. `gap_turn=False` (new option) lowers it to 0.0105 rad but worsens the
+  median hinge error (0.079 -> 0.095 rad), so the default projection is unchanged.
+
+### Data added
+
+`data/joints_v1c` (seed 6061, 28 workers; composition in its `meta.json`): no jointless scenes (the trainer drops
+them), weighted toward the measured failures (ragdoll 22%, chain 16%, door 8%, laptop 8%, box_lid 7%, drawer 6%,
+robot_arm 5%, pendulum 3%) plus 25% new "calm" kinds that mostly stay on the table: `lid_calm` (laptops / lidded
+boxes resting, nudged 0.05-0.6 m/s, at an edge with the centre of mass on the table, lids on a stop or closing
+slowly), `ragdoll_calm` (sitting / lying in the middle, standing and barely pushed, let go a few cm above the
+table), `chain_calm` (lying, slightly draped, folded and let go: link-link contacts), `arm_calm` (stiff or damped
+arms starting on a limit or near rest). The default `KIND_WEIGHTS` never draw the new kinds: `data/joints_v1` is
+reproduced bit-for-bit (checked on 12 episodes). `data/joints_v3` = symlinks: train = v1 + v1b + v1c, val = all
+three, test = `data/joints_v1/test` only (unchanged).
+
+### Code changes (all defaults reproduce round 1)
+
+- `scripts/train_joint_ddp.py`: `--joint-rest 1` (rest / slide penalties also for articulated bodies that are truly
+  slow on both frames of a step without a contact), `--grow-rounds N` (with `--init`: append N identity-initialised
+  rounds; they are gated to scenes with a joint, so joint-free scenes keep the box computation exactly).
+- `agatha/joint_gnn.py`: `solve_joints` / `project_joints` options `gap_turn`, `velocity`, `gap_free` (ablation
+  switches, defaults unchanged).
+- `scripts/generate_joint_data.py`: the four calm kinds and the `nudge` / `edge_safe` staging modes.
+
+### Round-2 training command (warm start from round 1; result not yet in this document)
+
+```
+CUDA_VISIBLE_DEVICES=0,1,2,3 .venv-train/bin/torchrun --nproc_per_node=4 scripts/train_joint_ddp.py \
+    --data data/joints_v3 --init models/joint_gnn_r1.pt --grow-rounds 2 --joint-rest 1 \
+    --teacher models/runs/joint_v1/init_contact.pt --mix-box-data data/v3 --mix-box-frac 0.05 \
+    --inherit-lr-scale 0 --drop-jointless-train 1 --box-guard 0.01 --w-move 3 --w-impulse 3 --w-speed 1 \
+    --event-frac 0.3 --w-jcoord 1 --w-jrel 0.5 --w-jmove 3 --w-rest 3 --w-slide 2 --w-pen 3 --w-anchor 4 \
+    --batch 704 --epochs 40 --windows-per-epoch 600000 --start-horizon 8 --lr 5e-4 --warmup 300 --amp off \
+    --val-rollout-episodes 599 --max-gpu-gb 22 --out models/runs/joint_v2 --max-minutes 100
+```
+
+The contact trunk stays frozen (the diagnosis does not implicate it, and frozen + gated is what guarantees box
+parity). Note: `models/contact_gnn.pt` was replaced by another experiment on 2026-11-15 11:10 UTC; the joint model
+descends from the PREVIOUS box checkpoint, pinned as `models/runs/joint_v1/init_contact.pt`. Box parity of the
+joint model is by construction against that file, so pass `--contact models/runs/joint_v1/init_contact.pt` to
+`scripts/eval_joints.py`; against the new `models/contact_gnn.pt` the zero-joint outputs differ.
+
 ## How to run
 
 ```
@@ -158,3 +235,21 @@ In Python: `model = joint_gnn.build_from_checkpoint(torch.load('models/joint_gnn
 `next = model(state, props, context, mask, joints, joint_mask)` and optionally
 `joint_gnn.project_joints(state, next, props, context, mask, joints, joint_mask)`. Array formats are in
 `data/joints_v1/meta.json`.
+
+## Round 2 (2026-11-15, stopped early at 45 of 100 minutes)
+
+More data and a partial unfreeze: about 45,000 extra PyBullet episodes aimed at the round-1 failures (`data/joints_v3`), warm start from round 1, two extra message-passing rounds, box scenes still distilled against the box model. Training was stopped at epoch 12 of 40 to free the GPUs; the checkpoint below is `models/joint_gnn.pt` (round 1 kept as `models/joint_gnn_r1.pt`). Same fixed test set (`data/joints_v1` test, 1,996 episodes). Single evaluation run, not independently re-reviewed.
+
+| Model only (no projection) | Round 1 | Round 2 |
+|---|---|---|
+| Position error at 2 s, all bodies | 0.116 m | 0.108 m |
+| Position error at 2 s, jointed bodies | 0.154 m | 0.141 m |
+| Hinge angle error at 2 s | 0.343 rad | 0.338 rad |
+| Mean joint gap | 1.37 mm | 0.95 mm |
+| Mean penetration | 0.43 mm | 0.34 mm |
+| Rest drift | 9.2 mm/s | 6.9 mm/s |
+| Fell accuracy | 0.964 | 0.964 |
+
+With projection: position error at 2 s 0.114 to 0.105 m, hinge error 0.391 to 0.358 rad, rest drift 8.2 to 5.9 mm/s. Box-only scenes are unchanged against the box model the trunk came from (position error at 2 s 0.0603 vs 0.0607 m projected, identical without projection).
+
+What did not improve: hinge-angle error barely moved, so the error tail (hinges off by more than 1 rad, false falls, ragdoll limb angles) was not re-measured and should be assumed still present. Full tables: `models/joint_eval.md`.

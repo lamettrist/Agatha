@@ -119,3 +119,50 @@ CUDA_VISIBLE_DEVICES=4,5,6,7 .venv-train/bin/torchrun --nproc_per_node=4 scripts
 `docs/soft-example.json` (284 kB) is one test rollout for a viewer: episode 206, a soft ball on boxes,
 chosen as the MEDIAN last-frame error of `soft_projected` (20.4 mm), with true and predicted vertices,
 faces and the prescribed box poses.
+
+## Round 2 (in progress: diagnosis and data only; NO round-2 model result is reported here yet)
+
+Round-1 files are kept as `models/soft_gnn_r1.pt`, `models/soft_eval_r1.{json,md}`,
+`models/soft_eval_meshgraphnets_r1.{json,md}`. Everything above describes round 1.
+
+Diagnosis of the round-1 checkpoint (raw model, `models/soft_eval_r1_diagnosis.json`):
+
+- **Data-limited:** rollout error at 2 s is 33.6 mm on 900 TRAINING episodes against 49.3 mm (validation) and
+  47.2 mm (test); one-step error 0.62 / 0.80 / 0.76 mm; 10 steps from a true state 5.1 / 8.9 / 8.4 mm. The
+  training loss kept falling (0.36 -> 0.20) after validation flattened at epoch 8; the cosine schedule was
+  compressed into the 75 minutes and did reach its minimum, so it was not cut short.
+- **Heavy tails, wrong trajectory rather than wrong shape:** median 18.4 mm against mean 47.2 mm at 2 s; the
+  worst 10% of the episodes carry 59% of the summed error; COM error 45.2 mm, shape error 9.9 mm.
+- **Box contact:** 10-step rollouts from the truth are 14.8 mm in windows with box contact against 6.9 mm
+  with table/floor contact only (box_on_soft 18.9 against 2.0 mm). On box_on_soft, hiding the boxes from the
+  model changes nothing (42.3 -> 41.7 mm): 19 of 123 episodes in which the box knocks the body more than
+  5 cm (true 181 mm, predicted 68 mm) carry 69% of that kind's error.
+- **Over-stretch:** per step the excess strain is largest in free flight (+0.0033 per step, 3.5% of the
+  frames); most of it is produced in contact. The non-learned limiter does not fix it (`project_soft`
+  max_strain 0.08: strain error 0.0125 -> 0.0123, position 0.3-1.3 mm worse). A larger strain-loss weight
+  does (6-minute fine-tunes, validation: 0.0130 -> 0.0113 with weight 1, 0.0102 with weight 3; position
+  unchanged within the 2 mm noise of such probes).
+- **Longer unroll:** a 6-minute k=8 fine-tune was not better than k=4 (55.7 against 51.6 mm at 2 s, with
+  3.6x fewer windows seen); inconclusive, not used.
+
+Data: `data/soft_v1c` (seed 20261) adds 21,787 training episodes (23,500 attempted, 7.3% dropped; the
+generator was stopped at the time limit, 28,000 were requested) with the mix soft_on_boxes 26%, box_on_soft
+16%, soft_edge_fall 15%, cloth_drape_edge 10%, soft_drop 10%, soft_launch 8%, soft_rest 7%, cloth_drape_box
+5%, cloth_drop 3%; `data/soft_v1c_val` (seed 31337) adds 413 validation episodes. `data/soft_v3` (symlinks):
+30,321 training / 782 validation episodes; test = `data/soft_v1/test`, unchanged. Parameter ranges of the
+generator are unchanged (no new stiffness / size / mesh variety).
+
+Trainer flags added: `--box-frac`, `--box-gap`, `--late-horizon`, `--late-from`, `--late-batch`.
+Predicting the rigid boxes jointly is out of scope for round 2: boxes stay teacher-forced.
+
+## Round 2 (2026-11-15): more data did not help; round 1 kept
+
+Round 2 added about 28,000 PyBullet episodes (`data/soft_v3`) and trained from the round-1 weights; it was stopped at epoch 6 of 24 after validation stayed flat. On the fixed test set (`data/soft_v1` test, 752 episodes), model only:
+
+| | Round 1 (kept) | Round 2 |
+|---|---|---|
+| Vertex error at 0.5 / 1 / 2 s | 24.6 / 38.4 / 47.2 mm | 23.3 / 39.2 / 49.2 mm |
+| Error at the last frame (3 s) | 55.1 mm | 58.2 mm |
+| Strain error | 0.0121 | 0.0081 |
+
+Position error did not improve (slightly worse at 1 s and beyond), so by the pre-set rule `models/soft_gnn.pt` stays the round-1 model. Strain error did improve by a third. The conclusion is that this model is not limited by the amount of data at this size; the remaining error is more likely capacity, the 4-step training horizon against 60-step rollouts, or the prescribed-rigid-body setup. Round-2 checkpoint: `models/runs/soft_r2/best.pt` (not committed).

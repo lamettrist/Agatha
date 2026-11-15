@@ -31,6 +31,12 @@ What is trained
   --w-strain 0.3 --strain-scale 0.02 slowed learning of the dynamics, so those are not the defaults.)  Pinned (kinematic) vertices are prescribed and carry no loss.
 - Sampler: --rest-frac of every batch are windows that contain a frame at rest (settling tails); the
   remainder is half uniform, half active as before.
+- Round 2 (all off by default): --box-frac F draws a fraction F of every batch from windows in which a soft
+  vertex is within --box-gap of a rigid box (measured on the round-1 checkpoint: 10-step rollouts from the
+  truth are 2-3x worse in box-contact windows); --late-horizon K (--late-from, --late-batch) unrolls K steps
+  in the last part of the schedule (a 6-minute k=8 probe was NOT better than k=4, so it is not in the
+  round-2 command); --w-strain 1-3 instead of 0.2 lowered the rollout strain error by 13-21% in 6-minute
+  probes without a measurable change of the position error.
 - --extra-data DIR --extra-frac F: a fraction F of every batch are windows from a second data set in the
   same shard format (e.g. data/external_v2/meshgraphnets_soft); its val split is rolled out every epoch and
   logged as extra_* (not part of the model-selection score).
