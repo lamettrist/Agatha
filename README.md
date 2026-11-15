@@ -197,47 +197,67 @@ Official integration references: [OpenAI function calling](https://developers.op
 
 ## API and Base44
 
-Local base URL: **`http://127.0.0.1:8017`**. Base44 on a remote/HTTPS origin needs a reachable **HTTPS** API URL, e.g. `https://YOUR-API-HOST`. Localhost refers to the viewer's machine. Set `CORS_ORIGINS` in `.env` to the exact Base44 preview/production origins, comma-separated, and restart. No API key is required for local simulation endpoints.
+The frontend is a separate app that uses this server only through HTTP. Full reference: [docs/api.md](docs/api.md).
+Frontend guide with copy-paste code: [docs/base44-integration.md](docs/base44-integration.md).
+Recorded real exchanges for every route: [docs/api-examples.json](docs/api-examples.json)
+(`scripts/capture_api_examples.py --base <running server>`).
 
-| Method | Path | Request / response |
+Local base URL: **`http://127.0.0.1:8017`**. Base44 on a remote/HTTPS origin needs a reachable **HTTPS** API URL; localhost refers to the viewer's machine. `https://precognition.base44.app` is allowed by default; set `CORS_ORIGINS` in `.env` (exact origins, comma-separated) for others and restart. No API key is required.
+
+| Method | Path | Request → response |
 | --- | --- | --- |
-| POST | `/api/scenes` | multipart `image`, optional `table_width_m` → `{scene_id, scene, report}` |
-| POST | `/api/scenes/demo` | `{}`; optional `?scenario=desk` or `?scenario=bottle` → `{scene_id, scene, report}` |
+| POST | `/api/scenes/demo?scenario=` | `desk` (default), `bottle`, `laptop`, `soft` → `{scene_id, scene, report}` |
 | GET | `/api/scenes/{id}` | → same scene record |
-| POST | `/api/simulate` | `{scene_id, actions, engine, learned_architecture?, duration?, fps?}` → `{physics, learned, error, warnings, scene_id}` |
+| POST | `/api/scenes` | multipart `image` (JPEG/PNG/WebP, 10 MB), optional `table_width_m`, `distance_reference` → scene record |
+| POST | `/api/scenes/video` | multipart `file` (video, 100 MB), optional `table_width_m` → scene record; 422/503 with a report when nothing is reconstructed |
+| POST | `/api/scenes/scan` | multipart `file` (`.ply`, `.obj`, `.usdz`) → scene record |
+| POST | `/api/scenes/{id}/objects/{object_id}` | `{mass_kg?, shape?, size?}` → a new scene record (mass only for scenes with joints or soft bodies) |
+| POST | `/api/simulate` | `{scene_id, actions, engine?, learned_architecture?, duration?, fps?}` → `{scene_id, physics, learned, error, warnings}` |
 | POST | `/api/assistant/query` | `{scene_id, question}` → `{status, answer, actions_ran, simulation_results, sources, tool_trace, warnings?}` |
-| GET | `/api/leaderboard` | → `{entries:[{name,scene_id,chaos_score}]}` |
-| POST | `/api/leaderboard` | `{name,scene_id,chaos_score}` → saved entry (latest physics score required) |
+| GET | `/api/leaderboard` | → `{entries:[{name, scene_id, chaos_score}]}` |
+| POST | `/api/leaderboard` | `{name, scene_id, chaos_score}` → saved entry (must match the latest physics score) |
+| GET | `/api/metrics` | → held-out evaluation numbers (`contact_v2` block for the current default) |
+| GET | `/api/reconstructions/{run_id}/{filename}` | → debug image / mesh of an upload |
+| GET | `/api/health` | → supported scenarios, architectures, experimental flags, loaded vision models |
 
-`engine` is `physics`, `learned` or `both`. `learned_architecture` is `default`, `mlp_multistep` or `graph_impulse`; `default` selects the measured better MLP. The engine not requested is null. On `both`, a missing checkpoint returns physics plus a warning and null learned/error; learned-only returns 503. Unknown scene is 404; invalid inputs/actions are 422. Images are limited to 10 MB / 20 megapixels. Frame positions are centers, quaternions xyzw; frames additionally include velocities. Error includes per-frame, overall mean and final mean position error, plus fall-set agreement. API comparison averages over all retained objects, including static objects; held-out training metrics above exclude static objects.
+A scene is `{objects[], support, joints[], soft_bodies[]}`. Units are metres/kg/seconds/radians, right-handed Y-up, positions are centres, frame quaternions are xyzw, `support.height` is the table top.
 
-Example Base44 client:
+**Engines.** `engine` is `physics`, `learned` or `both`. `learned_architecture` is `default` (or `auto`): the server routes by scene content. Other values: `contact_gnn`, `joint_gnn`, `soft_gnn`, and the earlier baselines `mlp_multistep`, `graph_impulse`.
+
+| Scene contains | Learned model (`model_architecture`) | PyBullet reference |
+| --- | --- | --- |
+| boxes only (`desk`, `bottle`, uploads) | `contact_gnn` (contact graph network + non-learned contact projection) | yes |
+| joints (`laptop`) — experimental | `joint_gnn` | no: `physics` and `error` are `null`, `warnings` explains |
+| soft bodies (`soft`) — experimental | `contact_gnn+soft_gnn` (one-way rigid → soft coupling) | no: same |
+
+Unknown scene is 404; invalid inputs are 422 (`detail` is a string or a validation array); a learned-only request with a missing checkpoint is 503. Joints, soft bodies and video-upload accuracy are experimental.
 
 ```javascript
 const API = 'https://YOUR-API-HOST';
 const post = async (path, body) => {
   const r = await fetch(API + path, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(body)
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
   });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  const data = await r.json();
+  if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+  return data;
 };
-const {scene_id, scene} = await post('/api/scenes/demo', {});
-const result = await post('/api/simulate', {
+const {scene_id, scene} = await post('/api/scenes/demo?scenario=desk', {});   // or bottle | laptop | soft
+const {physics, learned, error, warnings} = await post('/api/simulate', {
   scene_id, actions: [{type:'push', id:'mug', direction:[1,0], impulse_Ns:0.55}],
   engine:'both', duration:3, fps:30
 });
-// Three.js is Y-up already; mesh.position.fromArray(frame.position),
-// mesh.quaternion.fromArray(frame.quaternion). No Bullet conversion in UI.
-const reply = await post('/api/assistant/query', {
-  scene_id, question:'Look up the mug mass, then push it and compare both engines.'
-});
+const run = physics ?? learned;        // physics is null for jointed / soft scenes: show `warnings`
+for (const o of run.frames[0].objects) {
+  // Three.js is Y-up already: mesh.position.fromArray(o.position); mesh.quaternion.fromArray(o.quaternion)
+}
+// Soft bodies (learned only): learned.soft_meshes[id].faces (flat triangle indices) +
+// frame.soft_bodies[i].vertices (flat xyz) -> THREE.BufferGeometry. See docs/base44-integration.md.
 const form = new FormData(); form.append('image', file); form.append('table_width_m','1.2');
 const uploaded = await fetch(API+'/api/scenes',{method:'POST',body:form}).then(r=>r.json());
 ```
 
-All action request shapes (each applies at t=0; radians only in scene rotations, tilt action explicitly degrees):
+Actions (each applies at t=0; tilt is in degrees):
 
 ```json
 [
@@ -249,8 +269,6 @@ All action request shapes (each applies at t=0; radians only in scene rotations,
   {"type":"set_support_collisions","enabled":false}
 ]
 ```
-
-Actual recorded JSON request/response examples, including the demo scene, both-engine simulation, missing-key assistant and leaderboard: [docs/api-examples.json](docs/api-examples.json). These are captured from real endpoint executions, not invented results. Frame arrays in this document are explicitly excerpted to first/last frames. A photo response also returns detector bboxes/confidences, kept count, scale confidence, support-plane fit and estimated-value report.
 
 ## Validation and limitations
 

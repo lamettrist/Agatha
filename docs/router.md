@@ -71,10 +71,10 @@ trained on them, which is noted in `approximations`.
   than 5 mm open or a limit exceeded by more than 0.1, instead of letting the model teleport the body.
   Tilt, no-clip, out-of-range gravity and pushes on jointed bodies (applied as a centre-of-mass velocity only)
   are listed in `approximations`.
-- **Not routed yet.** `agatha/assistant.py` and the object-edit endpoint (`POST /api/scenes/{id}/objects/{id}`)
-  still treat every scene as loose boxes: the edit re-settles a jointed scene without its joints (the next
-  simulate then answers 422), and the assistant's tools ignore joints and soft bodies. The viewer blocks both
-  for jointed / soft scenes; the API does not.
+- **Assistant and object edit.** `agatha/assistant.py` now calls `router.rollout` / `router.reference`, so on a
+  jointed / soft scene its PyBullet tool reports the reference warning as a tool error and its learned tool uses
+  the routed models. The object-edit endpoint (`POST /api/scenes/{id}/objects/{id}`) accepts only `mass_kg` for
+  jointed / soft scenes and does not re-settle them; `shape` / `size` are a 422 (`docs/api.md`, route 6).
 - All three models keep their own limits (`docs/joints-experimental.md`, `docs/soft-bodies-experimental.md`).
   Nothing here measures the accuracy of the composite; the tests only check sanity (finite, joints closed,
   no sinking into the table, a resting body stays put).

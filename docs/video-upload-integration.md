@@ -1,5 +1,9 @@
 # Video upload integration
 
+> The complete API reference is [api.md](api.md) and the frontend guide is
+> [base44-integration.md](base44-integration.md) (upload code with timeouts and 422/503 handling). This page
+> keeps the video-specific notes. Video reconstruction accuracy is experimental.
+
 Both `POST /api/scenes` and `POST /api/scenes/video` accept video uploads under
 multipart `file`, `image`, or `video`. The generic endpoint routes by the filename
 extension as well as the media type, including `application/octet-stream` uploads.
@@ -31,10 +35,12 @@ previously running server after upgrading its source.
 
 The local viewer is `/` on the same server. Its wording differs from “Detected
 world model”; an external viewer must map the response above explicitly. It must
-also allow long-running video requests (up to three minutes).
+also allow long-running video requests (up to three minutes; the latest measured run of the
+35 MB fixture took 56 s on one GPU, 0.4 s when cached: `docs/api-examples.json`).
 
 `GET /api/health` reports the supported media, endpoint paths, object-array field,
-loaded models and CUDA availability. `https://precognition.base44.app` is allowed
+loaded models and CUDA availability, plus the demo scenarios, learned architectures and
+experimental feature flags. `https://precognition.base44.app` is allowed
 by the default CORS configuration; an explicit `CORS_ORIGINS` setting still takes
 precedence.
 

@@ -1,0 +1,738 @@
+{
+ "a_train": {
+  "episodes": 900,
+  "rollout_mean": {
+   "5": 5.73,
+   "10": 12.69,
+   "20": 22.86,
+   "30": 29.11,
+   "40": 33.63,
+   "50": 35.86,
+   "60": 37.62
+  },
+  "rollout_median": {
+   "5": 4.16,
+   "10": 7.86,
+   "20": 11.48,
+   "30": 12.93,
+   "40": 14.75,
+   "50": 15.94,
+   "60": 16.88
+  },
+  "strain_err": 0.01152,
+  "strain_abs": 0.01423,
+  "one_step_mm": 0.62,
+  "ten_step_from_truth_mm": 5.11
+ },
+ "a_val": {
+  "episodes": 369,
+  "rollout_mean": {
+   "5": 7.9,
+   "10": 24.29,
+   "20": 40.85,
+   "30": 45.61,
+   "40": 49.28,
+   "50": 53.8,
+   "60": 56.84
+  },
+  "rollout_median": {
+   "5": 5.4,
+   "10": 12.49,
+   "20": 16.49,
+   "30": 18.6,
+   "40": 19.89,
+   "50": 20.69,
+   "60": 22.1
+  },
+  "strain_err": 0.01295,
+  "strain_abs": 0.01521,
+  "one_step_mm": 0.8,
+  "ten_step_from_truth_mm": 8.92
+ },
+ "a_test": {
+  "episodes": 752,
+  "rollout_mean": {
+   "5": 8.92,
+   "10": 24.58,
+   "20": 38.37,
+   "30": 42.93,
+   "40": 47.19,
+   "50": 52.4,
+   "60": 55.08
+  },
+  "rollout_median": {
+   "5": 5.54,
+   "10": 11.36,
+   "20": 14.6,
+   "30": 16.93,
+   "40": 18.4,
+   "50": 19.32,
+   "60": 20.23
+  },
+  "strain_err": 0.01214,
+  "strain_abs": 0.01488,
+  "one_step_mm": 0.76,
+  "ten_step_from_truth_mm": 8.39
+ },
+ "a_kind": {
+  "box_on_soft": {
+   "train": {
+    "n": 148,
+    "roll2s": 24.53,
+    "med2s": 13.6,
+    "one": 0.86,
+    "ten": 4.32
+   },
+   "val": {
+    "n": 55,
+    "roll2s": 61.13,
+    "med2s": 20.6,
+    "one": 1.06,
+    "ten": 9.7
+   },
+   "test": {
+    "n": 123,
+    "roll2s": 42.34,
+    "med2s": 15.8,
+    "one": 0.95,
+    "ten": 6.81
+   }
+  },
+  "cloth_drape_box": {
+   "train": {
+    "n": 68,
+    "roll2s": 29.2,
+    "med2s": 17.5,
+    "one": 0.41,
+    "ten": 4.57
+   },
+   "val": {
+    "n": 16,
+    "roll2s": 45.12,
+    "med2s": 22.3,
+    "one": 0.49,
+    "ten": 6.7
+   },
+   "test": {
+    "n": 50,
+    "roll2s": 24.78,
+    "med2s": 15.8,
+    "one": 0.4,
+    "ten": 5.37
+   }
+  },
+  "cloth_drape_edge": {
+   "train": {
+    "n": 91,
+    "roll2s": 44.56,
+    "med2s": 10.1,
+    "one": 0.38,
+    "ten": 4.35
+   },
+   "val": {
+    "n": 32,
+    "roll2s": 45.63,
+    "med2s": 8.6,
+    "one": 0.45,
+    "ten": 6.1
+   },
+   "test": {
+    "n": 32,
+    "roll2s": 62.45,
+    "med2s": 8.9,
+    "one": 0.5,
+    "ten": 5.24
+   }
+  },
+  "cloth_drop": {
+   "train": {
+    "n": 10,
+    "roll2s": 6.96,
+    "med2s": 3.9,
+    "one": 0.26,
+    "ten": 1.89
+   },
+   "val": {
+    "n": 5,
+    "roll2s": 8.95,
+    "med2s": 6.2,
+    "one": 0.3,
+    "ten": 1.9
+   },
+   "test": {
+    "n": 32,
+    "roll2s": 11.36,
+    "med2s": 5.1,
+    "one": 0.3,
+    "ten": 2.16
+   }
+  },
+  "soft_drop": {
+   "train": {
+    "n": 192,
+    "roll2s": 24.27,
+    "med2s": 14.4,
+    "one": 0.52,
+    "ten": 4.21
+   },
+   "val": {
+    "n": 92,
+    "roll2s": 26.37,
+    "med2s": 17.8,
+    "one": 0.55,
+    "ten": 5.35
+   },
+   "test": {
+    "n": 176,
+    "roll2s": 24.55,
+    "med2s": 15.2,
+    "one": 0.58,
+    "ten": 5.44
+   }
+  },
+  "soft_edge_fall": {
+   "train": {
+    "n": 73,
+    "roll2s": 80.95,
+    "med2s": 31.3,
+    "one": 0.95,
+    "ten": 9.96
+   },
+   "val": {
+    "n": 40,
+    "roll2s": 98.42,
+    "med2s": 39.5,
+    "one": 1.22,
+    "ten": 16.69
+   },
+   "test": {
+    "n": 77,
+    "roll2s": 90.88,
+    "med2s": 36.8,
+    "one": 1.19,
+    "ten": 18.09
+   }
+  },
+  "soft_launch": {
+   "train": {
+    "n": 83,
+    "roll2s": 45.61,
+    "med2s": 18.6,
+    "one": 0.76,
+    "ten": 6.14
+   },
+   "val": {
+    "n": 37,
+    "roll2s": 71.72,
+    "med2s": 25.6,
+    "one": 0.94,
+    "ten": 12.56
+   },
+   "test": {
+    "n": 126,
+    "roll2s": 44.15,
+    "med2s": 22.2,
+    "one": 0.73,
+    "ten": 9.07
+   }
+  },
+  "soft_on_boxes": {
+   "train": {
+    "n": 99,
+    "roll2s": 55.18,
+    "med2s": 35.6,
+    "one": 1.15,
+    "ten": 10.56
+   },
+   "val": {
+    "n": 49,
+    "roll2s": 67.1,
+    "med2s": 49.6,
+    "one": 1.46,
+    "ten": 15.66
+   },
+   "test": {
+    "n": 86,
+    "roll2s": 109.97,
+    "med2s": 39.3,
+    "one": 1.36,
+    "ten": 16.51
+   }
+  },
+  "soft_rest": {
+   "train": {
+    "n": 136,
+    "roll2s": 5.22,
+    "med2s": 0.9,
+    "one": 0.11,
+    "ten": 1.08
+   },
+   "val": {
+    "n": 43,
+    "roll2s": 6.74,
+    "med2s": 1.1,
+    "one": 0.12,
+    "ten": 1.23
+   },
+   "test": {
+    "n": 50,
+    "roll2s": 6.76,
+    "med2s": 0.8,
+    "one": 0.09,
+    "ten": 1.06
+   }
+  }
+ },
+ "b": {
+  "box_on_soft": {
+   "n": 123,
+   "growth": [
+    9.97,
+    23.61,
+    37.3,
+    42.36,
+    42.34,
+    41.6,
+    41.63
+   ],
+   "com2s": 40.66,
+   "shape2s": 8.84,
+   "median2s": 15.8,
+   "top10_share": 0.62
+  },
+  "cloth_drape_box": {
+   "n": 50,
+   "growth": [
+    4.47,
+    8.07,
+    13.51,
+    19.78,
+    24.78,
+    29.49,
+    33.51
+   ],
+   "com2s": 20.24,
+   "shape2s": 13.52,
+   "median2s": 15.8,
+   "top10_share": 0.34
+  },
+  "cloth_drape_edge": {
+   "n": 32,
+   "growth": [
+    3.68,
+    5.91,
+    13.96,
+    50.7,
+    62.45,
+    84.39,
+    100.73
+   ],
+   "com2s": 58.29,
+   "shape2s": 16.62,
+   "median2s": 8.9,
+   "top10_share": 0.69
+  },
+  "cloth_drop": {
+   "n": 32,
+   "growth": [
+    6.17,
+    9.24,
+    11.47,
+    11.66,
+    11.36,
+    11.13,
+    10.97
+   ],
+   "com2s": 10.79,
+   "shape2s": 3.0,
+   "median2s": 5.1,
+   "top10_share": 0.44
+  },
+  "soft_drop": {
+   "n": 176,
+   "growth": [
+    6.13,
+    15.25,
+    18.89,
+    20.38,
+    24.55,
+    30.1,
+    33.09
+   ],
+   "com2s": 22.74,
+   "shape2s": 9.48,
+   "median2s": 15.2,
+   "top10_share": 0.43
+  },
+  "soft_edge_fall": {
+   "n": 77,
+   "growth": [
+    18.3,
+    62.99,
+    81.69,
+    82.95,
+    90.88,
+    96.84,
+    97.27
+   ],
+   "com2s": 89.11,
+   "shape2s": 11.44,
+   "median2s": 36.8,
+   "top10_share": 0.54
+  },
+  "soft_launch": {
+   "n": 126,
+   "growth": [
+    12.24,
+    28.53,
+    41.28,
+    43.02,
+    44.15,
+    51.04,
+    51.36
+   ],
+   "com2s": 42.33,
+   "shape2s": 8.96,
+   "median2s": 22.2,
+   "top10_share": 0.47
+  },
+  "soft_on_boxes": {
+   "n": 86,
+   "growth": [
+    10.16,
+    40.26,
+    90.26,
+    97.85,
+    109.97,
+    118.42,
+    125.98
+   ],
+   "com2s": 108.21,
+   "shape2s": 13.66,
+   "median2s": 39.3,
+   "top10_share": 0.52
+  },
+  "soft_rest": {
+   "n": 50,
+   "growth": [
+    0.78,
+    1.98,
+    4.06,
+    5.54,
+    6.76,
+    7.79,
+    8.58
+   ],
+   "com2s": 5.85,
+   "shape2s": 4.27,
+   "median2s": 0.8,
+   "top10_share": 0.66
+  },
+  "ALL": {
+   "n": 752,
+   "growth": [
+    8.92,
+    24.58,
+    38.37,
+    42.93,
+    47.19,
+    52.4,
+    55.08
+   ],
+   "com2s": 45.24,
+   "shape2s": 9.92,
+   "median2s": 18.4,
+   "top10_share": 0.59
+  }
+ },
+ "b_class": {
+  "box_on_soft": {
+   "support/floor": {
+    "n": 526,
+    "err_mm": 1.95,
+    "strain_err": 0.00305,
+    "dabs": 0.00041
+   },
+   "box": {
+    "n": 212,
+    "err_mm": 18.86,
+    "strain_err": 0.01138,
+    "dabs": 0.00328
+   }
+  },
+  "cloth_drape_box": {
+   "box": {
+    "n": 300,
+    "err_mm": 5.37,
+    "strain_err": 0.00666,
+    "dabs": 0.00196
+   }
+  },
+  "cloth_drape_edge": {
+   "support/floor": {
+    "n": 192,
+    "err_mm": 5.24,
+    "strain_err": 0.00662,
+    "dabs": 0.00224
+   }
+  },
+  "cloth_drop": {
+   "support/floor": {
+    "n": 192,
+    "err_mm": 2.16,
+    "strain_err": 0.00278,
+    "dabs": 0.00244
+   }
+  },
+  "soft_drop": {
+   "support/floor": {
+    "n": 1056,
+    "err_mm": 5.44,
+    "strain_err": 0.00537,
+    "dabs": 0.00126
+   }
+  },
+  "soft_edge_fall": {
+   "support/floor": {
+    "n": 462,
+    "err_mm": 18.09,
+    "strain_err": 0.00961,
+    "dabs": 0.00281
+   }
+  },
+  "soft_launch": {
+   "flight": {
+    "n": 1,
+    "err_mm": 5.81,
+    "strain_err": 0.01669,
+    "dabs": 0.01669
+   },
+   "support/floor": {
+    "n": 755,
+    "err_mm": 9.08,
+    "strain_err": 0.00565,
+    "dabs": 0.00112
+   }
+  },
+  "soft_on_boxes": {
+   "support/floor": {
+    "n": 182,
+    "err_mm": 8.66,
+    "strain_err": 0.00543,
+    "dabs": 0.00185
+   },
+   "box": {
+    "n": 334,
+    "err_mm": 20.79,
+    "strain_err": 0.01073,
+    "dabs": 0.00293
+   }
+  },
+  "soft_rest": {
+   "support/floor": {
+    "n": 300,
+    "err_mm": 1.06,
+    "strain_err": 0.00313,
+    "dabs": 0.00042
+   }
+  },
+  "ALL": {
+   "flight": {
+    "n": 1,
+    "err_mm": 5.81,
+    "strain_err": 0.01669,
+    "dabs": 0.01669
+   },
+   "support/floor": {
+    "n": 3665,
+    "err_mm": 6.9,
+    "strain_err": 0.00538,
+    "dabs": 0.00138
+   },
+   "box": {
+    "n": 846,
+    "err_mm": 14.84,
+    "strain_err": 0.00945,
+    "dabs": 0.00267
+   }
+  }
+ },
+ "c_onestep": {
+  "train": {
+   "flight": {
+    "n": 1509,
+    "err_mm": 1.37,
+    "dabs": 0.003326
+   },
+   "support/floor": {
+    "n": 43280,
+    "err_mm": 0.48,
+    "dabs": 0.000404
+   },
+   "box": {
+    "n": 8311,
+    "err_mm": 1.18,
+    "dabs": 0.000513
+   }
+  },
+  "test": {
+   "flight": {
+    "n": 1585,
+    "err_mm": 1.64,
+    "dabs": 0.00349
+   },
+   "support/floor": {
+    "n": 35889,
+    "err_mm": 0.59,
+    "dabs": 0.000436
+   },
+   "box": {
+    "n": 6894,
+    "err_mm": 1.44,
+    "dabs": 0.000678
+   }
+  }
+ },
+ "b_nobox": {
+  "soft_on_boxes": {
+   "with_boxes": 109.97,
+   "boxes_hidden": 189.69
+  },
+  "box_on_soft": {
+   "with_boxes": 42.34,
+   "boxes_hidden": 41.74
+  },
+  "cloth_drape_box": {
+   "with_boxes": 24.78,
+   "boxes_hidden": 88.82
+  }
+ },
+ "c_limiter": {
+  "raw": {
+   "v1": 38.37,
+   "v2": 47.19,
+   "v3": 55.08,
+   "strain_err": 0.01214,
+   "strain_abs": 0.01488,
+   "shape2s": 9.92,
+   "deep": 0.089,
+   "pen_max": 2.29
+  },
+  "proj": {
+   "v1": 38.39,
+   "v2": 47.45,
+   "v3": 54.95,
+   "strain_err": 0.01248,
+   "strain_abs": 0.01527,
+   "shape2s": 9.89,
+   "deep": 0.0,
+   "pen_max": 0.0
+  },
+  "proj_s50": {
+   "v1": 38.33,
+   "v2": 47.27,
+   "v3": 54.93,
+   "strain_err": 0.01239,
+   "strain_abs": 0.01519,
+   "shape2s": 9.8,
+   "deep": 0.0,
+   "pen_max": 0.0
+  },
+  "proj_s30": {
+   "v1": 38.23,
+   "v2": 47.3,
+   "v3": 55.73,
+   "strain_err": 0.01238,
+   "strain_abs": 0.01511,
+   "shape2s": 9.86,
+   "deep": 0.0,
+   "pen_max": 0.0
+  },
+  "proj_s15": {
+   "v1": 38.29,
+   "v2": 47.5,
+   "v3": 56.05,
+   "strain_err": 0.01237,
+   "strain_abs": 0.01481,
+   "shape2s": 9.95,
+   "deep": 0.0,
+   "pen_max": 0.0
+  },
+  "proj_s08": {
+   "v1": 38.4,
+   "v2": 47.7,
+   "v3": 56.21,
+   "strain_err": 0.01231,
+   "strain_abs": 0.01436,
+   "shape2s": 9.95,
+   "deep": 0.0,
+   "pen_max": 0.0
+  },
+  "proj_s15_it4": {
+   "v1": 38.37,
+   "v2": 47.58,
+   "v3": 55.99,
+   "strain_err": 0.01243,
+   "strain_abs": 0.01482,
+   "shape2s": 10.0,
+   "deep": 0.0,
+   "pen_max": 0.0
+  }
+ },
+ "c_kind": {
+  "box_on_soft": {
+   "raw": 0.01289,
+   "hold": 0.00762,
+   "raw_abs": 0.01622,
+   "true_abs": 0.01169
+  },
+  "cloth_drape_box": {
+   "raw": 0.01198,
+   "hold": 0.01042,
+   "raw_abs": 0.01363,
+   "true_abs": 0.01042
+  },
+  "cloth_drape_edge": {
+   "raw": 0.00927,
+   "hold": 0.00634,
+   "raw_abs": 0.0086,
+   "true_abs": 0.00634
+  },
+  "cloth_drop": {
+   "raw": 0.00891,
+   "hold": 0.0006,
+   "raw_abs": 0.00898,
+   "true_abs": 0.0006
+  },
+  "soft_drop": {
+   "raw": 0.01163,
+   "hold": 0.01111,
+   "raw_abs": 0.01519,
+   "true_abs": 0.01092
+  },
+  "soft_edge_fall": {
+   "raw": 0.01442,
+   "hold": 0.01034,
+   "raw_abs": 0.01696,
+   "true_abs": 0.01104
+  },
+  "soft_launch": {
+   "raw": 0.01191,
+   "hold": 0.01044,
+   "raw_abs": 0.01469,
+   "true_abs": 0.01079
+  },
+  "soft_on_boxes": {
+   "raw": 0.0159,
+   "hold": 0.01232,
+   "raw_abs": 0.0179,
+   "true_abs": 0.01232
+  },
+  "soft_rest": {
+   "raw": 0.00681,
+   "hold": 0.00471,
+   "raw_abs": 0.01159,
+   "true_abs": 0.01008
+  }
+ }
+}
