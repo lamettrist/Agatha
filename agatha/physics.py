@@ -21,10 +21,14 @@ class World:
         p.setGravity(0, 0, -self.gravity, physicsClientId=c)
         self._box("floor", (20, .1, 20), (0, -.05, 0), 0)
         w, d = scene.support.size
-        self._box("support", (w, .08, d), (0, scene.support.height-.04, 0), 0)
+        self._box("support", (w, scene.support.thickness, d), (0, scene.support.height-scene.support.thickness/2, 0), 0)
         for o in scene.objects:
-            self._box(o.id, o.size, o.position, 0 if o.is_static else o.mass_kg,
-                      euler_to_bullet(o.rotation_euler), o.friction)
+            if o.collision is not None or o.shape != 'box':
+                from .scene_reconstruction.bodies import create_body
+                create_body(self, o)
+            else:
+                self._box(o.id, o.size, o.position, 0 if o.is_static else o.mass_kg,
+                          euler_to_bullet(o.rotation_euler), o.friction)
 
         if not scene.support.collisions_enabled:
             self._support_collisions(False)
@@ -75,7 +79,7 @@ class World:
             elif a.type == "tilt_support":
                 self.tilt[0 if a.axis == "x" else 2] = math.radians(a.angle_deg)
                 p.resetBasePositionAndOrientation(self.bodies["support"],
-                    to_bullet((0, self.scene.support.height-.04, 0)),
+                    to_bullet((0, self.scene.support.height-self.scene.support.thickness/2, 0)),
                     euler_to_bullet(self.tilt), physicsClientId=self.client)
             elif a.type == "set_support_collisions":
                 self._support_collisions(a.enabled)
