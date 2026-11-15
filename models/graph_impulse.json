@@ -1,0 +1,45 @@
+{
+  "kind": "graph_impulse",
+  "parameters": 40646,
+  "training_seconds": 341.31030969694257,
+  "epochs": 30,
+  "best_epoch": 30,
+  "validation_loss": 0.011444884752563667,
+  "training_seed": 42,
+  "data_order_seed": 42,
+  "noise_seed": 991,
+  "horizon_steps": 3,
+  "message_passing_rounds": 3,
+  "samples_per_scene_per_epoch": 2,
+  "batch_size": 96,
+  "dataset": {
+    "base_scenes": 5000,
+    "extra_scenes": 1000,
+    "total_scenes": 6000,
+    "scene_transitions": 360000,
+    "extra_seed": 41872,
+    "seconds": 38.976256027817726,
+    "step_s": 0.05,
+    "split": "scene index % 10 == 0 held out for validation",
+    "kinds": {
+      "layout": 5000,
+      "noclip": 333,
+      "toss": 334,
+      "toss_noclip": 333
+    },
+    "note": "Identical episodes for graph/MLP, including vertical impulses and explicit table collision state. Bottles are boxes; no fluid model."
+  },
+  "training": "Both models from scratch, identical scene split, sampled windows, loss, noise, optimizer/schedule and epochs. Checkpoints selected on validation three-step loss.",
+  "evaluation_seed": 20261115,
+  "held_out_scenes": 200,
+  "mean_position_error_m": {
+    "0.5": 0.11335198309445092,
+    "1.0": 0.24787247248488478,
+    "2.0": 0.46338275098634785
+  },
+  "fell_agreement": 0.8414154652686763,
+  "evaluated_objects": 763,
+  "physics_fell_count": 105,
+  "learned_fell_count": 100,
+  "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos."
+}

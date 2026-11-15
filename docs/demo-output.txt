@@ -1,4 +1,4 @@
-Loaded offline desk: b4180ed3f6ba428fa2619b3b82cc30fd
+Loaded offline desk: 20c6c44289394aac85249139027fbe22
 {
   "engine": "physics",
   "frames": 91,
@@ -19,9 +19,9 @@ Loaded offline desk: b4180ed3f6ba428fa2619b3b82cc30fd
   "tipped": [
     "mug"
   ],
-  "chaos_score": 2.979766137218664
+  "chaos_score": 2.483972305084426
 }
-Mean position error (m): 0.09198791815183938
-Final position error (m): 0.1203728133861237
+Mean position error (m): 0.05181498551472123
+Final position error (m): 0.0780534525510573
 Fall agreement: True
 Demo OK. Estimates and box approximations; not a guaranteed real-world outcome.

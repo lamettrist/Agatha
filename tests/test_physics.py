@@ -43,3 +43,23 @@ def test_other_actions_and_unknown_id():
     simulate(s,[SetMass(type='set_mass',id='box',kg=2),Tilt(type='tilt_support',angle_deg=12,axis='x'),Gravity(type='set_gravity',g=5)])
     assert s.objects[0].mass_kg==.5
     with pytest.raises(ValueError): simulate(s,[Remove(type='remove',id='unknown')])
+
+def test_upward_toss_and_disabled_support():
+    from agatha.schema import SupportCollisions
+    s=scene();s.objects[0].position=(0,.8,0)
+    actions=[Push(type='push',id='box',direction=(0,1,0),impulse_Ns=1.5)]
+    r=simulate(s,actions,1,20)
+    assert r['frames'][4]['objects'][0]['position'][1]>.8
+    assert r['frames'][0]['objects'][0]['velocity'][1]==pytest.approx(3.)
+    r=simulate(s,[SupportCollisions(type='set_support_collisions',enabled=False)],1,20)
+    assert r['final_state']['objects'][0]['position'][1]<.06
+    assert r['events']['fell']==['box']
+    assert s.support.collisions_enabled is True
+
+def test_disable_demo_support_including_desk_alias():
+    from pathlib import Path
+    from agatha.schema import SupportCollisions
+    s=Scene.model_validate_json(Path('scenes/demo_desk.json').read_text())
+    result=simulate(s,[SupportCollisions(type='set_support_collisions',enabled=False)],1,20)
+    phone=next(o for o in result['final_state']['objects'] if o['id']=='phone')
+    assert phone['position'][1]<.05

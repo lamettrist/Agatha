@@ -39,9 +39,10 @@ class Store:
             # Return an independent value, so tool-call mass changes cannot mutate saved scenes.
             return json.loads(json.dumps(self.scenes[key]))
 
-    def demo(self) -> dict:
-        scene=Scene.model_validate_json((ROOT/'scenes/demo_desk.json').read_text())
-        return self.add(scene,dict(source='bundled_demo',estimated=['all masses and dimensions']))
+    def demo(self,scenario: str = 'desk') -> dict:
+        filename='demo_bottle.json' if scenario=='bottle' else 'demo_desk.json'
+        scene=Scene.model_validate_json((ROOT/'scenes'/filename).read_text())
+        return self.add(scene,dict(source='bundled_demo',scenario=scenario,estimated=['all masses and dimensions']))
 
     def record_score(self,scene_id: str,score: float):
         with self.lock:

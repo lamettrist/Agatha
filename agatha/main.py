@@ -19,7 +19,9 @@ def get_record(key: str) -> dict:
     except KeyError: raise HTTPException(404,'Scene not found')
 
 @app.post('/api/scenes/demo')
-def demo(): return store.demo()
+def demo(scenario: str = 'desk'):
+    if scenario not in ('desk','bottle'): raise HTTPException(422,'scenario must be desk or bottle')
+    return store.demo(scenario)
 
 @app.get('/api/scenes/{scene_id}')
 def get_scene(scene_id: str): return get_record(scene_id)
@@ -41,7 +43,7 @@ async def from_image(image: UploadFile = File(...), table_width_m: float | None 
 
 from .schema import Scene, SimulationRequest
 from .physics import simulate
-from .world_model import rollout, compare
+from .world_model import rollout, compare, load_model
 
 @app.post('/api/simulate')
 def run_simulation(request: SimulationRequest):
@@ -52,7 +54,7 @@ def run_simulation(request: SimulationRequest):
             result['physics']=simulate(scene,request.actions,request.duration,request.fps)
             store.record_score(request.scene_id,result['physics']['chaos_score'])
         if request.engine in ('learned','both'):
-            try: result['learned']=rollout(scene,request.actions,round(request.duration*request.fps),request.fps)
+            try: result['learned']=rollout(scene,request.actions,round(request.duration*request.fps),request.fps,model=load_model(request.learned_architecture))
             except (FileNotFoundError,RuntimeError) as exc:
                 if request.engine=='learned': raise HTTPException(503,str(exc))
                 result['warnings'].append(f'Learned model unavailable: {exc}')

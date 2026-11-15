@@ -1,0 +1,448 @@
+{
+  "protocol": {
+    "seed_basis": 824911,
+    "horizons_s": [
+      0.5,
+      1.0,
+      2.0
+    ],
+    "fps": 20,
+    "duration_s": 2,
+    "layout_scenes": 100,
+    "per_other_suite": 30,
+    "matched_cases": true,
+    "model_selection": "Development A/B benchmark, not a blind research test.",
+    "penetration": "27 box sample points within finite support slab and >5mm below top; geometric approximation. Pass-through measured separately. Disabled table has null penetration metrics, since passing through is intentional.",
+    "limitations": [
+      "All bodies including bottles are boxes; no water/fluid simulation.",
+      "Training uses up to six objects; more_objects evaluates nine.",
+      "Conservation enforced for graph internal linear pair impulses only, not full angular momentum."
+    ]
+  },
+  "checkpoints": {
+    "mlp_multistep": "models/mlp_multistep.pt",
+    "graph_impulse": "models/graph_impulse.pt"
+  },
+  "models": {
+    "physics": {
+      "layout": {
+        "scenes": 100,
+        "mean_position_error_m": {
+          "0.5": 0.0,
+          "1.0": 0.0,
+          "2.0": 0.0
+        },
+        "fall_confusion": {
+          "tp": 49,
+          "fp": 0,
+          "tn": 324,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": 1.0,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": 0.006277381808670633,
+        "max_table_penetration_m": 0.07722232879932188,
+        "passed_through_solid_table_objects": 1,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 48.772371374070644,
+        "mean_rollout_ms": 54.14053611457348
+      },
+      "toss": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.0,
+          "1.0": 0.0,
+          "2.0": 0.0
+        },
+        "fall_confusion": {
+          "tp": 12,
+          "fp": 0,
+          "tn": 18,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": 1.0,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": 0.0016260162601626016,
+        "max_table_penetration_m": 0.0057084630523079535,
+        "passed_through_solid_table_objects": 0,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 24.084934033453465,
+        "mean_rollout_ms": 24.1990198691686
+      },
+      "noclip": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.0,
+          "1.0": 0.0,
+          "2.0": 0.0
+        },
+        "fall_confusion": {
+          "tp": 123,
+          "fp": 0,
+          "tn": 2,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": 1.0,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": null,
+        "max_table_penetration_m": null,
+        "passed_through_solid_table_objects": null,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 51.02117266505957,
+        "mean_rollout_ms": 52.81789513925711
+      },
+      "toss_noclip": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.0,
+          "1.0": 0.0,
+          "2.0": 0.0
+        },
+        "fall_confusion": {
+          "tp": 30,
+          "fp": 0,
+          "tn": 0,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": 1.0,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": null,
+        "max_table_penetration_m": null,
+        "passed_through_solid_table_objects": null,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 23.500287905335426,
+        "mean_rollout_ms": 23.69982631256183
+      },
+      "stacks": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.0,
+          "1.0": 0.0,
+          "2.0": 0.0
+        },
+        "fall_confusion": {
+          "tp": 0,
+          "fp": 0,
+          "tn": 180,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": null,
+        "fall_recall": null,
+        "table_penetration_frame_fraction": 0.0,
+        "max_table_penetration_m": 0.0,
+        "passed_through_solid_table_objects": 0,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 113.23885899037123,
+        "mean_rollout_ms": 114.67163593818744
+      },
+      "more_objects": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.0,
+          "1.0": 0.0,
+          "2.0": 0.0
+        },
+        "fall_confusion": {
+          "tp": 0,
+          "fp": 0,
+          "tn": 270,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": null,
+        "fall_recall": null,
+        "table_penetration_frame_fraction": 0.0,
+        "max_table_penetration_m": 0.0,
+        "passed_through_solid_table_objects": 0,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 172.87524323910475,
+        "mean_rollout_ms": 174.8834041878581
+      }
+    },
+    "mlp_multistep": {
+      "layout": {
+        "scenes": 100,
+        "mean_position_error_m": {
+          "0.5": 0.08379504387839115,
+          "1.0": 0.14323580228471297,
+          "2.0": 0.18592753582087204
+        },
+        "fall_confusion": {
+          "tp": 38,
+          "fp": 10,
+          "tn": 314,
+          "fn": 11
+        },
+        "fell_agreement": 0.9436997319034852,
+        "fall_precision": 0.7916666666666666,
+        "fall_recall": 0.7755102040816326,
+        "table_penetration_frame_fraction": 0.2969986268227294,
+        "max_table_penetration_m": 0.07999239000129024,
+        "passed_through_solid_table_objects": 8,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 65.83392340689898,
+        "mean_rollout_ms": 66.66607402265072
+      },
+      "toss": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.10495012930308419,
+          "1.0": 0.25098890755783454,
+          "2.0": 0.2808432425992906
+        },
+        "fall_confusion": {
+          "tp": 10,
+          "fp": 4,
+          "tn": 14,
+          "fn": 2
+        },
+        "fell_agreement": 0.8,
+        "fall_precision": 0.7142857142857143,
+        "fall_recall": 0.8333333333333334,
+        "table_penetration_frame_fraction": 0.2845528455284553,
+        "max_table_penetration_m": 0.0799636855632104,
+        "passed_through_solid_table_objects": 3,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 64.16692305356264,
+        "mean_rollout_ms": 65.03170318901539
+      },
+      "noclip": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.07725191296285218,
+          "1.0": 0.10545301922258217,
+          "2.0": 0.12004946077803659
+        },
+        "fall_confusion": {
+          "tp": 123,
+          "fp": 1,
+          "tn": 1,
+          "fn": 0
+        },
+        "fell_agreement": 0.992,
+        "fall_precision": 0.9919354838709677,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": null,
+        "max_table_penetration_m": null,
+        "passed_through_solid_table_objects": null,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 65.9022992476821,
+        "mean_rollout_ms": 66.34012510379155
+      },
+      "toss_noclip": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.10535816823684496,
+          "1.0": 0.22627719651297848,
+          "2.0": 0.24668963239911423
+        },
+        "fall_confusion": {
+          "tp": 30,
+          "fp": 0,
+          "tn": 0,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": 1.0,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": null,
+        "max_table_penetration_m": null,
+        "passed_through_solid_table_objects": null,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 64.12576232105494,
+        "mean_rollout_ms": 64.26139784355958
+      },
+      "stacks": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.011157277228254204,
+          "1.0": 0.013702259016387414,
+          "2.0": 0.019112619542918395
+        },
+        "fall_confusion": {
+          "tp": 0,
+          "fp": 0,
+          "tn": 180,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": null,
+        "fall_recall": null,
+        "table_penetration_frame_fraction": 0.017344173441734417,
+        "max_table_penetration_m": 0.011542890823343109,
+        "passed_through_solid_table_objects": 0,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 64.8330356925726,
+        "mean_rollout_ms": 68.15320228536923
+      },
+      "more_objects": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.011095587514525206,
+          "1.0": 0.016557341878426064,
+          "2.0": 0.025813203909563036
+        },
+        "fall_confusion": {
+          "tp": 0,
+          "fp": 0,
+          "tn": 270,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": null,
+        "fall_recall": null,
+        "table_penetration_frame_fraction": 0.0025293586269196024,
+        "max_table_penetration_m": 0.010474914609783524,
+        "passed_through_solid_table_objects": 0,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 66.43080990761518,
+        "mean_rollout_ms": 69.5799296721816
+      }
+    },
+    "graph_impulse": {
+      "layout": {
+        "scenes": 100,
+        "mean_position_error_m": {
+          "0.5": 0.12605437957519888,
+          "1.0": 0.2750013494809703,
+          "2.0": 0.4704902034511905
+        },
+        "fall_confusion": {
+          "tp": 25,
+          "fp": 35,
+          "tn": 289,
+          "fn": 24
+        },
+        "fell_agreement": 0.8418230563002681,
+        "fall_precision": 0.4166666666666667,
+        "fall_recall": 0.5102040816326531,
+        "table_penetration_frame_fraction": 0.21591577846073368,
+        "max_table_penetration_m": 0.0799874502020744,
+        "passed_through_solid_table_objects": 60,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 97.08816185593605,
+        "mean_rollout_ms": 98.1804502569139
+      },
+      "toss": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.14833586292707157,
+          "1.0": 0.45653919729770503,
+          "2.0": 0.818677254999787
+        },
+        "fall_confusion": {
+          "tp": 12,
+          "fp": 13,
+          "tn": 5,
+          "fn": 0
+        },
+        "fell_agreement": 0.5666666666666667,
+        "fall_precision": 0.48,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": 0.03170731707317073,
+        "max_table_penetration_m": 0.07985344757008836,
+        "passed_through_solid_table_objects": 7,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 95.51280364394188,
+        "mean_rollout_ms": 96.45739421248436
+      },
+      "noclip": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.14915574510412805,
+          "1.0": 0.12589556574067085,
+          "2.0": 0.21786085078473247
+        },
+        "fall_confusion": {
+          "tp": 123,
+          "fp": 2,
+          "tn": 0,
+          "fn": 0
+        },
+        "fell_agreement": 0.984,
+        "fall_precision": 0.984,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": null,
+        "max_table_penetration_m": null,
+        "passed_through_solid_table_objects": null,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 96.69242613017559,
+        "mean_rollout_ms": 99.6306685730815
+      },
+      "toss_noclip": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.004442208176674745,
+          "1.0": 0.13879638040390793,
+          "2.0": 0.5259923291085872
+        },
+        "fall_confusion": {
+          "tp": 30,
+          "fp": 0,
+          "tn": 0,
+          "fn": 0
+        },
+        "fell_agreement": 1.0,
+        "fall_precision": 1.0,
+        "fall_recall": 1.0,
+        "table_penetration_frame_fraction": null,
+        "max_table_penetration_m": null,
+        "passed_through_solid_table_objects": null,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 95.04754934459925,
+        "mean_rollout_ms": 94.58377448221047
+      },
+      "stacks": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.08586332229327175,
+          "1.0": 0.19260259110106656,
+          "2.0": 0.3478769039127312
+        },
+        "fall_confusion": {
+          "tp": 0,
+          "fp": 10,
+          "tn": 170,
+          "fn": 0
+        },
+        "fell_agreement": 0.9444444444444444,
+        "fall_precision": 0.0,
+        "fall_recall": null,
+        "table_penetration_frame_fraction": 0.034552845528455285,
+        "max_table_penetration_m": 0.07995630216895463,
+        "passed_through_solid_table_objects": 14,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 92.99217909574509,
+        "mean_rollout_ms": 94.33265862365563
+      },
+      "more_objects": {
+        "scenes": 30,
+        "mean_position_error_m": {
+          "0.5": 0.08540151709618397,
+          "1.0": 0.20754910881326968,
+          "2.0": 0.3610582390316221
+        },
+        "fall_confusion": {
+          "tp": 0,
+          "fp": 4,
+          "tn": 266,
+          "fn": 0
+        },
+        "fell_agreement": 0.9851851851851852,
+        "fall_precision": 0.0,
+        "fall_recall": null,
+        "table_penetration_frame_fraction": 0.024119241192411923,
+        "max_table_penetration_m": 0.07912353128068725,
+        "passed_through_solid_table_objects": 0,
+        "stable_scene_fraction": 1.0,
+        "median_rollout_ms": 98.66481553763151,
+        "mean_rollout_ms": 99.68583149214585
+      }
+    }
+  }
+}

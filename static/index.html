@@ -14,6 +14,7 @@
 <aside class="card controls">
 <h2><span class="step">01</span> Bring a scene</h2>
 <button id="load-demo" class="primary">Load offline desk <span>↗</span></button>
+<button id="load-bottle" class="bottle-demo">Load bottle experiment ↗</button>
 <label class="upload" for="photo">＋ Upload a desk photo<input id="photo" type="file" accept="image/*"></label>
 <label class="field">Table width reference (optional, m)<input id="table-width" type="number" min="0.3" max="3" step="0.1" placeholder="e.g. 1.2"></label>
 <div id="photo-wrap" hidden><canvas id="detections" aria-label="Uploaded photo with detection boxes"></canvas></div>
@@ -23,7 +24,9 @@
 <h2><span class="step">02</span> Make it fall</h2>
 <label class="field">Object<select id="object"></select></label>
 <div id="object-meta" class="meta"></div>
-<label class="field">Intervention<select id="action"><option value="push">Push → +X (impulse, Ns)</option><option value="remove">Remove object</option><option value="set_mass">Set object mass (kg)</option><option value="tilt_support">Tilt support around Z (degrees)</option><option value="set_gravity">Set gravity (m/s²)</option></select></label>
+<label class="collision-control"><input id="table-collisions" type="checkbox" checked> Solid table collisions</label><p class="muted">Uncheck to deliberately let objects pass through the table.</p>
+<label class="field">Learned model<select id="architecture"><option value="default">Selected default</option><option value="mlp_multistep">A / Multi-step MLP</option><option value="graph_impulse">B / Graph impulses</option></select></label>
+<label class="field">Intervention<select id="action"><option value="push">Push → +X (impulse, Ns)</option><option value="toss">Toss upward (impulse, Ns)</option><option value="remove">Remove object</option><option value="set_mass">Set object mass (kg)</option><option value="tilt_support">Tilt support around Z (degrees)</option><option value="set_gravity">Set gravity (m/s²)</option></select></label>
 <label class="field" id="amount-field">Amount<input id="amount" type="number" value="0.55" step="0.05" min="0.01" max="20"></label>
 <button id="run" class="primary">Run both engines <span>▶</span></button>
 <p class="muted">Or click any object in 3D to push it toward +X. Each run starts from the original scene.</p>
@@ -32,7 +35,7 @@
 <div class="stage-toolbar"><span class="live-dot"></span><span id="scene-label">DESK / READY</span><label class="engine-toggle">View <select id="engine"><option value="both">Side by side</option><option value="physics">Physics only</option><option value="learned">Learned only</option></select></label></div>
 <div id="views">
 <div class="viewport" id="physics-panel"><div class="viewport-label"><span class="tag physics">PHYSICS</span><span>PyBullet · 240 Hz</span></div><div class="canvas-wrap" id="physics-view"></div><span class="view-hint">CLICK A BOX TO PUSH ↗</span></div>
-<div class="viewport" id="learned-panel"><div class="viewport-label"><span class="tag learned">LEARNED</span><span>MLP · 79k parameters</span></div><div class="canvas-wrap" id="learned-view"></div><span class="view-hint">AUTOREGRESSIVE / NO PHYSICS STEPPING</span></div>
+<div class="viewport" id="learned-panel"><div class="viewport-label"><span class="tag learned">LEARNED</span><span id="model-label">Learned dynamics</span></div><div class="canvas-wrap" id="learned-view"></div><span class="view-hint">AUTOREGRESSIVE / NO PHYSICS STEPPING</span></div>
 </div>
 <div class="playback"><button id="play" title="Replay" aria-label="Replay simulation">▶</button><input id="timeline" type="range" min="0" max="90" value="0" aria-label="Simulation time"><span id="time">0.00 / 3.00 s</span></div>
 <div class="metrics"><div><span>PHYSICS FELL</span><strong id="fell">—</strong></div><div><span>CHAOS SCORE</span><strong id="chaos">—</strong></div><div><span>POSITION ERROR</span><strong id="error">—<small> m</small></strong></div></div>

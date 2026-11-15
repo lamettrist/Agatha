@@ -1,0 +1,6 @@
+Click-to-push / playback: Physics fell: mug. Learned fell: mug. 0.078 m
+Engine toggle / leaderboard / assistant response: passed
+Bottle toss / both learned architectures / deliberately disabled table: passed
+Real photo upload: 4 detected · 2 kept · scale confidence medium · relative_depth_ransac.
+Real photo simulation: Physics fell: none. Learned fell: none.
+Mobile overflow / no external browser requests / no JS errors: passed

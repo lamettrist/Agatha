@@ -36,8 +36,9 @@ def prepare(scene: Scene, actions: list[Action]) -> tuple[Scene,np.ndarray,float
         elif a.type=='set_mass': objects[a.id].mass_kg=a.kg; objects[a.id].mass_source='user'
         elif a.type=='push' and not objects[a.id].is_static:
             n=math.hypot(*a.direction)
-            states[a.id][7]+=a.direction[0]/n*a.impulse_Ns/objects[a.id].mass_kg
-            states[a.id][9]+=a.direction[1]/n*a.impulse_Ns/objects[a.id].mass_kg
+            direction=a.direction if len(a.direction)==3 else (a.direction[0],0,a.direction[1])
+            states[a.id][7:10]+=np.asarray(direction)*a.impulse_Ns/n/objects[a.id].mass_kg
+        elif a.type=='set_support_collisions': scene.support.collisions_enabled=a.enabled
         elif a.type=='set_gravity': gravity=a.g
         elif a.type=='tilt_support': tilt[0 if a.axis=='x' else 2]=math.radians(a.angle_deg)
     scene.objects=list(objects.values())
@@ -99,14 +100,27 @@ class LearnedModel:
     def __init__(self,path: str | Path = ROOT/'models/world_model.pt'):
         torch.set_num_threads(4)
         path=Path(path)
-        if not path.exists(): raise FileNotFoundError('Learned checkpoint missing. Run scripts/train_world_model.py; physics remains available.')
+        if not path.exists(): raise FileNotFoundError('Learned checkpoint missing. Regenerate it with the README training commands; physics remains available.')
         checkpoint=torch.load(path,map_location='cpu',weights_only=True)
+        self.kind=checkpoint.get('kind','mlp_one_step')
+        self.adapter=None
+        if self.kind in ('mlp_multistep','graph_impulse'):
+            from .dynamics import StateModelAdapter
+            self.adapter=StateModelAdapter(checkpoint)
+            self.model=self.adapter.model
+            return
         self.model=DynamicsMLP(); self.model.load_state_dict(checkpoint['state_dict']); self.model.eval()
         self.xmean=checkpoint['xmean']; self.xstd=checkpoint['xstd']
         self.ymean=checkpoint['ymean']; self.ystd=checkpoint['ystd']
 
     def step(self,scene: Scene,states: np.ndarray,gravity: float,tilt: list[float]) -> np.ndarray:
         if not len(states): return states.copy()
+        if self.adapter is not None:
+            output=self.adapter.step(scene,states,gravity,tilt)
+            if not np.isfinite(output).all(): raise ValueError('Learned model diverged')
+            return output
+        if not scene.support.collisions_enabled:
+            raise RuntimeError('This legacy checkpoint has no table-collision input; train the multi-step models for the noclip counterfactual')
         static=np.array([o.is_static for o in scene.objects])
         x=torch.from_numpy(features(scene,states,gravity,tilt))
         with torch.inference_mode():
@@ -120,9 +134,11 @@ class LearnedModel:
         if not np.isfinite(out).all(): raise ValueError('Learned model diverged')
         return out.astype(np.float32)
 
-@lru_cache(maxsize=1)
-def load_model() -> LearnedModel:
-    try: return LearnedModel()
+@lru_cache(maxsize=3)
+def load_model(architecture: str = 'default') -> LearnedModel:
+    filenames={'default':'world_model.pt','mlp_multistep':'mlp_multistep.pt','graph_impulse':'graph_impulse.pt'}
+    if architecture not in filenames: raise ValueError('Unknown learned architecture')
+    try: return LearnedModel(ROOT/'models'/filenames[architecture])
     except FileNotFoundError: raise
     except Exception as exc:
         raise RuntimeError(f'Learned checkpoint could not load ({type(exc).__name__}); physics remains available') from exc
@@ -148,9 +164,9 @@ def rollout(scene: Scene, actions: list[Action], steps: int = 60, fps: int = 20,
         s=(1-weight)*a+weight*b
         if len(s): s[:,3:7]/=np.maximum(np.linalg.norm(s[:,3:7],axis=1,keepdims=True),1e-8)
         frames.append(frame(s,prepared,i/fps))
-    return dict(engine='learned',**summarize(scene,frames,tilt=tilt),support_rotation_euler=tilt,
-                estimated=True,contacts_available=False,
-                disclaimer='Learned MLP prediction, trained on synthetic boxes; contacts are not detected. Autoregressive error grows with time.')
+    return dict(engine='learned',**summarize(prepared,frames,tilt=tilt),support_rotation_euler=tilt,support_collisions_enabled=prepared.support.collisions_enabled,
+                estimated=True,contacts_available=False,model_architecture=model.kind,
+                disclaimer=f'Learned {model.kind} prediction, trained on synthetic boxes; contacts are not detected. Autoregressive error grows with time.')
 
 def compare(physics: dict,learned: dict) -> dict:
     per_frame=[]

@@ -34,3 +34,19 @@ def test_validation_and_cors():
         assert client.post('/api/simulate',json=dict(scene_id=key,actions=actions)).status_code==422
     assert client.post('/api/leaderboard',json=dict(name='x',scene_id=key,chaos_score=0)).status_code==422
     assert client.options('/api/simulate',headers={'Origin':'http://localhost:8000','Access-Control-Request-Method':'POST'}).headers['access-control-allow-origin']=='http://localhost:8000'
+
+
+def test_bottle_toss_noclip_and_architecture_selection():
+    client=TestClient(app);record=client.post('/api/scenes/demo?scenario=bottle',json={}).json()
+    key=record['scene_id']
+    for kind in ('mlp_multistep','graph_impulse'):
+        response=client.post('/api/simulate',json=dict(scene_id=key,engine='both',learned_architecture=kind,duration=1,fps=20,
+            actions=[dict(type='push',id='bottle',direction=[0,1,0],impulse_Ns=1.5),dict(type='set_support_collisions',enabled=False)]))
+        assert response.status_code==200,response.text
+        result=response.json()
+        assert result['learned']['model_architecture']==kind
+        assert result['physics']['support_collisions_enabled'] is False
+        assert result['learned']['support_collisions_enabled'] is False
+        assert result['physics']['frames'][4]['objects'][0]['position'][1]>.87
+    assert client.post('/api/scenes/demo?scenario=unknown').status_code==422
+    assert client.post('/api/simulate',json=dict(scene_id=key,learned_architecture='invented')).status_code==422

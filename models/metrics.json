@@ -1,30 +1,62 @@
 {
-  "evaluation_seed": 90731,
-  "held_out_scenes": 50,
+  "evaluation_seed": 20261115,
+  "held_out_scenes": 200,
   "mean_position_error_m": {
-    "0.5": 0.0714421367986619,
-    "1.0": 0.12062019978529237,
-    "2.0": 0.23266332819719315
+    "0.5": 0.06320202431094198,
+    "1.0": 0.10053921960965524,
+    "2.0": 0.15039030148854282
   },
-  "fell_agreement": 0.9336734693877551,
-  "evaluated_objects": 196,
-  "physics_fell_count": 18,
-  "learned_fell_count": 21,
+  "fell_agreement": 0.9475753604193972,
+  "evaluated_objects": 763,
+  "physics_fell_count": 105,
+  "learned_fell_count": 87,
   "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos.",
-  "training_seconds": 17.647673970088363,
-  "epochs": 40,
-  "best_epoch": 26,
-  "validation_loss": 0.0295743215829134,
-  "parameters": 79181,
+  "kind": "mlp_multistep",
+  "parameters": 79373,
+  "training_seconds": 90.32991267368197,
+  "epochs": 30,
+  "best_epoch": 30,
+  "validation_loss": 0.006333945639198646,
   "training_seed": 42,
+  "data_order_seed": 42,
+  "noise_seed": 991,
+  "horizon_steps": 3,
+  "message_passing_rounds": 0,
+  "samples_per_scene_per_epoch": 2,
+  "batch_size": 96,
   "dataset": {
-    "seed": 2026,
-    "scenes": 500,
-    "scene_transitions": 30000,
-    "object_transitions": 114840,
-    "seconds": 39.55812717229128,
+    "base_scenes": 5000,
+    "extra_scenes": 1000,
+    "total_scenes": 6000,
+    "scene_transitions": 360000,
+    "extra_seed": 41872,
+    "seconds": 38.976256027817726,
     "step_s": 0.05,
-    "action_encoding": "Actions at t=0 encoded in post-action velocities, masses, membership, support tilt and gravity. groups index complete scene/action recipes in transitions_cases.json."
+    "split": "scene index % 10 == 0 held out for validation",
+    "kinds": {
+      "layout": 5000,
+      "noclip": 333,
+      "toss": 334,
+      "toss_noclip": 333
+    },
+    "note": "Identical episodes for graph/MLP, including vertical impulses and explicit table collision state. Bottles are boxes; no fluid model."
   },
-  "architecture": "81 -> 192 -> 192 -> 128 -> 13 SiLU MLP; free-flight residual, 3 nearest neighbors"
+  "training": "Both models from scratch, identical scene split, sampled windows, loss, noise, optimizer/schedule and epochs. Checkpoints selected on validation three-step loss.",
+  "architecture": "82 -> 192 -> 192 -> 128 -> 13 SiLU MLP; three-step/noise training, explicit support collision bit",
+  "legacy_50_scene_evaluation": {
+    "evaluation_seed": 90731,
+    "held_out_scenes": 50,
+    "mean_position_error_m": {
+      "0.5": 0.07087564963772254,
+      "1.0": 0.08997881788394474,
+      "2.0": 0.12786473122397898
+    },
+    "fell_agreement": 0.9540816326530612,
+    "evaluated_objects": 196,
+    "physics_fell_count": 18,
+    "learned_fell_count": 15,
+    "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos."
+  },
+  "selected_kind": "mlp_multistep",
+  "selection_note": "Selected over the graph candidate by paired development evaluation. Additional toss/noclip suites recorded in ab_results.json."
 }

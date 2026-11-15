@@ -28,6 +28,7 @@ class SceneObject(StrictModel):
     confidence: float = Field(default=1, ge=0, le=1)
 
 class Support(StrictModel):
+    collisions_enabled: bool = True
     size: tuple[Positive, Positive] = (1.2, 0.8)  # width, depth
     height: float = Field(default=0.75, ge=0, le=5)
 
@@ -44,7 +45,7 @@ class Scene(StrictModel):
 class Push(StrictModel):
     type: Literal["push"]
     id: str
-    direction: tuple[float, float]
+    direction: tuple[float, float] | Vec3
     impulse_Ns: float = Field(gt=0, le=20)
     @model_validator(mode="after")
     def nonzero(self):
@@ -65,11 +66,16 @@ class Tilt(StrictModel):
 class Gravity(StrictModel):
     type: Literal["set_gravity"]
     g: float = Field(ge=0, le=30)
-Action = Annotated[Push | Remove | SetMass | Tilt | Gravity, Field(discriminator="type")]
+class SupportCollisions(StrictModel):
+    type: Literal['set_support_collisions']
+    enabled: bool
+
+Action = Annotated[Push | Remove | SetMass | Tilt | Gravity | SupportCollisions, Field(discriminator="type")]
 
 class SimulationRequest(StrictModel):
     scene_id: str
     actions: list[Action] = Field(default_factory=list, max_length=20)
     engine: Literal["physics", "learned", "both"] = "both"
+    learned_architecture: Literal['default','mlp_multistep','graph_impulse'] = 'default'
     duration: float = Field(default=3, ge=0.1, le=5)
     fps: Literal[10, 20, 30] = 30

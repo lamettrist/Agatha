@@ -26,6 +26,20 @@ class World:
             self._box(o.id, o.size, o.position, 0 if o.is_static else o.mass_kg,
                       euler_to_bullet(o.rotation_euler), o.friction)
 
+        if not scene.support.collisions_enabled:
+            self._support_collisions(False)
+
+    def _support_collisions(self, enabled: bool):
+        self.scene.support.collisions_enabled = enabled
+        ids = ["support"] + [o.id for o in self.scene.objects if o.is_static
+            and o.size[0] >= self.scene.support.size[0]*.95
+            and o.size[2] >= self.scene.support.size[1]*.95
+            and abs(o.position[1]+o.size[1]/2-self.scene.support.height)<.03]
+        for id in ids:
+            if id in self.bodies:
+                p.setCollisionFilterGroupMask(self.bodies[id], -1,
+                    1 if enabled else 0, -1 if enabled else 0, physicsClientId=self.client)
+
     def _box(self, name, size, pos, mass, quat=(0,0,0,1), friction=.5):
         half = (size[0]/2, size[2]/2, size[1]/2)
         shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=half, physicsClientId=self.client)
@@ -55,14 +69,16 @@ class World:
                 if mass > 0:
                     v, av = p.getBaseVelocity(b, physicsClientId=self.client)
                     n = math.hypot(*a.direction)
-                    dv = to_bullet((a.direction[0]/n*a.impulse_Ns/mass, 0,
-                                    a.direction[1]/n*a.impulse_Ns/mass))
+                    direction = a.direction if len(a.direction)==3 else (a.direction[0],0,a.direction[1])
+                    dv = to_bullet(tuple(v/n*a.impulse_Ns/mass for v in direction))
                     p.resetBaseVelocity(b, [v[i]+dv[i] for i in range(3)], av, physicsClientId=self.client)
             elif a.type == "tilt_support":
                 self.tilt[0 if a.axis == "x" else 2] = math.radians(a.angle_deg)
                 p.resetBasePositionAndOrientation(self.bodies["support"],
                     to_bullet((0, self.scene.support.height-.04, 0)),
                     euler_to_bullet(self.tilt), physicsClientId=self.client)
+            elif a.type == "set_support_collisions":
+                self._support_collisions(a.enabled)
             elif a.type == "set_gravity":
                 self.gravity = a.g
                 p.setGravity(0, 0, -a.g, physicsClientId=self.client)
@@ -102,7 +118,7 @@ def summarize(scene: Scene, frames: list[dict], contacts: list[dict] | None = No
             if o.is_static: continue
             pos = np.asarray(state["position"])
             local = rot.T @ (pos - [0, scene.support.height-.04, 0])
-            if (abs(local[0]) > scene.support.size[0]/2 or abs(local[2]) > scene.support.size[1]/2) and local[1] < .01:
+            if (not scene.support.collisions_enabled or abs(local[0]) > scene.support.size[0]/2 or abs(local[2]) > scene.support.size[1]/2) and local[1] < .01:
                 fell.add(o.id)
             r = p.getMatrixFromQuaternion(state["quaternion"])
             if r[4] < math.cos(math.radians(35)):
@@ -133,6 +149,6 @@ def simulate(scene: Scene, actions: list[Action], duration: float = 3, fps: int 
                         seen.add(pair)
                         contacts.append(dict(ids=pair, t=round(i/fps,6)))
             frames.append(world.snapshot(i/fps))
-        return dict(engine="physics", **summarize(scene, frames, contacts, world.tilt),
-                    support_rotation_euler=world.tilt, estimated=True,
+        return dict(engine="physics", **summarize(world.scene, frames, contacts, world.tilt),
+                    support_rotation_euler=world.tilt, support_collisions_enabled=world.scene.support.collisions_enabled, estimated=True,
                     disclaimer="Box approximation with estimated parameters; not a guaranteed real-world outcome.")

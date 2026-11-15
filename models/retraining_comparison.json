@@ -1,0 +1,59 @@
+{
+  "original_500_scene_mlp": {
+    "evaluation_seed": 20261115,
+    "held_out_scenes": 200,
+    "mean_position_error_m": {
+      "0.5": 0.07337070308452198,
+      "1.0": 0.15715742687797657,
+      "2.0": 0.26645578396135633
+    },
+    "fell_agreement": 0.9069462647444299,
+    "evaluated_objects": 763,
+    "physics_fell_count": 105,
+    "learned_fell_count": 102,
+    "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos."
+  },
+  "expanded_5000_scene_one_step_mlp": {
+    "evaluation_seed": 20261115,
+    "held_out_scenes": 200,
+    "mean_position_error_m": {
+      "0.5": 0.05926003189406134,
+      "1.0": 0.10873263468898388,
+      "2.0": 0.16992399570737113
+    },
+    "fell_agreement": 0.9384010484927916,
+    "evaluated_objects": 763,
+    "physics_fell_count": 105,
+    "learned_fell_count": 86,
+    "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos."
+  },
+  "matched_multi_step_mlp": {
+    "evaluation_seed": 20261115,
+    "held_out_scenes": 200,
+    "mean_position_error_m": {
+      "0.5": 0.06320202431094198,
+      "1.0": 0.10053921960965524,
+      "2.0": 0.15039030148854282
+    },
+    "fell_agreement": 0.9475753604193972,
+    "evaluated_objects": 763,
+    "physics_fell_count": 105,
+    "learned_fell_count": 87,
+    "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos."
+  },
+  "matched_graph_impulse": {
+    "evaluation_seed": 20261115,
+    "held_out_scenes": 200,
+    "mean_position_error_m": {
+      "0.5": 0.11335198309445092,
+      "1.0": 0.24787247248488478,
+      "2.0": 0.46338275098634785
+    },
+    "fell_agreement": 0.8414154652686763,
+    "evaluated_objects": 763,
+    "physics_fell_count": 105,
+    "learned_fell_count": 100,
+    "note": "Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos."
+  },
+  "note": "All four checkpoints evaluated on the identical 200 ordinary held-out scenes, seed 20261115; same PyBullet reference and scene generator. Final matched models additionally trained on toss/noclip episodes."
+}

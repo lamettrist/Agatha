@@ -40,6 +40,25 @@ def main():
         page.click('#ask');page.wait_for_function("!document.getElementById('ask').disabled",timeout=120000)
         assert page.locator('#answer').inner_text()
         print('Engine toggle / leaderboard / assistant response: passed',flush=True)
+        page.click('#load-bottle');page.wait_for_function("document.getElementById('object').value==='bottle'")
+        for kind in ('mlp_multistep','graph_impulse'):
+            page.select_option('#architecture',kind)
+            with page.expect_response(lambda r:r.url.endswith('/api/simulate')) as response:
+                page.click('#run')
+            prediction=response.value.json()
+            assert prediction['learned']['model_architecture']==kind
+            assert max(f['objects'][0]['position'][1] for f in prediction['physics']['frames'])>1.2
+            page.wait_for_function("!document.getElementById('run').disabled")
+        page.select_option('#architecture','mlp_multistep');page.uncheck('#table-collisions')
+        with page.expect_response(lambda r:r.url.endswith('/api/simulate')) as response:
+            page.click('#run')
+        prediction=response.value.json()
+        assert prediction['physics']['support_collisions_enabled'] is False
+        assert prediction['learned']['support_collisions_enabled'] is False
+        assert prediction['physics']['events']['fell']==['bottle']
+        page.wait_for_function("document.getElementById('time').textContent.startsWith('3.00')")
+        page.screenshot(path='docs/bottle-noclip.png',full_page=True)
+        print('Bottle toss / both learned architectures / deliberately disabled table: passed',flush=True)
         if args.photo:
             page.set_input_files('#photo',str(args.photo))
             page.wait_for_function("document.getElementById('reconstruction').textContent.includes('detected ·')",timeout=90000)

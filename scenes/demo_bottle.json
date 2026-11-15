@@ -1,0 +1,6 @@
+{
+  "objects": [
+    {"id":"bottle","label":"bottle","shape":"box","size":[0.075,0.24,0.075],"position":[0,0.87,0],"rotation_euler":[0,0,0],"mass_kg":0.5,"mass_source":"estimated","friction":0.5,"is_static":false,"confidence":1}
+  ],
+  "support":{"size":[1.2,0.8],"height":0.75,"collisions_enabled":true}
+}

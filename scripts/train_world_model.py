@@ -12,8 +12,8 @@ from agatha.world_model import DynamicsMLP,LearnedModel,rollout
 from agatha.physics import simulate
 from generate_data import random_case
 
-def evaluate(checkpoint: Path, scenes: int=50) -> dict:
-    rng=np.random.default_rng(90731); model=LearnedModel(checkpoint)
+def evaluate(checkpoint: Path, scenes: int=50, seed: int=90731) -> dict:
+    rng=np.random.default_rng(seed); model=LearnedModel(checkpoint)
     errors={str(t):[] for t in [.5,1.,2.]}; agreements=[]; fall_counts=[0,0]
     for i in range(scenes):
         scene,actions=random_case(rng)
@@ -28,11 +28,12 @@ def evaluate(checkpoint: Path, scenes: int=50) -> dict:
             a=o.id in expected['events']['fell']; b=o.id in predicted['events']['fell']
             agreements.append(a==b); fall_counts[0]+=a; fall_counts[1]+=b
         if (i+1)%10==0: print(f'evaluated {i+1}/{scenes}',flush=True)
-    return dict(evaluation_seed=90731,held_out_scenes=scenes,mean_position_error_m={t:float(np.mean(e)) for t,e in errors.items()},
+    return dict(evaluation_seed=seed,held_out_scenes=scenes,mean_position_error_m={t:float(np.mean(e)) for t,e in errors.items()},
         fell_agreement=float(np.mean(agreements)),evaluated_objects=len(agreements),physics_fell_count=fall_counts[0],learned_fell_count=fall_counts[1],
         note='Independent held-out scenes and actions; errors are autoregressive, not teacher-forced. Synthetic boxes only; no guarantee on photos.')
 
 def train(data: Path,checkpoint: Path,epochs: int):
+    checkpoint.parent.mkdir(parents=True,exist_ok=True)
     torch.set_num_threads(4); torch.manual_seed(42); np.random.seed(42)
     datafile=np.load(data); x=torch.from_numpy(datafile['x']); y=torch.from_numpy(datafile['y']); groups=datafile['groups']
     # Split by entire scene, never by adjacent frames.

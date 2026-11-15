@@ -1,9 +1,9 @@
 {
+  "action_encoding": "Actions at t=0 encoded in post-action velocities, masses, membership, support tilt and gravity. groups index complete scene/action recipes in transitions_cases.json.",
   "seed": 2026,
-  "scenes": 500,
-  "scene_transitions": 30000,
-  "object_transitions": 114840,
-  "seconds": 39.55812717229128,
-  "step_s": 0.05,
-  "action_encoding": "Actions at t=0 encoded in post-action velocities, masses, membership, support tilt and gravity. groups index complete scene/action recipes in transitions_cases.json."
+  "scenes": 5000,
+  "scene_transitions": 300000,
+  "object_transitions": 1172100,
+  "seconds": 401.734141478315,
+  "step_s": 0.05
 }
