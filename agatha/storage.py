@@ -42,3 +42,26 @@ class Store:
     def demo(self) -> dict:
         scene=Scene.model_validate_json((ROOT/'scenes/demo_desk.json').read_text())
         return self.add(scene,dict(source='bundled_demo',estimated=['all masses and dimensions']))
+
+    def record_score(self,scene_id: str,score: float):
+        with self.lock:
+            self.write(f'score_{scene_id}.json',dict(chaos_score=score))
+
+    def leaderboard(self) -> list[dict]:
+        with self.lock:
+            path=self.directory/'leaderboard.json'
+            return json.loads(path.read_text()) if path.exists() else []
+
+    def add_score(self,name: str,scene_id: str,claimed_score: float) -> dict:
+        import math
+        with self.lock:
+            self.get(scene_id)
+            score_path=self.directory/f'score_{scene_id}.json'
+            if not score_path.exists(): raise ValueError('Run the physics engine for this scene before submitting a score')
+            actual=json.loads(score_path.read_text())['chaos_score']
+            if not math.isclose(actual,claimed_score,rel_tol=1e-6,abs_tol=1e-6):
+                raise ValueError('chaos_score must match the latest server-computed physics score')
+            entry=dict(name=name,scene_id=scene_id,chaos_score=actual)
+            entries=sorted(self.leaderboard()+[entry],key=lambda e:e['chaos_score'],reverse=True)[:20]
+            self.write('leaderboard.json',entries)
+            return entry

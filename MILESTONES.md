@@ -26,3 +26,15 @@
 - Exa extraction test checks source membership, exact source evidence, numerical mass/unit agreement, and disk cache; fabricated URL and mismatched mass rejected.
 - Without keys: assistant HTTP 200 `status=unavailable`; both-engine simulation HTTP 200 and working.
 - **Live authenticated OpenAI/Exa calls unverified: no keys supplied.** SDK interfaces inspected against installed packages and official docs. No fake network results are shipped.
+
+## M5 — API and live demo polish
+- Final `.venv/bin/python -m pytest tests -q`: **20 passed in 2.91s**. Exact output: `docs/test-output.txt`.
+- Actual HTTP `bash scripts/demo.sh` on port **8017**: 91 frames per engine, both mug fall/tip, physics chaos **2.642423355**, final position error **0.12037 m**. Exact output: `docs/demo-output.txt`.
+- Chromium WebGL QA passed: initial scene, actual raycast click-to-push, playback, physics/learned toggle, leaderboard submit, missing-key assistant response, real YOLO/depth photo upload + detection overlay + both-engine simulation, mobile width 390px with no horizontal overflow, no browser external/CDN requests, no JavaScript errors.
+- Real photo upload: **4 detections, 2 kept, relative_depth_ransac**, medium scale confidence. Both engines ran on the reconstructed scene.
+- Actual endpoint request/response excerpts captured in `docs/api-examples.json`; rendered screenshot in `docs/demo.png`.
+- Additional agent test confirms a verified mass changes the physical outcome and does not mutate the saved scene.
+- Editable package installation, Python compilation, shell syntax, and `git diff --check` passed.
+- Default port is 8017 because another service already occupies port 8000 in this workspace.
+- Runtime stubs: **none**. Explicit fallback paths: depth → flat table; unavailable detector → zero fabricated detections; missing learned checkpoint → physics with warning; unavailable OpenAI/Exa → unavailable/estimated response.
+- Remaining verification gap: live authenticated OpenAI/Exa calls require the user's `.env` keys. Base44 itself is external; its integration contract and exact endpoints are documented, but the Base44 app was not edited or deployed.

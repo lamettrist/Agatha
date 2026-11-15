@@ -45,3 +45,15 @@ def test_agent_runs_real_tools_and_grounds_output(tmp_path,monkeypatch):
     assert result['simulation_results'][0]['fell']==['mug']
     assert 'estimated mass' in result['answer']
     assert store.get(record['scene_id'])==record
+
+def test_verified_mass_changes_agent_physics_only(tmp_path):
+    store=Store(tmp_path);record=store.demo();agent=Assistant(store)
+    agent.lookup.lookup=lambda label,client:dict(label='cup',mass_kg=1.5,mass_source='exa',source_url='https://manufacturer.example/spec',reference_kind='representative product')
+    actions=[dict(type='push',id='mug',direction=[1,0],impulse_Ns=.55)]
+    messages=[ToolMessage('get_scene',{}),ToolMessage('lookup_object_properties',{'label':'cup'}),ToolMessage('simulate',{'actions':actions}),ToolMessage(None,{})]
+    client=NS(chat=NS(completions=NS(create=Mock(side_effect=[NS(choices=[NS(message=m)]) for m in messages]))))
+    result=agent.query(record['scene_id'],'Use a published mass then push',client)
+    assert result['sources'][0]['mass_kg']==1.5
+    assert result['simulation_results'][0]['fell']==[]
+    # With the original .32kg estimate the same impulse makes the mug fall.
+    assert store.get(record['scene_id'])==record

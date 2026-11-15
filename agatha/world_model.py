@@ -121,7 +121,11 @@ class LearnedModel:
         return out.astype(np.float32)
 
 @lru_cache(maxsize=1)
-def load_model() -> LearnedModel: return LearnedModel()
+def load_model() -> LearnedModel:
+    try: return LearnedModel()
+    except FileNotFoundError: raise
+    except Exception as exc:
+        raise RuntimeError(f'Learned checkpoint could not load ({type(exc).__name__}); physics remains available') from exc
 
 def frame(states: np.ndarray, scene: Scene, t: float) -> dict:
     return dict(t=t,objects=[dict(id=o.id,position=s[:3].tolist(),quaternion=s[3:7].tolist(),

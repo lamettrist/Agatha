@@ -12,7 +12,7 @@ from .storage import Store
 class PropertyExtraction(BaseModel):
     model_config=ConfigDict(extra='forbid')
     mass_kg: float | None
-    size_m: tuple[float,float,float] | None
+    size_m: list[float] | None
     source_url: str | None
     mass_evidence: str | None
     size_evidence: str | None
@@ -74,7 +74,7 @@ class PropertyLookup:
             page=next(p for p in pages if p['url']==extracted.source_url)
             if extracted.size_m and extracted.size_evidence and normalize(extracted.size_evidence) in normalize(page['text']):
                 numbers=[float(n)*SIZE_UNITS[u.lower()] for n,u in SIZE_RE.findall(extracted.size_evidence)]
-                if len(numbers)==3 and all(math.isclose(a,b,rel_tol=.025) for a,b in zip(sorted(numbers),sorted(extracted.size_m))):
+                if len(numbers)==3 and len(extracted.size_m)==3 and all(math.isfinite(v) and 0<v<100 for v in extracted.size_m) and all(math.isclose(a,b,rel_tol=.025) for a,b in zip(sorted(numbers),sorted(extracted.size_m))):
                     size=extracted.size_m
             result=dict(label=label,mass_kg=extracted.mass_kg,size_m=size,mass_source='exa',source_url=extracted.source_url,
                         product_name=extracted.product_name,mass_evidence=extracted.mass_evidence,cached=False,

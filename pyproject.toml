@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "agatha-foresight"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["fastapi>=0.115,<1", "pydantic>=2.8,<3", "uvicorn>=0.30", "python-multipart", "python-dotenv", "numpy>=1.26", "pillow", "pybullet==3.2.7", "torch>=2.2", "ultralytics>=8.3", "transformers>=4.45,<5", "openai>=2", "exa-py>=2", "requests"]
+dependencies = ["fastapi>=0.115,<1", "pydantic>=2.8,<3", "uvicorn>=0.30", "python-multipart", "python-dotenv", "numpy>=1.26", "pillow", "pybullet==3.2.7", "torch>=2.2,<3", "ultralytics>=8.3,<8.5", "transformers>=4.45,<5", "openai>=2,<4", "exa-py>=2,<3", "requests"]
 [project.optional-dependencies]
 test = ["pytest", "httpx"]
 [tool.setuptools.packages.find]

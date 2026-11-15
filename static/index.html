@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Foresight · Agatha</title>
+<link rel="stylesheet" href="/static/style.css">
+<script type="importmap">{"imports":{"three":"/static/vendor/three.module.js"}}</script>
+</head>
+<body>
+<header><a class="brand" href="/">F<span class="brand-dot">◉</span>RESIGHT</a><span class="subtitle">AGATHA / WHAT IF, IN MOTION</span><span class="track">Hack the Nest · OpenAI + Exa</span></header>
+<main>
+<div class="intro"><div><p class="eyebrow">FROM A REAL SCENE TO A POSSIBLE FUTURE</p><h1>Give your desk a little chaos.</h1><p class="lede">Rebuild a photo. Poke the scene. Compare physics with a learned world model.</p></div><div class="units">METERS · KG · SECONDS<br><span>Y-up / approximate boxes</span></div></div>
+<div class="workspace">
+<aside class="card controls">
+<h2><span class="step">01</span> Bring a scene</h2>
+<button id="load-demo" class="primary">Load offline desk <span>↗</span></button>
+<label class="upload" for="photo">＋ Upload a desk photo<input id="photo" type="file" accept="image/*"></label>
+<label class="field">Table width reference (optional, m)<input id="table-width" type="number" min="0.3" max="3" step="0.1" placeholder="e.g. 1.2"></label>
+<div id="photo-wrap" hidden><canvas id="detections" aria-label="Uploaded photo with detection boxes"></canvas></div>
+<p id="reconstruction" class="muted">The bundled desk runs with no network or API keys.</p>
+<details><summary>Reconstruction estimates</summary><pre id="report">All demo dimensions and masses are estimated.</pre></details>
+<div class="divider"></div>
+<h2><span class="step">02</span> Make it fall</h2>
+<label class="field">Object<select id="object"></select></label>
+<div id="object-meta" class="meta"></div>
+<label class="field">Intervention<select id="action"><option value="push">Push → +X (impulse, Ns)</option><option value="remove">Remove object</option><option value="set_mass">Set object mass (kg)</option><option value="tilt_support">Tilt support around Z (degrees)</option><option value="set_gravity">Set gravity (m/s²)</option></select></label>
+<label class="field" id="amount-field">Amount<input id="amount" type="number" value="0.55" step="0.05" min="0.01" max="20"></label>
+<button id="run" class="primary">Run both engines <span>▶</span></button>
+<p class="muted">Or click any object in 3D to push it toward +X. Each run starts from the original scene.</p>
+</aside>
+<section class="stage-area">
+<div class="stage-toolbar"><span class="live-dot"></span><span id="scene-label">DESK / READY</span><label class="engine-toggle">View <select id="engine"><option value="both">Side by side</option><option value="physics">Physics only</option><option value="learned">Learned only</option></select></label></div>
+<div id="views">
+<div class="viewport" id="physics-panel"><div class="viewport-label"><span class="tag physics">PHYSICS</span><span>PyBullet · 240 Hz</span></div><div class="canvas-wrap" id="physics-view"></div><span class="view-hint">CLICK A BOX TO PUSH ↗</span></div>
+<div class="viewport" id="learned-panel"><div class="viewport-label"><span class="tag learned">LEARNED</span><span>MLP · 79k parameters</span></div><div class="canvas-wrap" id="learned-view"></div><span class="view-hint">AUTOREGRESSIVE / NO PHYSICS STEPPING</span></div>
+</div>
+<div class="playback"><button id="play" title="Replay" aria-label="Replay simulation">▶</button><input id="timeline" type="range" min="0" max="90" value="0" aria-label="Simulation time"><span id="time">0.00 / 3.00 s</span></div>
+<div class="metrics"><div><span>PHYSICS FELL</span><strong id="fell">—</strong></div><div><span>CHAOS SCORE</span><strong id="chaos">—</strong></div><div><span>POSITION ERROR</span><strong id="error">—<small> m</small></strong></div></div>
+<p id="status" role="status" aria-live="polite">Loading the offline desk…</p>
+<div class="card assistant"><div class="assistant-heading"><h2><span class="step">03</span> Ask a what-if</h2><span class="muted">OPENAI PLANS · EXA GROUNDS</span></div>
+<form id="ask-form"><label class="sr-only" for="question">Ask a what-if question</label><input id="question" placeholder="What if I push the mug? Look up its mass first." value="What if I push the mug? Look up its mass and compare both engines."><button id="ask" class="primary" type="submit">Ask ↗</button></form>
+<p id="answer">The agent uses real tool outputs. API keys enable OpenAI + Exa; simulations work independently.</p><div id="sources"></div><details id="trace-wrap" hidden><summary>Actions and tool evidence</summary><pre id="trace"></pre></details>
+</div>
+<div class="card leaderboard"><div class="assistant-heading"><h2>Make it fall / local leaderboard</h2><span class="muted">FALL COUNT + DISPLACEMENT (m)</span></div><form id="score-form"><input id="name" placeholder="Team name" maxlength="40" required aria-label="Leaderboard name"><button id="save-score" type="submit">Submit physics score ↗</button></form><ol id="scores"></ol></div>
+</section>
+</div>
+<footer><span class="warning-dot">●</span> A sandbox for possibilities. Monocular scale, box shapes and unsourced masses are estimates. Predictions are not guaranteed real-world outcomes.</footer>
+</main><script type="module" src="/static/app.js"></script>
+</body></html>
