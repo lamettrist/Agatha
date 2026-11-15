@@ -16,6 +16,12 @@ Notes
   (the stop lands on a log interval; the partial epoch is validated and saved as usual).
 - --warmup is capped at 5% of the total updates (large --batch runs have few updates).
 - Everything a rank needs lives on its GPU: no DataLoader, windows are gathered on-device.
+- OPT-IN video-derived data (--video-data DIR ... --video-frac F): the model is state-based (3D box poses), so video
+  is only usable after it has been converted to approximate object trajectories (tracking + geometry; shards in the
+  data/v2 format plus obs_mask / pos_sigma / has_orientation). Those are much noisier than simulator states, so a
+  fraction F of every batch is drawn from video windows and trained with a position-only, noise-tolerant loss times
+  the small --video-weight; the checkpoint selection score is the simulator score only. With --video-frac 0 (default)
+  sampling, loss and updates are identical to a run without the flags.
 """
 import argparse
 import copy
@@ -41,6 +47,8 @@ from agatha import contact_gnn as cg
 from agatha.dynamics import euler_quaternion, rotation
 
 TERMS = ('loss', 'one', 'pos', 'vel', 'ang', 'rot', 'pen', 'rest', 'slide')
+# video windows (only with --video-frac > 0): unweighted video loss, its three parts, mean position error in metres
+VIDEO_TERMS = ('video_loss', 'video_pos', 'video_pen', 'video_rot', 'video_err_m')
 
 
 # ----------------------------------------------------------------------------- args
@@ -106,6 +114,16 @@ def parse_args():
                         '(0 = off; the remainder stays half uniform / half active)')
     p.add_argument('--score-fall-weight', type=float, default=0.0,
                    help='selection score += w*((1 - fall recall) + 0.5*(1 - fall precision)), 4 s val rollout, collisions-enabled episodes (0 = unchanged)')
+    # video-derived trajectories (opt-in; nothing changes while --video-frac is 0)
+    p.add_argument('--video-data', type=str, nargs='+', default=None,
+                   help='roots of video-derived shards (<root>/{train,val}/shard_*.npz: data/v2 keys + obs_mask [E,T+1,N], '
+                        'pos_sigma [E,N] m, has_orientation [E,N]); val splits, when present, are always evaluated')
+    p.add_argument('--video-frac', type=float, default=0.0, help='fraction of every batch drawn from video windows (0 = off)')
+    p.add_argument('--video-weight', type=float, default=0.2, help='multiplier on the video loss: total = sim loss + W * video loss')
+    p.add_argument('--video-horizon', type=int, default=0,
+                   help='unroll length on video windows (0 = the current sim curriculum horizon k, i.e. --horizon once the curriculum is done)')
+    p.add_argument('--video-w-rot', type=float, default=0.1,
+                   help='weight of the weak orientation term on video objects whose has_orientation flag is set')
     # system
     p.add_argument('--amp', choices=('auto', 'bf16', 'fp16', 'off'), default='auto')
     p.add_argument('--compile', type=int, default=0)
@@ -237,6 +255,125 @@ def gather(data, e, t0, k, device, lookahead=0):
     return tuple(x.to(device, non_blocking=True) for x in out)
 
 
+# ----------------------------------------------------------------------------- video-derived data
+def _load_video_shard(path):
+    """data/v2 shard keys + obs_mask [E,T+1,N], pos_sigma [E,N], has_orientation [E,N] (+ optional vel_valid [E,T+1,N]).
+    Missing keys fall back to the conservative choice: every frame observed, sigma 0, no orientation."""
+    with np.load(path) as z:
+        states = np.array(z['states'], dtype=np.float32)
+        props = z['props'].astype(np.float32, copy=False)
+        context = z['context'].astype(np.float32, copy=False)
+        mask = z['mask'].astype(bool)
+        E, frames, N = states.shape[:3]
+        obs = z['obs_mask'].astype(bool) if 'obs_mask' in z.files else np.ones((E, frames, N), bool)
+        sigma = z['pos_sigma'].astype(np.float32) if 'pos_sigma' in z.files else np.zeros((E, N), np.float32)
+        ori = z['has_orientation'].astype(bool) if 'has_orientation' in z.files else np.zeros((E, N), bool)
+        vel_valid = z['vel_valid'].astype(bool) if 'vel_valid' in z.files else None
+    finite = np.isfinite(states).all(-1)
+    obs = obs & finite & mask[:, None]
+    states = np.nan_to_num(states, nan=0., posinf=0., neginf=0.)
+    norm = np.linalg.norm(states[..., 3:7], axis=-1, keepdims=True)
+    states[..., 3:7] = np.where(norm > 1e-6, states[..., 3:7] / np.maximum(norm, 1e-6), np.array([0, 0, 0, 1], np.float32))
+    if vel_valid is None:
+        # a finite-difference velocity needs a neighbouring observation of the same object
+        neighbour = np.zeros_like(obs)
+        neighbour[:, 1:] |= obs[:, :-1]
+        neighbour[:, :-1] |= obs[:, 1:]
+        vel_valid = neighbour
+    sigma = np.where(np.isfinite(sigma), sigma, 0.).astype(np.float32).clip(min=0.)
+    return dict(states=states, props=props, context=context, mask=mask, obs=obs, vel_ok=obs & vel_valid, sigma=sigma, ori=ori & mask)
+
+
+def _pad_video(part, frames, slots):
+    E, f, n = part['states'].shape[:3]
+    if (f, n) == (frames, slots):
+        return part
+
+    def grow(x, shape, fill=0):
+        out = np.full(shape + x.shape[len(shape):], fill, x.dtype)
+        out[tuple(slice(0, s) for s in x.shape[:len(shape)])] = x
+        return out
+    states = grow(part['states'], (E, frames, slots))
+    pad = np.ones((E, frames, slots), bool)
+    pad[:, :f, :n] = False
+    states[pad, 6] = 1.                                    # identity quaternion in padded frames / slots
+    return dict(states=states, props=grow(part['props'], (E, slots)), context=part['context'], mask=grow(part['mask'], (E, slots)),
+                obs=grow(part['obs'], (E, frames, slots)), vel_ok=grow(part['vel_ok'], (E, frames, slots)),
+                sigma=grow(part['sigma'], (E, slots)), ori=grow(part['ori'], (E, slots)))
+
+
+def load_video_split(roots, split: str, threads: int = 8, slots: int = 0):
+    """All video sources concatenated (frames / slots padded to the largest; padded entries are unobserved and masked).
+    Returns (data dict of numpy arrays or None when no root has this split, [source names])."""
+    parts, names = [], []
+    for root in roots:
+        files = sorted(glob.glob(str(Path(root) / split / 'shard_*.npz')))
+        if not files:
+            continue
+        with ThreadPoolExecutor(max(1, threads)) as pool:
+            loaded = list(pool.map(_load_video_shard, files))
+        for q in loaded:
+            q['source'] = np.full(len(q['states']), len(names), np.int64)
+        parts += loaded
+        names.append(Path(root).name)
+    if not parts:
+        return None, names
+    for key in ('props', 'context'):
+        dims = {q[key].shape[-1] for q in parts}
+        if len(dims) > 1:
+            raise ValueError(f'video shards disagree on the {key} width: {sorted(dims)}')
+    frames, slots = max(q['states'].shape[1] for q in parts), max(slots, max(q['states'].shape[2] for q in parts))
+    parts = [dict(_pad_video(q, frames, slots), source=q['source']) for q in parts]
+    data = {k: np.concatenate([q[k] for q in parts]) for k in parts[0]}
+    dyn = data['mask'] & (data['props'][..., 5] < .5)                                   # [E,N]
+    # a window may START at a frame where every real dynamic object is observed with a valid velocity estimate
+    data['start_ok'] = (data['vel_ok'] | ~dyn[:, None]).all(-1) & dyn.any(-1)[:, None]  # [E,T+1]
+    data['obs_count'] = (data['obs'] & dyn[:, None]).sum(-1).astype(np.int64)           # observed dynamic objects per frame
+    del data['vel_ok']
+    return data, names
+
+
+def video_window_index(data, k: int):
+    """Flat indices e*(T-k+1)+t0 of the windows that start at a valid frame and have an observed target in t0+1..t0+k."""
+    T = data['states'].shape[1] - 1
+    per = T - k + 1
+    t0 = torch.arange(per, device=data['states'].device)
+    cs = F.pad(data['obs_count'].cumsum(1), (1, 0))
+    win = data['start_ok'][:, :per] & ((cs[:, t0 + k + 1] - cs[:, t0 + 1]) > 0)
+    return win.reshape(-1).nonzero().squeeze(1), per
+
+
+class VideoSampler:
+    """Per-rank slices of a (seed, epoch, k) permutation of the valid video windows; independent of WindowSampler's generator."""
+
+    def __init__(self, data, seed: int, rank: int, world: int):
+        self.data, self.seed, self.rank, self.world, self.key = data, seed, rank, world, None
+
+    def set(self, epoch: int, k: int):
+        if self.key == (epoch, k):
+            return
+        self.key = (epoch, k)
+        idx, self.per = video_window_index(self.data, k)
+        if len(idx) == 0:
+            raise RuntimeError(f'no valid video window of horizon {k}: lower --video-horizon or check obs_mask / velocities')
+        g = torch.Generator().manual_seed(self.seed * 1_000_003 + epoch * 1009 + k + 500_009)
+        perm = torch.randperm(len(idx), generator=g)
+        self.pool = idx[(perm[self.rank::self.world] if len(idx) >= self.world else perm).to(idx.device)]
+        self.windows, self.cursor = len(idx), 0
+
+    def next(self, batch: int):
+        flat = self.pool[(self.cursor + torch.arange(batch, device=self.pool.device)) % len(self.pool)]
+        self.cursor += batch
+        return flat // self.per, flat % self.per
+
+
+def gather_video(data, e, t0, k, device):
+    t = t0[:, None] + torch.arange(k + 1, device=t0.device)
+    out = (data['states'][e[:, None], t], data['obs'][e[:, None], t], data['props'][e], data['context'][e], data['mask'][e],
+           data['sigma'][e], data['ori'][e])
+    return tuple(x.to(device, non_blocking=True) for x in out)
+
+
 # ----------------------------------------------------------------------------- losses
 def dynamic_mask(props, context, mask):
     static = props[..., 5] > .5
@@ -317,8 +454,12 @@ def event_frames(data, lead=20, chunk=2048):
     return torch.cat(out)
 
 
-def unroll(model, states, rest, props, context, mask, k, args, amp_dtype, gen=None):
-    """k-step autoregressive loss. Returns (loss, stats[len(TERMS)], bad flag tensor)."""
+def unroll(model, states, rest, props, context, mask, k, args, amp_dtype, gen=None, video=None):
+    """k-step autoregressive loss. Returns (loss, stats[len(TERMS)], bad flag tensor).
+    video: optional (states, obs, props, context, mask, sigma, ori) windows of the same k and slot count. They ride in the
+    same model calls (the model is dispatch-bound, a second unroll would halve the throughput) but are scored only by
+    VideoLoss; every sim term below is computed on the sim rows alone. Then returns
+    (sim loss + --video-weight * video loss, sim stats, bad, video stats[len(VIDEO_TERMS)])."""
     dyn = dynamic_mask(props, context, mask)
     count = dyn.sum().clamp_min(1)
 
@@ -343,15 +484,33 @@ def unroll(model, states, rest, props, context, mask, k, args, amp_dtype, gen=No
     stats = states.new_zeros(len(TERMS))
     bad = torch.zeros((), dtype=torch.bool, device=states.device)
     use_amp = amp_dtype is not None and states.is_cuda
+    if video is not None:
+        rows = states.shape[0]
+        vloss = VideoLoss(*video, args)
+        vcur = video[0][:, 0]
+        props_all, context_all, mask_all = torch.cat((props, video[2])), torch.cat((context, video[3])), torch.cat((mask, video[4]))
     for j in range(k):
         true = states[:, j + 1]
-        with torch.autocast('cuda', dtype=amp_dtype or torch.float16, enabled=use_amp):
-            raw = model.predict_raw(cur, props, context, mask)
-        raw = raw.float()
+        if video is None:
+            with torch.autocast('cuda', dtype=amp_dtype or torch.float16, enabled=use_amp):
+                raw = model.predict_raw(cur, props, context, mask)
+            raw = raw.float()
+        else:
+            cur_all = torch.cat((cur, vcur))
+            with torch.autocast('cuda', dtype=amp_dtype or torch.float16, enabled=use_amp):
+                raw_all = model.predict_raw(cur_all, props_all, context_all, mask_all)
+            raw_all = raw_all.float()
+            raw = raw_all[:rows]
         with torch.no_grad():
             # pushforward-style target: from the model's CURRENT (possibly drifted) input to the TRUE next state
             target = (model.raw_targets(cur.detach(), true, props, context, mask).float() - mean) / std
-        nxt = model.integrate(cur, raw * std + mean, props, context, mask)
+        if video is None:
+            nxt = model.integrate(cur, raw * std + mean, props, context, mask)
+        else:
+            nxt_all = model.integrate(cur_all, raw_all * std + mean, props_all, context_all, mask_all)
+            nxt, vnxt = nxt_all[:rows], nxt_all[rows:]
+            vloss.step(j, vnxt)
+            vcur = vnxt if args.bptt else vnxt.detach()
         wj = None
         if base is not None:
             wj = base
@@ -388,7 +547,72 @@ def unroll(model, states, rest, props, context, mask, k, args, amp_dtype, gen=No
         bad = bad | ~torch.isfinite(nxt).all() | (nxt[..., :3].abs() > 100).any()
         cur = nxt if args.bptt else nxt.detach()
     norm = sum(weights)
+    if video is not None:
+        video_loss, video_stats, video_bad = vloss.result()
+        return total / norm + args.video_weight * video_loss, stats / norm, bad | ~torch.isfinite(total) | video_bad, video_stats
     return total / norm, stats / norm, bad | ~torch.isfinite(total)
+
+
+class VideoLoss:
+    """Loss on video-derived windows, accumulated over the unroll steps.
+    Position-only Huber on (p_pred - p_video)/max(0.02, 2*pos_sigma) at observed frames, a penetration penalty on the
+    PREDICTED state alone (depth beyond 2 mm; there is no trustworthy reference state) and a weak orientation term on
+    objects flagged has_orientation. No velocity / one-step / rest / slide terms: those targets are not trustworthy."""
+
+    def __init__(self, states, obs, props, context, mask, sigma, ori, args):
+        self.states, self.obs, self.props, self.context, self.mask, self.ori, self.args = states, obs, props, context, mask, ori, args
+        self.dyn = dynamic_mask(props, context, mask)
+        self.count = self.dyn.sum().clamp_min(1)
+        self.scale = (2 * sigma).clamp_min(.02)[..., None]
+        zero = states.new_zeros(())
+        self.pos_sum = self.pos_w = self.rot_sum = self.rot_w = self.pen_sum = self.err_sum = self.err_n = zero
+        self.weight_sum = 0.
+        self.bad = torch.zeros((), dtype=torch.bool, device=states.device)
+
+    def step(self, j, nxt):
+        """nxt: the model's prediction for frame j+1 of the window."""
+        weight = self.args.step_decay ** j
+        target = self.states[:, j + 1]
+        seen = (self.obs[:, j + 1] & self.dyn).float()
+        diff = nxt[..., :3] - target[..., :3]
+        self.pos_sum = self.pos_sum + weight * (huber(diff / self.scale).mean(-1) * seen).sum()
+        self.pos_w = self.pos_w + weight * seen.sum()
+        oriented = seen * self.ori
+        self.rot_sum = self.rot_sum + weight * (huber(geodesic(nxt[..., 3:7], target[..., 3:7]) / .3) * oriented).sum()
+        self.rot_w = self.rot_w + weight * oriented.sum()
+        depth = cg.penetration_depths(nxt, self.props, self.context, self.mask)
+        for key in ('support', 'floor', 'objects'):
+            self.pen_sum = self.pen_sum + weight * (huber((depth[key] - .002).clamp_min(0) / .005) * self.dyn).sum() / self.count
+        self.weight_sum += weight
+        self.err_sum = self.err_sum + (diff.detach().norm(dim=-1) * seen).sum()
+        self.err_n = self.err_n + seen.sum()
+        self.bad = self.bad | ~torch.isfinite(nxt).all() | (nxt[..., :3].abs() > 100).any()
+
+    def result(self):
+        """(loss, stats[len(VIDEO_TERMS)], bad flag tensor)"""
+        pos = self.pos_sum / self.pos_w.clamp_min(1e-6)
+        rot = self.rot_sum / self.rot_w.clamp_min(1e-6)
+        pen = self.pen_sum / max(self.weight_sum, 1e-9)
+        loss = self.args.w_pos * pos + self.args.w_pen * pen + self.args.video_w_rot * rot
+        stats = torch.stack([loss.detach(), pos.detach(), pen.detach(), rot.detach(), self.err_sum / self.err_n.clamp_min(1)]).float()
+        return loss, stats, self.bad | ~torch.isfinite(loss)
+
+
+def unroll_video(model, states, obs, props, context, mask, sigma, ori, k, args, amp_dtype):
+    """k-step VideoLoss on video-derived windows alone, unrolled exactly like a sim window from the (already noisy)
+    video state. Used when the video windows cannot share the sim forward (different k, slot count or feature widths).
+    Returns (loss, stats[len(VIDEO_TERMS)], bad flag tensor)."""
+    acc = VideoLoss(states, obs, props, context, mask, sigma, ori, args)
+    mean, std = model.out_mean.float(), model.out_std.float()
+    cur = states[:, 0]
+    use_amp = amp_dtype is not None and states.is_cuda
+    for j in range(k):
+        with torch.autocast('cuda', dtype=amp_dtype or torch.float16, enabled=use_amp):
+            raw = model.predict_raw(cur, props, context, mask)
+        nxt = model.integrate(cur, raw.float() * std + mean, props, context, mask)
+        acc.step(j, nxt)
+        cur = nxt if args.bptt else nxt.detach()
+    return acc.result()
 
 
 class Trainee(nn.Module):
@@ -398,8 +622,16 @@ class Trainee(nn.Module):
         super().__init__()
         self.model, self.args, self.amp_dtype = model, args, amp_dtype
 
-    def forward(self, states, rest, props, context, mask, k, gen):
-        return unroll(self.model, states, rest, props, context, mask, k, self.args, self.amp_dtype, gen)
+    def forward(self, states, rest, props, context, mask, k, gen, video=None):
+        if video is None:
+            return unroll(self.model, states, rest, props, context, mask, k, self.args, self.amp_dtype, gen)
+        # video windows share the forward (one DDP forward per update); the sim loss and its statistics stay separate
+        *windows, kv = video
+        if kv == k and all(a.shape[1:] == b.shape[1:] for a, b in zip(windows[2:5], (props, context, mask))):
+            return unroll(self.model, states, rest, props, context, mask, k, self.args, self.amp_dtype, gen, windows)
+        out = unroll(self.model, states, rest, props, context, mask, k, self.args, self.amp_dtype, gen)
+        loss, stats, bad = unroll_video(self.model, *windows, kv, self.args, self.amp_dtype)
+        return out[0] + self.args.video_weight * loss, out[1], out[2] | bad, stats
 
 
 # ----------------------------------------------------------------------------- schedule
@@ -532,6 +764,64 @@ def validate(model, val, device, args, amp_dtype):
     return out
 
 
+@torch.no_grad()
+def validate_video(model, data, names, device, args, amp_dtype):
+    """Position error (m) of raw rollouts started from video-derived states, against the video-derived positions at
+    observed frames. Reported only: never part of the selection score. `hold` = error of leaving every object at its start."""
+    model.eval()
+    T = data['states'].shape[1] - 1
+    k = min(20, T)                                        # up to 1 s
+    short = min(args.video_horizon or args.horizon, k)
+    idx, per = video_window_index(data, k)
+    if len(idx) == 0:
+        return {'video_val_windows': 0}
+    g = torch.Generator().manual_seed(args.seed + 15485863)
+    idx = idx[torch.randperm(len(idx), generator=g)[:args.val_windows].to(idx.device)]
+    err = torch.zeros(k + 1, device=device)
+    hold = torch.zeros(k + 1, device=device)
+    seen_n = torch.zeros(k + 1, device=device)
+    src_err = torch.zeros(len(names), device=device)
+    src_n = torch.zeros(len(names), device=device)
+    pen_sum = pen_n = 0.
+    for i in range(0, len(idx), 2048):
+        f = idx[i:i + 2048]
+        e = f // per
+        states, obs, props, context, mask, _, _ = gather_video(data, e, f % per, k, device)
+        source = data['source'][e].to(device)
+        dyn = dynamic_mask(props, context, mask)
+        cur = states[:, 0]
+        for j in range(1, k + 1):
+            with torch.autocast('cuda', dtype=amp_dtype or torch.float16, enabled=amp_dtype is not None and device.type == 'cuda'):
+                cur = model(cur, props, context, mask)
+            cur = torch.nan_to_num(cur.float(), nan=1e3, posinf=1e3, neginf=-1e3).clamp(-1e3, 1e3)
+            seen = (obs[:, j] & dyn).float()
+            d = (cur[..., :3] - states[:, j, :, :3]).norm(dim=-1) * seen
+            err[j] += d.sum()
+            hold[j] += ((states[:, 0, :, :3] - states[:, j, :, :3]).norm(dim=-1) * seen).sum()
+            seen_n[j] += seen.sum()
+            if j <= short:
+                src_err.index_add_(0, source, d.sum(-1))
+                src_n.index_add_(0, source, seen.sum(-1))
+                depth = cg.penetration_depths(cur, props, context, mask)
+                worst = torch.maximum(torch.maximum(depth['support'], depth['floor']), depth['objects'])
+                pen_sum += float((torch.nan_to_num(worst, nan=1.) * dyn).sum())
+                pen_n += float(dyn.sum())
+
+    def ratio(a, b):
+        return float(a / b) if float(b) > 0 else float('nan')
+    out = {'video_val_windows': int(len(idx)), 'video_val_horizon': short,
+           'video_val_pos_err_k': ratio(err[1:short + 1].sum(), seen_n[1:short + 1].sum()),
+           'video_val_hold_err_k': ratio(hold[1:short + 1].sum(), seen_n[1:short + 1].sum()),
+           'video_val_penetration': pen_sum / max(pen_n, 1)}
+    for j, name in ((10, '0.5s'), (20, '1s')):
+        if j <= k:
+            out[f'video_val_pos_err_{name}'] = ratio(err[j], seen_n[j])
+            out[f'video_val_hold_err_{name}'] = ratio(hold[j], seen_n[j])
+    for i, name in enumerate(names):
+        out[f'video_val_pos_err_k/{name}'] = ratio(src_err[i], src_n[i])
+    return out
+
+
 # ----------------------------------------------------------------------------- io
 def atomic_save(obj, path: Path):
     tmp = path.with_name(path.name + f'.tmp{os.getpid()}')
@@ -642,6 +932,43 @@ def main():
             f'loaded in {time.time() - t:.1f}s; active frames {float(train["active"].float().mean()):.3f}')
         val = to_device(load_split(args.data, 'val', args.max_val_episodes, args.load_threads, need_meta=True), device)
         log(f'[data] val episodes={val["states"].shape[0]} chaotic={int(val["chaotic"].sum())}')
+    # ---- video-derived data (opt-in)
+    if not 0 <= args.video_frac < 1:
+        raise SystemExit('--video-frac must be in [0, 1)')
+    if args.video_frac > 0 and not args.video_data:
+        raise SystemExit('--video-frac > 0 needs --video-data')
+    video_batch = int(round(args.batch * args.video_frac))
+    if args.video_frac > 0 and not 0 < video_batch < args.batch:
+        raise SystemExit(f'--video-frac {args.video_frac} of --batch {args.batch} gives {video_batch} video windows; need 1..batch-1')
+    vtrain = vsampler = vval = None
+    vnames = []
+    if video_batch:
+        vtrain_np, vnames_train = load_video_split(args.video_data, 'train', args.load_threads, train['states'].shape[2])  # sim slot count: shared model calls
+        if vtrain_np is None:
+            raise SystemExit(f'no train shards under {args.video_data}')
+        vtrain = to_device(vtrain_np, data_device)
+        del vtrain_np
+        vsampler = VideoSampler(vtrain, args.seed, rank, world)
+        if main_rank:
+            vT = vtrain['states'].shape[1] - 1
+            log(f'[video] train sources {vnames_train}: episodes={vtrain["states"].shape[0]} T={vT} slots={vtrain["states"].shape[2]}; '
+                f'valid start frames {float(vtrain["start_ok"].float().mean()):.3f}; median pos_sigma {float(vtrain["sigma"][vtrain["mask"]].median()):.4f} m; '
+                f'objects with orientation {float(vtrain["ori"][vtrain["mask"]].float().mean()):.2f}')
+            log(f'[video] {video_batch} of {args.batch} windows per rank per update are video windows; total loss = sim + {args.video_weight} * video '
+                f'(position-only Huber at observed frames + predicted-state penetration + {args.video_w_rot} * orientation where flagged); '
+                f'video horizon {args.video_horizon or "follows the sim k"}; selection score is the SIM score only')
+            if vtrain['states'].shape[2] != train['states'].shape[2] or any(vtrain[key].shape[-1] != train[key].shape[-1] for key in ('props', 'context')):
+                log('[video] NOTE slot count or props/context width differs from the sim data: video windows get their own unroll (about half the throughput)')
+            elif args.video_horizon:
+                log('[video] NOTE with --video-horizon different from the sim k the video windows get their own unroll (about half the throughput)')
+    if args.video_data and main_rank:
+        vval_np, vnames = load_video_split(args.video_data, 'val', args.load_threads)
+        if vval_np is not None:
+            vval = to_device(vval_np, device)
+            log(f'[video] val sources {vnames}: episodes={vval["states"].shape[0]} (reported only, never scored)')
+            del vval_np
+        else:
+            log('[video] no val split under --video-data: no video validation')
     events = event_frames(train) if args.event_frac > 0 else None
     sampler = WindowSampler(train.pop('active'), args.seed, rank, world, events, args.event_frac)
     if main_rank and events is not None:
@@ -734,6 +1061,9 @@ def main():
     budget = args.max_minutes * 60 if args.max_minutes > 0 else None
     stop = False
     width = len(TERMS) + 4                                 # + dropped, skipped, stop, wall-clock progress
+    vslot = width                                          # video statistics are appended only when video windows are in use
+    if video_batch:
+        width += len(VIDEO_TERMS)
     progress = 0.                                          # elapsed/budget, shared by all ranks at log intervals
 
     for epoch in range(start_epoch, args.epochs):
@@ -741,6 +1071,7 @@ def main():
         gen.manual_seed(args.seed * 1_000_003 + epoch * 7919 + rank * 104_729 + 17)
         accum = torch.zeros(width, device=device)
         epoch_stats = torch.zeros(len(TERMS), device=device)
+        epoch_vstats = torch.zeros(len(VIDEO_TERMS), device=device)
         epoch_logs = 0
         epoch_start = interval_start = time.time()
         interval_updates = 0
@@ -751,9 +1082,15 @@ def main():
             lr = lr_at(global_step, total_updates, args, progress)
             for group in optimizer.param_groups:
                 group['lr'] = lr
-            e, t0 = sampler.next(args.batch)
+            e, t0 = sampler.next(args.batch - video_batch)
             batch = gather(train, e, t0, k, device, args.rest_lookahead)
-            loss, stats, bad = net(*batch, k, gen)
+            if video_batch:
+                kv = min(args.video_horizon or k, vtrain['states'].shape[1] - 1)
+                vsampler.set(epoch, kv)
+                ve, vt = vsampler.next(video_batch)
+                loss, stats, bad, vstats = net(*batch, k, gen, gather_video(vtrain, ve, vt, kv, device) + (kv, ))
+            else:
+                loss, stats, bad = net(*batch, k, gen)
             optimizer.zero_grad(set_to_none=True)
             if bool(bad):
                 # keep the DDP reduction in lock-step: this rank contributes zero gradients
@@ -761,6 +1098,8 @@ def main():
                 accum[len(TERMS)] += 1
             else:
                 accum[:len(TERMS)] += stats
+                if video_batch:
+                    accum[vslot:] += vstats
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             norm = nn.utils.clip_grad_norm_(model.parameters(), args.clip)
@@ -798,6 +1137,9 @@ def main():
                     row = dict(step=global_step, epoch=epoch + 1, k=k, lr=lr, windows_per_sec=wps, windows_per_sec_per_gpu=wps / world,
                                dropped_batches=dropped_total, skipped_updates=skipped_total, minutes=(time.time() - start_wall) / 60,
                                **{name: values[i] / good for i, name in enumerate(TERMS)})
+                    if video_batch:
+                        row.update({name: values[vslot + i] / good for i, name in enumerate(VIDEO_TERMS)}, video_k=kv)
+                        epoch_vstats += accum[vslot:] / good
                     log_file.write(json.dumps(clean(row)) + '\n')
                     log_file.flush()
                     epoch_stats += accum[:len(TERMS)] / good
@@ -805,7 +1147,9 @@ def main():
                     if epoch_logs % 5 == 1:
                         log(f'  e{epoch + 1} u{update + 1}/{updates_per_epoch} k={k} loss={row["loss"]:.4f} one={row["one"]:.4f} '
                             f'pos={row["pos"]:.4f} pen={row["pen"]:.4f} rest={row["rest"]:.4f} slide={row["slide"]:.4f} lr={lr:.2e} '
-                            f'{wps:,.0f} win/s ({wps / world:,.0f}/gpu) dropped={dropped_total}')
+                            f'{wps:,.0f} win/s ({wps / world:,.0f}/gpu) dropped={dropped_total}'
+                            + (f' | video k={kv} loss={row["video_loss"]:.4f} pos={row["video_pos"]:.4f} pen={row["video_pen"]:.4f} '
+                               f'rot={row["video_rot"]:.4f} err={row["video_err_m"] * 100:.2f}cm' if video_batch else ''))
                 accum.zero_()
                 interval_updates = 0
                 interval_start = time.time()
@@ -821,6 +1165,10 @@ def main():
             metrics = validate(ema, val, device, args, amp_dtype)
             metrics.update(epoch=epoch + 1, step=global_step, k=k, train_seconds=train_time, val_seconds=time.time() - t,
                            **{f'train_{name}': float(v) / max(epoch_logs, 1) for name, v in zip(TERMS, epoch_stats)})
+            if video_batch:
+                metrics.update({f'train_{name}': float(v) / max(epoch_logs, 1) for name, v in zip(VIDEO_TERMS, epoch_vstats)})
+            if vval is not None:     # reported only; metrics['score'] (the selection score) is the simulator score, untouched
+                metrics.update(validate_video(ema, vval, vnames, device, args, amp_dtype))
             improved = metrics['score'] < best
             best = min(best, metrics['score'])
             ship = shipped(ema, config, epoch + 1, args, metrics)
@@ -839,6 +1187,14 @@ def main():
                 f'fall P/R={metrics["fall_precision"]:.3f}/{metrics["fall_recall"]:.3f} (on {metrics["fall_precision_on"]:.3f}/{metrics["fall_recall_on"]:.3f}) '
                 f'score={metrics["score"]:.4f}'
                 f'{" *best*" if improved else ""} train {train_time:.0f}s val {metrics["val_seconds"]:.0f}s')
+            if video_batch or vval is not None:
+                def cm(key):
+                    v = metrics.get(key)
+                    return 'n/a' if v is None or v != v else f'{v * 100:.2f}cm'
+                log(f'[epoch {epoch + 1}] video (not scored): train loss={metrics.get("train_video_loss", float("nan")):.4f} err={cm("train_video_err_m")}; '
+                    f'val windows={metrics.get("video_val_windows", 0)} pos err k{metrics.get("video_val_horizon", 0)}={cm("video_val_pos_err_k")} '
+                    f'(hold {cm("video_val_hold_err_k")}) 0.5s={cm("video_val_pos_err_0.5s")} 1s={cm("video_val_pos_err_1s")} (hold {cm("video_val_hold_err_1s")}) '
+                    f'pen={metrics.get("video_val_penetration", float("nan")) * 1000:.2f}mm')
             if monitor:
                 log(f'[epoch {epoch + 1}] {monitor.summary()}')
         if stop:

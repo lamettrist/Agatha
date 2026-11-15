@@ -94,6 +94,12 @@ def parse_args():
                    help='warm-start model + EMA weights, normalizer and model config from a shipped-format soft_gnn checkpoint '
                         '(fresh optimizer and schedule); ignored when --resume finds <out>/last.pt')
     p.add_argument('--start-horizon', type=int, default=0, help='lower bound on the curriculum horizon k (0 = normal curriculum)')
+    p.add_argument('--late-horizon', type=int, default=0, help='round 2: unroll horizon k used from --late-from of the schedule on (0 = off; e.g. 8)')
+    p.add_argument('--late-from', type=float, default=.6, help='fraction of the schedule (updates or wall-clock budget) at which --late-horizon starts')
+    p.add_argument('--late-batch', type=int, default=0, help='windows per GPU per update while k > --horizon (0 = --batch); memory grows with batch * k')
+    p.add_argument('--box-frac', type=float, default=0., help='round 2: fraction of every batch drawn from windows in which a soft vertex is within '
+                                                              '--box-gap of a rigid box (box-contact windows have 2-3x the rollout error)')
+    p.add_argument('--box-gap', type=float, default=.02, help='m: distance to a box that makes a frame a box-contact frame')
     # model
     p.add_argument('--width', type=int, default=128)
     p.add_argument('--rounds', type=int, default=6)
@@ -258,6 +264,42 @@ def gather(data, e, t0, k, device):
 def episodes(data, sl, device):
     """Whole-episode batch dict (all frames) for the slice / index `sl`."""
     return {key: data[key][sl].to(device) for key in TENSOR_KEYS}
+
+
+@torch.no_grad()
+def box_contact_frames(data, gap=.02, chunk=64):
+    """bool [E,T+1]: some real soft vertex is within `gap` metres of a rigid obstacle (true trajectory)."""
+    verts, states = data['verts'], data['states']
+    E, T1 = verts.shape[:2]
+    out = torch.zeros(E, T1, dtype=torch.bool, device=verts.device)
+    if states.shape[2] == 0:
+        return out
+    for e in data['mask'].any(1).nonzero().squeeze(1).split(chunk):
+        n = len(e)
+        v = verts[e].float().flatten(0, 1)
+        state = states[e].float().flatten(0, 1)
+        rep = lambda x: x[e][:, None].expand(-1, T1, *x.shape[1:]).flatten(0, 1)
+        props, mask, context, vm = rep(data['props']), rep(data['mask']), rep(data['context']), rep(data['vert_mask'])
+        state, props, mask = sg._rigid(len(v), v.device, state, props, mask)
+        sdf = sg._box_point_sdf(v, state, props)[0]
+        ok = sg._obstacles(state, props, mask, sg._context(context))[:, None, :] & vm[:, :, None]
+        out[e] = ((sdf < gap) & ok).flatten(1).any(1).reshape(n, T1)
+    return out
+
+
+def soft_horizon(step, total, horizon, progress, args):
+    """Curriculum of the contact trainer, plus --late-horizon from --late-from of the schedule on."""
+    k = horizon_at(step, total, horizon, progress, args.start_horizon)
+    if args.late_horizon > 0 and max(step / max(total, 1), progress) >= args.late_from:
+        k = max(k, args.late_horizon)
+    return k
+
+
+def draw_active(sampler, n):
+    """n windows from a WindowSampler's event pool only (its `active` list), with its own cursor."""
+    flat = sampler.active[(sampler.ca + torch.arange(n, device=sampler.frames.device)) % len(sampler.active)]
+    sampler.ca += n
+    return flat // sampler.per, flat % sampler.per
 
 
 # ----------------------------------------------------------------------------- model calls
@@ -596,10 +638,23 @@ def main():
     # the sampler sees frames 1..T, so its t0' = t0-1 and every window has the previous frame t0-1 >= 0
     active = train.pop('active')[:, 1:]
     sampler = WindowSampler(active, args.seed, rank, world, event_frames=~active if args.rest_frac > 0 else None, event_frac=args.rest_frac)
+    box_sampler = None
+    if args.box_frac > 0:
+        near = box_contact_frames(train, args.box_gap)
+        if bool(near.any()):
+            box_sampler = WindowSampler(near[:, 1:], args.seed + 53, rank, world)
+        if main_rank:
+            log(f'[data] box-contact frames (a vertex within {args.box_gap} m of a box): {float(near.float().mean()):.3f} of all frames, '
+                f'{float(near.any(1).float().mean()):.3f} of the episodes; batch fraction {args.box_frac if box_sampler else 0}')
+        del near
+    args.late_horizon = max(0, min(args.late_horizon, T - 1, extra['verts'].shape[1] - 2 if use_extra else T - 1))
     if use_extra:
         horizon = max(1, min(horizon, extra['verts'].shape[1] - 2))
         extra_sampler = WindowSampler(extra.pop('active')[:, 1:], args.seed + 31, rank, world)
-    n_extra = min(args.batch - 1, max(1, int(round(args.batch * args.extra_frac)))) if use_extra else 0
+    def mix(batch_size):                                   # (extra-data windows, box-contact windows) of one batch
+        n_extra = min(batch_size - 1, max(1, int(round(batch_size * args.extra_frac)))) if use_extra else 0
+        n_box = min(batch_size - n_extra - 1, int(round(batch_size * args.box_frac))) if box_sampler is not None else 0
+        return n_extra, max(n_box, 0)
 
     # ---- model
     last_path = args.out / 'last.pt'
@@ -681,6 +736,7 @@ def main():
         log(f'[schedule] warmup {args.warmup} updates ({100 * args.warmup / max(total_updates, 1):.1f}% of total'
             f'{f"; capped from {requested_warmup}" if args.warmup != requested_warmup else ""}); cosine to lr_min={args.lr_min}; '
             f'horizon k=1/2/4/{horizon} (capped at {horizon}) from 0/5/15/35% of the schedule'
+            + (f', k={args.late_horizon} from {100 * args.late_from:.0f}% on (batch {args.late_batch or args.batch}/GPU there)' if args.late_horizon > horizon else '')
             + (f'; schedule is also driven by the {args.max_minutes:g} min wall-clock budget' if args.max_minutes > 0 else ''))
         if total_updates < 2000:
             log(f'[schedule] WARNING only {total_updates} optimizer updates in total: raise --epochs/--windows-per-epoch or lower --batch')
@@ -698,19 +754,27 @@ def main():
         net.train()
         gen.manual_seed(args.seed * 1_000_003 + epoch * 7919 + rank * 104_729 + 17)
         accum = torch.zeros(width, device=device)
+        interval_windows = 0
         epoch_stats = torch.zeros(len(TERMS), device=device)
         epoch_logs = 0
         epoch_start = interval_start = time.time()
         interval_updates = 0
-        k = horizon_at(global_step, total_updates, horizon, progress, args.start_horizon)
+        k = soft_horizon(global_step, total_updates, horizon, progress, args)
         lr = args.lr
         for update in range(updates_per_epoch):
-            k = horizon_at(global_step, total_updates, horizon, progress, args.start_horizon)
+            k = soft_horizon(global_step, total_updates, horizon, progress, args)
             sampler.set(epoch, k)
             lr = lr_at(global_step, total_updates, args, progress)
             for group in optimizer.param_groups:
                 group['lr'] = lr
-            e, t0 = sampler.next(args.batch - n_extra)
+            batch_size = args.late_batch if args.late_batch > 0 and k > horizon else args.batch
+            n_extra, n_box = mix(batch_size)
+            interval_windows += batch_size
+            e, t0 = sampler.next(batch_size - n_extra - n_box)
+            if n_box:
+                box_sampler.set(epoch, k)
+                eb, tb = draw_active(box_sampler, n_box)
+                e, t0 = torch.cat((e, eb)), torch.cat((t0, tb))
             batch = gather(train, e, t0 + 1, k, device)
             if n_extra:
                 extra_sampler.set(epoch, k)
@@ -755,7 +819,7 @@ def main():
                 progress = min(1., values[len(TERMS) + 3])
                 if main_rank:
                     elapsed = time.time() - interval_start
-                    wps = interval_updates * args.batch * world / max(elapsed, 1e-9)
+                    wps = interval_windows * world / max(elapsed, 1e-9)
                     dropped_total += int(values[len(TERMS)])
                     skipped_total += int(values[len(TERMS) + 1] / world)
                     row = dict(step=global_step, epoch=epoch + 1, k=k, lr=lr, windows_per_sec=wps, windows_per_sec_per_gpu=wps / world,
@@ -770,7 +834,7 @@ def main():
                             f'pos={row["pos"]:.4f} strain={row["strain"]:.4f} pen={row["pen"]:.4f} rest={row["rest"]:.4f} lr={lr:.2e} '
                             f'{wps:,.0f} win/s ({wps / world:,.0f}/gpu) dropped={dropped_total}')
                 accum.zero_()
-                interval_updates = 0
+                interval_updates = interval_windows = 0
                 interval_start = time.time()
                 if stop:
                     break

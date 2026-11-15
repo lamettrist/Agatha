@@ -420,6 +420,18 @@ class JB:
             art.lin = horizontal(rng.uniform(-math.pi, math.pi))*float(rng.uniform(.3, 2.5))
             if rng.random() < .25: art.ang = np.array([0., rng.uniform(-4, 4), 0.])
             return True
+        if mode == "nudge":      # round 2: slow slide that stops on the table (0.05-0.6 m/s), sometimes a slow yaw
+            if not self.place(art, inset=.06): return False
+            art.lin = horizontal(rng.uniform(-math.pi, math.pi))*float(rng.uniform(.05, .6))
+            if rng.random() < .3: art.ang = np.array([0., rng.uniform(-1.5, 1.5), 0.])
+            return True
+        if mode == "edge_safe":  # round 2: at / over an edge with the COM well on the table; at rest, or pushed slowly along / away from the edge
+            if not self.place_edge(art, float(rng.uniform(-.03, .3))): return False
+            r = rng.random(); n = art.edge_normal; tangent = np.array([n[2], 0., n[0]])
+            if r < .35: art.lin = tangent*float(rng.uniform(-.6, .6))
+            elif r < .6: art.lin = -n*float(rng.uniform(.05, .8))+tangent*float(rng.uniform(-.3, .3))
+            elif r < .75: art.lin = n*float(rng.uniform(.02, .2))
+            return True
         if mode == "edge":
             if not self.place_edge(art, float(rng.uniform(-.05, .42))): return False
             if rng.random() < .7:
@@ -480,7 +492,7 @@ class JB:
 
 
 # ----------------------------------------------------------------------------- scenarios
-def _lidded(b: JB, base_size, lid_thickness, base_mass, lid_mass, upper, modes, weights):
+def _lidded(b: JB, base_size, lid_thickness, base_mass, lid_mass, upper, modes, weights, calm=False):
     """Base box + a lid hinged along the back top edge (laptop, box with a lid)."""
     rng = b.rng; w, tb, d = base_size; a = Art(b)
     base = a.root((w, tb, d), base_mass)
@@ -489,9 +501,13 @@ def _lidded(b: JB, base_size, lid_thickness, base_mass, lid_mass, upper, modes, 
     q0 = 0. if r < .15 else float(np.clip(rng.normal(math.pi/2, .15), 0, upper)) if r < .35 else float(rng.uniform(0, upper))
     qd0 = 0.
     if mode == "lid_push" or rng.random() < .15: qd0 = float(rng.uniform(-6, 6))
+    if calm:   # round 2: lids at their stops (closed 40% / fully open 20%), released slowly near a stop, or let go anywhere
+        r = rng.random()
+        q0 = 0. if r < .4 else upper if r < .6 else float(rng.uniform(0, .25)) if r < .7 else float(rng.uniform(max(upper-.3, 0), upper)) if r < .8 else float(rng.uniform(0, upper))
+        qd0 = float(rng.uniform(-1.5, 1.5)) if mode == "lid_slow" else 0.
     a.link(base, (w*b.U(.97, 1.), lid_thickness, d*b.U(.97, 1.)), lid_mass, "hinge", (0, tb/2, -d/2), (0, -lid_thickness/2, -d/2),
            axis=(-1, 0, 0), lower=0., upper=upper, damping=loguniform(rng, .002, .3), q0=q0, qd0=qd0)
-    if mode in ("lid_push", "hit"): ok = b.stage(a, "rest")
+    if mode in ("lid_push", "hit", "lid_slow"): ok = b.stage(a, "rest")
     else: ok = b.stage(a, mode)
     if not ok: b.ok = False; return None
     if mode == "hit": b.throw_at(b.centre(a))
@@ -503,6 +519,19 @@ def s_laptop(b: JB):
                 math.radians(b.U(105, 140)), ["rest", "lid_push", "push", "edge", "drop", "toss", "hit"],
                 [.18, .17, .2, .2, .1, .05, .1])
     if a is not None: b.add_free(int(rng.integers(0, 4)))
+
+def s_lid_calm(b: JB):
+    """Round 2: laptops (60%) / lidded boxes that stay on the table: resting, nudged, at an edge without falling, lid at
+    a stop or closing slowly (the round-1 model slid closed laptops off the table and let resting lids creep)."""
+    rng = b.rng; modes = ["rest", "nudge", "edge_safe", "lid_slow"]; weights = [.2, .3, .3, .2]
+    if rng.random() < .6:
+        a = _lidded(b, (b.U(.25, .38), b.U(.012, .025), b.U(.18, .27)), b.U(.005, .012), b.U(.6, 1.6), b.U(.15, .6),
+                    math.radians(b.U(105, 140)), modes, weights, calm=True)
+    else:
+        size = (b.U(.1, .3), b.U(.06, .2), b.U(.1, .3)); thickness = b.U(.008, .025)
+        a = _lidded(b, size, thickness, b.link_mass(size, lo=.15, hi=3.), b.link_mass((size[0], thickness, size[2]), lo=.03, hi=1.),
+                    math.radians(b.U(95, 175)), modes, weights, calm=True)
+    if a is not None: b.add_free(int(rng.integers(0, 3)))
 
 def s_box_lid(b: JB):
     rng = b.rng; size = (b.U(.1, .3), b.U(.06, .2), b.U(.1, .3)); thickness = b.U(.008, .025)
@@ -599,10 +628,11 @@ def s_pendulum(b: JB):
         return
     b.ok = False
 
-def s_chain(b: JB):
+def s_chain(b: JB, calm=False):
     rng = b.rng; n = int(rng.integers(3, 7)); a = Art(b)
     style = str(rng.choice(["ball", "hinge", "alternate"], p=[.45, .25, .3]))
     mode = str(rng.choice(["hang", "drape", "lie_push", "drop", "toss"], p=[.3, .22, .13, .22, .13]))
+    if calm: mode = str(rng.choice(["drape", "lie_push", "drop"], p=[.4, .4, .2]))   # round 2: slow settling on the table
     length = b.U(.06, .14); thick = b.U(.018, .04); density = loguniform(rng, 300, 3000)
     limited = style != "ball" and rng.random() < .5; limit = b.U(1., 2.6)
     damping = loguniform(rng, 1e-4, .02)
@@ -646,16 +676,19 @@ def s_chain(b: JB):
         if straight:
             a.root_q = q_axis((0, 0, 1), math.pi/2)   # the chain extends along local +x, lying on a side face
             if mode == "drape":
-                ok = b.place_edge(a, b.U(.3, .78), forward=(1, 0, 0) if rng.random() < .5 else (-1, 0, 0))
-                if ok and rng.random() < .3: a.lin = a.edge_normal*b.U(.2, 1.2)
+                ok = b.place_edge(a, b.U(.05, .45) if calm else b.U(.3, .78), forward=(1, 0, 0) if rng.random() < .5 else (-1, 0, 0))
+                if ok and rng.random() < .3: a.lin = a.edge_normal*(b.U(-.4, .15) if calm else b.U(.2, 1.2))
             else:
                 ok = b.place(a)
                 if ok:
                     a.lin = horizontal(rng.uniform(-math.pi, math.pi))*b.U(.3, 2.5)
                     if rng.random() < .5: a.ang = np.array([0., rng.uniform(-6, 6), 0.])
+                    if calm: a.lin, a.ang = a.lin*b.U(0, .25), a.ang*b.U(0, .25)
+        elif calm:   # folded chain let go just above the table: link-link contacts, then rest
+            ok = b.place(a, gap=b.U(.0, .04), inset=.08, tilt=q_axis(horizontal(rng.uniform(-math.pi, math.pi)), math.pi/2+b.U(-.3, .3)))
         else: ok = b.stage(a, mode)
         if not ok: b.ok = False; return
-        if rng.random() < .25:
+        if rng.random() < .25 and not calm:
             a.kicks.append((int(rng.integers(n)), a.bodies[0]["mass"]*rng.normal(size=3)*b.U(.5, 2.)))
     b.add_free(int(rng.integers(0, 4)))
 
@@ -667,7 +700,7 @@ def _clear_of_table(self, art):
     return True
 JB._clear_of_table = _clear_of_table
 
-def s_robot_arm(b: JB):
+def s_robot_arm(b: JB, calm=False):
     rng = b.rng; n = int(rng.integers(2, 5))
     base_size = np.array([b.U(.08, .16), b.U(.03, .1), b.U(.08, .16)])
     stiff = rng.random() < .15; density = loguniform(rng, 300, 2500)
@@ -687,6 +720,9 @@ def s_robot_arm(b: JB):
         elif r < .8: limits.append((-HINGE_FREE, HINGE_FREE))
         else: limits.append((-b.U(.2, 1.5), b.U(1.5, 2.9)))
     dampings = [b.U(.3, 1.5) if stiff else loguniform(rng, .001, .3) for _ in range(n)]
+    if calm:   # round 2: arms that settle slowly (stiff joints 50%) or start folded onto a limit / hanging down, and then REST
+        stiff = rng.random() < .5; dampings = [b.U(.3, 1.5) if stiff else loguniform(rng, .02, .3) for _ in range(n)]
+        calm_style = str(rng.choice(["limit", "small", "any"], p=[.35, .3, .35]))
     pad = n <= 3 and rng.random() < .3
     pad_size = np.array([b.U(.05, .1), b.U(.02, .04), b.U(.05, .1)])
     for _ in range(40):
@@ -696,6 +732,11 @@ def s_robot_arm(b: JB):
             lo, hi = max(limits[i][0], -3.), min(limits[i][1], 3.)
             q0 = float(rng.uniform(lo, hi)) if rng.random() < .9 else float(rng.uniform(-.3, .3))
             qd0 = float(rng.uniform(-3, 3)) if rng.random() < .15 else 0.
+            if calm:
+                qd0 = 0.
+                if calm_style == "limit" and limits[i][1] < HINGE_FREE-1e-6: q0 = float(rng.choice([lo, hi]))
+                if calm_style == "limit" and limits[i][1] < HINGE_FREE-1e-6: q0 = float(np.clip(q0+rng.uniform(-.15, .15), lo, hi))
+                if calm_style == "small": q0 = float(np.clip(rng.normal(0, .25), lo, hi))
             parent = a.link(parent, size, b.link_mass(size, density, lo=.05, hi=3.), "hinge", anchor, (0, -lengths[i]/2, 0), axis=axes[i],
                             lower=limits[i][0], upper=limits[i][1], damping=dampings[i], q0=q0, qd0=qd0)
             anchor = (0, lengths[i]/2, 0)
@@ -707,20 +748,22 @@ def s_robot_arm(b: JB):
     reach = sum(lengths)
     for _ in range(int(rng.integers(0, 4))):
         b.add_free(1, near=(a.t[0], a.t[2], reach+.05) if rng.random() < .8 else None)
-    if rng.random() < .12: b.throw_at(b.centre(a))
+    if rng.random() < .12 and not calm: b.throw_at(b.centre(a))
 
-def s_ragdoll(b: JB):
+def s_ragdoll(b: JB, calm=False):
     rng = b.rng; s = b.U(.45, .8); a = Art(b); density = loguniform(rng, 250, 1100)
     mode = str(rng.choice(["drop", "toss", "sit", "stand", "lie"], p=[.3, .15, .2, .15, .2]))
+    if calm: mode = str(rng.choice(["sit_in", "lie", "stand", "drop_low"], p=[.3, .3, .2, .2]))   # round 2: at rest / slowly toppling
     loose = mode in ("drop", "toss")
     def mass(size): return b.link_mass(size, density*b.U(.8, 1.2), lo=.03, hi=5.)
     def damp(): return loguniform(rng, .001, .05)
     def hinge_q(lower, upper, sit=None):
         if mode == "sit" and sit is not None: return float(sit+rng.normal(0, .08))
+        if mode == "sit_in" and sit is not None: return float(np.clip((sit if sit < 0 else 0.)+rng.normal(0, .08), lower, upper))  # legs straight ahead on the table
         if loose: return float(rng.uniform(lower, upper)*.6)
         return float(np.clip(rng.normal(0, .08), lower, upper))
     def ball_q(sit=None):
-        if mode == "sit" and sit is not None: return qmul(q_axis((1, 0, 0), sit), q_axis(rng.normal(size=3), abs(rng.normal(0, .08))))
+        if mode in ("sit", "sit_in") and sit is not None: return qmul(q_axis((1, 0, 0), sit), q_axis(rng.normal(size=3), abs(rng.normal(0, .08))))
         return q_axis(rng.normal(size=3), rng.uniform(0, .8) if loose else abs(rng.normal(0, .08)))
     def joint(kind, lower, upper, sit=None):
         if kind == "ball": return dict(kind="ball", damping=damp(), q0=ball_q(sit))
@@ -744,6 +787,29 @@ def s_ragdoll(b: JB):
         a.link(thigh, (sw, sl, sw), mass((sw, sl, sw)), anchor_parent=(0, -tl/2, 0), anchor_child=(0, sl/2, 0),
                **joint("hinge", -.05, 2.4, sit=math.pi/2))
     if mode in ("drop", "toss"): ok = b.stage(a, mode)
+    elif mode == "drop_low":   # let go flat, a few cm above the middle of the table: lands, limbs settle, stays up
+        a.root_q = q_axis((1, 0, 0), -math.pi/2 if rng.random() < .7 else math.pi/2)
+        ok = b.place(a, gap=b.U(.005, .08), inset=.05)
+    elif mode == "sit_in":     # sitting in the middle of the table, legs on the table: rests, or slowly topples back / sideways
+        ok = False
+        for _ in range(20):
+            normal, reach, half = b.edge(); tangent = np.array([normal[2], 0., normal[0]])
+            a.q = q_yaw(math.atan2(normal[0], normal[2]))
+            a.t = normal*(reach-tl-sl-b.U(.03, .2))+tangent*float(rng.uniform(-half+tw, half-tw))
+            a.t[1] = b.h+th/2+lw/2+CLEARANCE+.001
+            if abs(a.t[0]) < b.w/2-.05 and abs(a.t[2]) < b.d/2-.05 and b.free(a): ok = b.commit(a); break
+        if ok and rng.random() < .4: a.lin = horizontal(rng.uniform(-math.pi, math.pi))*b.U(.05, .4)
+    elif mode == "stand" and calm:   # standing, barely pushed: a slow topple
+        ok = b.place(a, inset=.1)
+        if ok and rng.random() < .7: a.lin = horizontal(rng.uniform(-math.pi, math.pi))*b.U(.02, .3)
+    elif mode == "lie" and calm:     # lying in the middle (70%) or at an edge with the COM on the table, at rest or nudged
+        a.root_q = q_axis((1, 0, 0), -math.pi/2)
+        if rng.random() < .3:
+            ok = b.place_edge(a, b.U(-.03, .25))
+            if ok and rng.random() < .5: a.lin = -a.edge_normal*b.U(.05, .6)
+        else:
+            ok = b.place(a, inset=.05)
+            if ok and rng.random() < .6: a.lin = horizontal(rng.uniform(-math.pi, math.pi))*b.U(.05, .5)
     elif mode == "stand":
         ok = b.place(a)
         if ok:
@@ -770,12 +836,18 @@ def s_ragdoll(b: JB):
             ok = b.place(a)
             if ok and rng.random() < .6: a.lin = horizontal(rng.uniform(-math.pi, math.pi))*b.U(.3, 2.)
     if not ok: b.ok = False; return
-    if rng.random() < .12: b.throw_at(b.centre(a))
+    if rng.random() < .12 and not calm: b.throw_at(b.centre(a))
     b.add_free(int(rng.integers(0, 3)))
+
+def s_chain_calm(b: JB): s_chain(b, calm=True)
+def s_arm_calm(b: JB): s_robot_arm(b, calm=True)
+def s_ragdoll_calm(b: JB): s_ragdoll(b, calm=True)
 
 
 SCENARIOS = dict(laptop=s_laptop, box_lid=s_box_lid, door=s_door, drawer=s_drawer, pendulum=s_pendulum, chain=s_chain,
-                 robot_arm=s_robot_arm, ragdoll=s_ragdoll)
+                 robot_arm=s_robot_arm, ragdoll=s_ragdoll,
+                 # round 2 (never drawn by the default KIND_WEIGHTS, so data/joints_v1 stays reproducible): targeted 'calm' variants
+                 lid_calm=s_lid_calm, chain_calm=s_chain_calm, arm_calm=s_arm_calm, ragdoll_calm=s_ragdoll_calm)
 
 
 # ----------------------------------------------------------------------------- Bullet world

@@ -137,8 +137,17 @@ def parse_args():
     p.add_argument('--joint-one-delta', type=float, default=0.0,
                    help='TRAIN-ONLY Huber delta (target sigmas) of the one-step term for bodies that belong to an articulation (0 = --one-delta). '
                         'Measured on data/joints_v1 with the inherited box normaliser: articulated bodies have rms normalised targets of 2.5-2.7 '
-                        '(boxes 1.0-1.1), 14% / 9% of their dv / dw components beyond 1 sigma (boxes 3% / 1%), p99 10 sigma; '
+                        '(boxes 1.0-1.1), 14%% / 9%% of their dv / dw components beyond 1 sigma (boxes 3%% / 1%%), p99 10 sigma; '
                         'chain and ragdoll are the extreme (rms 2.8-3.9).')
+    # round 2 (defaults reproduce round 1 exactly)
+    p.add_argument('--joint-rest', type=int, default=0,
+                   help='TRAIN-ONLY, 1 = the rest / slide penalties also cover bodies of an articulation that are truly slow (|v| < 0.01 m/s, '
+                        '|w| < 0.05 rad/s) on BOTH frames of a step WITHOUT being in contact (the dataset rest flag needs a contact, so a lid '
+                        'on its stop or an arm link held by its joints was never asked to stand still: measured resting-hinge creep)')
+    p.add_argument('--grow-rounds', type=int, default=0,
+                   help='with --init: append this many message-passing rounds to the checkpoint model. They start as the identity (final '
+                        'LayerNorm zeroed) and, with shared_rounds > 0, are gated to scenes with a joint like the other extra rounds, so the '
+                        'start is exactly the checkpoint and joint-free scenes keep the box computation')
     p.add_argument('--inherit-lr-scale', type=float, default=1.0,
                    help='LR multiplier for the weights inherited from the contact_gnn warm start (new joint modules and extra rounds use --lr); 0 = frozen')
     p.add_argument('--inherit-freeze-updates', type=int, default=0, help='inherited weights get LR 0 for this many updates (then --inherit-lr-scale)')
@@ -535,6 +544,10 @@ def unroll(model, states, rest, props, context, mask, joints, joint_mask, k, arg
     joint_weight = None
     if train and track and getattr(args, 'w_jmove', 1.) != 1:
         joint_weight = 1 + (args.w_jmove - 1) * jg.joint_motion(states[:, :k + 1], joints, joint_mask).float()
+    held = None                                           # --joint-rest: articulated bodies that are truly slow, contact or not
+    if train and has_joints and getattr(args, 'joint_rest', 0):
+        slow = (states[..., 7:10].norm(dim=-1) < .01) & (states[..., 10:13].norm(dim=-1) < .05)          # [B,k+1,N]
+        held = slow[:, :-1] & slow[:, 1:] & (dyn & (jg.articulations(joints, joint_mask, states.shape[2]) >= 0))[:, None]
     plain = ~joint_mask.any(1)                             # windows without joints (the mixed box data, plain_* episodes)
     distill = train and teacher is not None and getattr(args, 'w_distill', 0) > 0 and bool(plain.any())
     cur = states[:, 0]
@@ -575,6 +588,8 @@ def unroll(model, states, rest, props, context, mask, joints, joint_mask, k, arg
         # not to move relative to its own previous pose (bounded, as before).
         near = (cur.detach()[..., :3] - states[:, j, :, :3]).norm(dim=-1, keepdim=True) < .01
         rest_next = rest_all[:, j + 1:j + 2 + lookahead].all(1) if lookahead > 0 else rest[:, j + 1]
+        if held is not None:
+            rest_next = rest_next | held[:, j]
         phys = physics_losses(nxt, true, torch.where(near, true, cur), props, context, mask, rest_next, adjacent)
         terms.update(pen=phys['penetration'], rest=phys['rest'], slide=phys['slide'])
         terms.update(jcoord=total.new_zeros(()), jrel=total.new_zeros(()), distill=total.new_zeros(()))
@@ -614,6 +629,22 @@ def unroll(model, states, rest, props, context, mask, joints, joint_mask, k, arg
         cur = nxt if args.bptt else nxt.detach()
     norm = sum(weights)
     return total / norm, stats / norm, bad | ~torch.isfinite(total)
+
+
+def grow_rounds(model, extra):
+    """A JointGNN with `extra` more rounds that computes exactly what `model` computes (new rounds = identity)."""
+    config = dict(model.config); old = int(config['rounds']); config['rounds'] = old + int(extra)
+    if not 0 < int(config.get('shared_rounds', 0)) < old:
+        raise ValueError('--grow-rounds needs a checkpoint with gated extra rounds (0 < shared_rounds < rounds); otherwise box scenes would change')
+    grown = jg.JointGNN(**config)
+    missing = grown.load_state_dict(model.state_dict(), strict=False)
+    assert not missing.unexpected_keys and all(key.split('.')[0] in ('edge_updates', 'node_updates', 'joint_updates') for key in missing.missing_keys)
+    with torch.no_grad():
+        for index in range(old, config['rounds']):
+            for update in (grown.edge_updates[index], grown.node_updates[index], grown.joint_updates[index]):
+                update[-1].weight.zero_(); update[-1].bias.zero_()
+    grown.edge_radius = model.edge_radius
+    return grown.train(model.training)
 
 
 class Trainee(nn.Module):
@@ -939,6 +970,8 @@ def main():
     elif args.init is not None:
         init = torch.load(args.init, map_location='cpu', weights_only=True)
         model = jg.build_from_checkpoint(init)            # architecture, weights and normalizer follow the checkpoint
+        if args.grow_rounds > 0:
+            model = grow_rounds(model, args.grow_rounds)
         if args.inherited_rounds < 0:
             args.inherited_rounds = int(init.get('inherited_rounds', 0))
     else:

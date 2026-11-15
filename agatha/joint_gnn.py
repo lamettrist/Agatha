@@ -410,7 +410,8 @@ def physics_losses(pred_next, true_next, prev_state, props, context, mask, rest_
 # ----------------------------------------------------------------- projection
 @torch.no_grad()
 def solve_joints(state, props, context, mask, joints, joint_mask, iters: int = 6, snap: bool = True, limits: bool = True,
-                 limit_slop: tuple[float, float] = LIMIT_SLOP) -> torch.Tensor:
+                 limit_slop: tuple[float, float] = LIMIT_SLOP, gap_turn: bool = True, velocity: bool = True,
+                 gap_free: float = 0.) -> torch.Tensor:
     """Non-learned joint projection of a state [B,N,13] (no contact handling).
 
     Position pass (up to iters sweeps over all joints at once; a body's corrections are averaged
@@ -436,6 +437,11 @@ def solve_joints(state, props, context, mask, joints, joint_mask, iters: int = 6
     5 mm of pure PyBullet after 1 s with (0, 0), 90% with the default and 95% with (0.1, 0.01) (96% with
     limits=False).  (0, 0) restores the hard clamp.
     Sweeps stop early once every error is below 0.02 mm / 2e-5 rad (1e-4 m/s for velocities).
+    Round-2 options (defaults = previous behaviour): gap_turn=False closes anchor gaps by TRANSLATION only (split by
+    inverse mass; no body is turned about a hinge / ball to close a gap, so the correction cannot change a joint
+    angle); velocity=False skips the velocity pass (positions only); gap_free > 0 leaves a scene untouched whose
+    largest anchor / axis / limit error is below it (m or rad): a prediction that already satisfies its joints is
+    not edited at all.
     """
     with _no_autocast(state):
         props, context = _pad_inputs(props, context)
@@ -443,6 +449,15 @@ def solve_joints(state, props, context, mask, joints, joint_mask, iters: int = 6
         batch, count = current.shape[:2]; device = current.device
         parent, child, world, valid = _indices(joints, joint_mask, count, mask)
         if not bool(valid.any()): return original
+        if gap_free > 0:                                                       # scenes already within tolerance stay as predicted
+            v0 = _violations(_frames(current, joints, valid))
+            fine = torch.stack((v0['anchor_gap'], v0['off_axis'], (v0['limit_excess']-torch.where(joints[..., 4] > .5, float(limit_slop[1]), float(limit_slop[0]))).clamp_min(0)*float(limits))).amax(0).amax(-1) < gap_free
+            if bool(fine.all()): return original
+            if bool(fine.any()):
+                out = original.clone(); todo = ~fine
+                out[todo] = solve_joints(state[todo], props[todo], context[todo], mask[todo], joints[todo], joint_mask[todo], iters, snap, limits,
+                                         limit_slop, gap_turn, velocity, 0.)
+                return out
         dynamic = mask & (props[..., 5] < .5)
         inverse_mass = dynamic/props[..., 3].clamp_min(1e-3)
         size2 = props[..., :3].square()
@@ -491,6 +506,7 @@ def solve_joints(state, props, context, mask, joints, joint_mask, iters: int = 6
             about = lambda inertia, matrix: ((inertia > 0).all(-1)/(_rot_t(matrix, f.axis_p).square()/inertia.clamp_min(1e-12)).sum(-1).clamp_min(1e-12))[..., None, None]
             f.free_p = ball_w*f.full_p+hinge_w*about(inertia_p, f.rp)*outer     # 1 / (a^T I a) about a hinge axis
             f.free_c = ball_w*f.full_c+hinge_w*about(inertia_c, f.rc)*outer
+            if not gap_turn: f.free_p, f.free_c = torch.zeros_like(f.free_p), torch.zeros_like(f.free_c)
             f.skew_p, f.skew_c = skew(f.arm_p), skew(f.arm_c)
             f.anchor = (mass_p+mass_c)[..., None, None]*eye-f.skew_p@f.free_p@f.skew_p-f.skew_c@f.free_c@f.skew_c
             return f
@@ -564,7 +580,7 @@ def solve_joints(state, props, context, mask, joints, joint_mask, iters: int = 6
         edge = .002                                                            # "at the limit" tolerance (rad / m)
         at_upper, at_lower = limited & (f.coordinate >= upper-edge), limited & (f.coordinate <= lower+edge)
         outward = lambda rate: ((at_upper & (rate > 0)) | (at_lower & (rate < 0))).float()
-        for _ in range(iters):
+        for _ in range(iters if velocity else 0):
             # 1. angular: hinges keep only the spin about their axis (none of it into a limit)
             spin = pick(ang, child)-pick(ang, parent)*free_p[..., None]
             along = (spin*f.axis_p).sum(-1)
@@ -591,7 +607,8 @@ def solve_joints(state, props, context, mask, joints, joint_mask, iters: int = 6
 @torch.no_grad()
 def project_joints(prev, pred, props, context, mask, joints, joint_mask, iters: int = 6, outer: int = 1, snap: bool = True,
                    limits: bool = True, limit_slop: tuple[float, float] = LIMIT_SLOP, joint_slop: float = JOINT_CONTACT_SLOP,
-                   articulation_sleep: bool = True, slop_scope: str = 'scene', **contact_options) -> torch.Tensor:
+                   articulation_sleep: bool = True, slop_scope: str = 'scene', gap_turn: bool = True, velocity: bool = True,
+                   gap_free: float = 0., **contact_options) -> torch.Tensor:
     """contact_gnn.project (jointed pairs do not collide) followed by solve_joints.
 
     outer > 1 repeats the pair, so that a link pulled back into the support by its joint is lifted
@@ -605,6 +622,7 @@ def project_joints(prev, pred, props, context, mask, joints, joint_mask, iters: 
     EVERY dynamic body of its articulation is below the sleep speeds; otherwise a slow link next to a moving one
     (the base of a laptop whose lid is falling, a ragdoll's torso) is frozen while its neighbours pull on it.
     joint_slop=0, articulation_sleep=False restore the previous behaviour.
+    gap_turn / velocity / gap_free: see solve_joints (round-2 options; the defaults are the round-1 projection).
     """
     count = pred.shape[1]
     exclude = jointed_pairs(joints, joint_mask, count)
@@ -620,7 +638,8 @@ def project_joints(prev, pred, props, context, mask, joints, joint_mask, iters: 
     state = pred
     for _ in range(max(outer, 1)):
         state = contact(prev, state, props, context, mask, _exclude=exclude, **extra, **contact_options)
-        state = solve_joints(state, props, context, mask, joints, joint_mask, iters, snap=snap, limits=limits, limit_slop=limit_slop)
+        state = solve_joints(state, props, context, mask, joints, joint_mask, iters, snap=snap, limits=limits, limit_slop=limit_slop,
+                             gap_turn=gap_turn, velocity=velocity, gap_free=gap_free)
     return state
 
 # ------------------------------------------------------------------------- io

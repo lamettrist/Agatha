@@ -25,7 +25,8 @@ def deduplicate(instances, depth, plane_mask=None):
             containment=intersection/min(mask.sum(),old['mask'].sum())
             consistent=median is None or old['median_depth_m'] is None or abs(median-old['median_depth_m'])<.15
             independent_accessory=inst['label']=='gloves' and old['label'] in ('jacket','bag','backpack')
-            if consistent and not independent_accessory and (iou>.65 or containment>.85):
+            same_piece=inst['label']==old['label'] and inst['label'] in ('chair','laptop','backpack','bag','keyboard','monitor')
+            if not independent_accessory and (consistent or same_piece) and (iou>.65 or containment>.85):
                 duplicate=True;break
         if duplicate:
             dropped.append(dict(label=inst['label'],reason='duplicate_or_part_mask'));continue
@@ -37,6 +38,10 @@ def deduplicate(instances, depth, plane_mask=None):
 def split_depth_clusters(instances, depth):
     result=[]
     for inst in instances:
+        # A chair's back/seat or laptop's lid/base naturally occupy distinct depth
+        # clusters. They remain one rigid assembly, especially when tracked as one.
+        if inst['label'] in ('chair','laptop','backpack','bag','keyboard','monitor','jacket'):
+            result.append(inst);continue
         mask=inst['mask']; finite=mask & np.isfinite(depth) & (depth>0)
         values=depth[finite]
         if values.size<150:

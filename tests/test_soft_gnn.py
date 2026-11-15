@@ -377,3 +377,25 @@ def test_rest_loss_only_counts_resting_vertices():
     expect = (125-10)*(.001/(.005*sg.STEP)-.5)/125                                    # Smooth-L1 linear branch, x only
     assert float(loss) == pytest.approx(expect, rel=1e-4)
     assert float(sg.rest_loss(true_next, true_cur, true_next, true_cur, mask)) == 0
+
+
+def test_round2_trainer_helpers_late_horizon_and_box_contact_frames():
+    import sys
+    from pathlib import Path
+    from types import SimpleNamespace
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
+    import train_soft_ddp as ts
+    args = SimpleNamespace(start_horizon=0, late_horizon=8, late_from=.6)
+    assert [ts.soft_horizon(s, 100, 4, 0., args) for s in (0, 10, 20, 50, 59, 60, 99)] == [1, 2, 4, 4, 4, 8, 8]
+    assert ts.soft_horizon(0, 100, 4, .7, args) == 8                                  # wall-clock progress also triggers it
+    args.late_horizon = 0
+    assert ts.soft_horizon(99, 100, 4, 0., args) == 4                                 # off by default
+    # box-contact frames: the cube sits beside a box in frame 1 only; the second episode has no box at all
+    verts, mask, edges, rest = cube()
+    far = verts+torch.tensor([0., .5, 0.])*mask[..., None]
+    episode = torch.stack((far, verts, far), 1)                                       # [1,3,V,3]
+    state, props, rmask = boxes(pos=(.17, .81, 0.), size=(.2, .12, .2))               # box face 1 cm from the cube face
+    data = dict(verts=torch.cat((episode, episode)), states=state[:, None].repeat(2, 3, 1, 1), props=props.repeat(2, 1, 1),
+                mask=torch.cat((rmask, torch.zeros_like(rmask))), context=context(2), vert_mask=mask.repeat(2, 1))
+    near = ts.box_contact_frames(data, gap=.02)
+    assert near.tolist() == [[False, True, False], [False, False, False]]

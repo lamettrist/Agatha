@@ -18,7 +18,7 @@ from .segmentation import deduplicate,split_depth_clusters
 from .bodies import settle,stability
 from .assets import write_debug,export_visual
 
-VERSION='metric-photo-v14'
+VERSION='metric-photo-v15'
 RUN_LOCK=RLock()
 # kg, friction, rigid approximation, dimensions used ONLY when geometry fails.
 PRIORS={
@@ -265,7 +265,16 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
             except ValueError as exc: stage['vertical_alignment_fallback']=str(exc)
             basis=plane['basis'];origin=plane['center']
             cloud_world=(cloud-origin)@basis.T
-            surface=candidates if geometry_override is None else candidates&(np.abs(cloud_world[:,:,1])<.025)
+            surface=candidates
+            if geometry_override is not None:
+                from .structure import cloud_components
+                union=np.logical_or.reduce([region['mask'] for region in table_regions]) if table_regions else candidates
+                surface=union&valid&(np.abs(cloud_world[:,:,1])<.025)
+                if surface.sum()>30:
+                    components=cloud_components(cloud[surface])
+                    overlap=candidates[surface]
+                    chosen=int(np.bincount(components,weights=overlap.astype(float)).argmax())
+                    selected=np.zeros(surface.shape,bool);selected[surface]=components==chosen;surface=selected
             extents=np.percentile(cloud_world[surface][:,[0,2]],[1,99],axis=0) if surface.sum()>30 else np.array([[-.6,-.4],[.6,.4]])
             center_xz=extents.mean(0);origin=origin+basis.T@np.array([center_xz[0],0,center_xz[1]])
             cloud_world=(cloud-origin)@basis.T
@@ -387,21 +396,13 @@ def reconstruct(image: Image.Image,table_width_m: float | None=None, *, distance
                 objects.append(SceneObject(id=f'wall_{j}',label='wall',size=tuple(dims),position=tuple(fitted['center']),
                     rotation_euler=tuple(fitted['rotation_euler']),is_static=True,shape_method='plane_slab',confidence=mask['confidence']))
             if geometry_override is not None:
-                for j,region in enumerate(table_regions):
-                    if region is primary_table:continue
-                    pts=cloud_world[region['mask']&valid]
-                    if len(pts)<30:continue
-                    try:
-                        tabletop=g.fit_plane(pts,threshold=.015,normal_hint=[0,1,0])
-                        if abs(tabletop['normal'][1])<.95:continue
-                        pts=pts[np.abs((pts-tabletop['center'])@tabletop['normal'])<.02]
-                        fitted=g.fit_box(pts)
-                    except ValueError:continue
-                    dims=fitted['size'];dims[1]=.03
-                    if min(dims[0],dims[2])<.1:continue
-                    center=fitted['center'];center[1]=float(np.median(pts[:,1]))-.015
-                    objects.append(SceneObject(id=f'table_{j}',label='table',size=tuple(dims),position=tuple(center),
-                        rotation_euler=tuple(fitted['rotation_euler']),is_static=True,shape_method='plane_slab',confidence=region['confidence']))
+                from .structure import table_surfaces
+                surfaces=table_surfaces(table_regions,cloud_world,valid,support)
+                for j,surface in enumerate(surfaces):
+                    details=dict(surface);details.pop('observed_points')
+                    objects.append(SceneObject(id=f'table_{j}',label='table',**details,
+                        is_static=True,shape_method='connected_plane_slab',confidence=.6))
+                stage['secondary_table_surfaces']=surfaces
             stage['body_count']=len(objects)
         # Recenter/expand the slab using observed table bounds and contact anchors.
         # Hidden table extent is an estimate, recorded instead of dropping bodies off its edge.

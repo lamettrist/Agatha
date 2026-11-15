@@ -82,8 +82,12 @@ def fit_one(obj,instance,instances,camera,camera_pose,support_height):
 
 def refine(scene_objects,instances,camera,camera_pose,height):
     by_id={inst.get('object_id'):inst for inst in instances};reports=[]
+    supports={'support':height,'floor':0.}
+    supports.update({obj.id:obj.position[1]+obj.size[1]/2 for obj in scene_objects if obj.is_static and obj.label=='table'})
     for obj in scene_objects:
         if obj.id not in by_id or obj.is_static:continue
-        report=fit_one(obj,by_id[obj.id],instances,camera,camera_pose,height)
+        support_height=supports.get(obj.supported_by,height)
+        report=fit_one(obj,by_id[obj.id],instances,camera,camera_pose,support_height)
+        if report is not None:report['support_height_m']=support_height
         if report is not None:reports.append(report)
     return reports
