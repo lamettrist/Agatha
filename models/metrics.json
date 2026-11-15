@@ -125,127 +125,127 @@
         "rest_drift_mps": 0.1689821946658238,
         "diverged_episodes": 0
       },
-      "latency_ms_per_step_cpu": 1.660597634812196
+      "latency_ms_per_step_cpu": 12.133170726398628
     },
     "new_raw": {
       "all": {
         "n_episodes": 2468,
         "pos_err_m": {
-          "0.5s": 0.02396914681870767,
-          "1s": 0.043761274942805226,
-          "2s": 0.05966002597177927
+          "0.5s": 0.02403094168200494,
+          "1s": 0.04340325394526136,
+          "2s": 0.06010294351525795
         },
-        "pos_err_active_2s_m": 0.16212528453841296,
+        "pos_err_active_2s_m": 0.162983017039487,
         "out_of_bounds_episodes": 0,
-        "ori_err_deg_2s": 14.336312880752615,
-        "fell_accuracy": 0.9787637466818354,
-        "fell_precision": 0.924223602484472,
-        "fell_recall": 0.9358490566037736,
-        "mean_penetration_m": 0.0003917139964354207,
-        "mean_penetration_capped_50mm_m": 0.00038692295443116685,
-        "frac_frames_penetrating_over_5mm": 0.009406996587030717,
-        "rest_drift_mps": 0.005723925974323025,
+        "ori_err_deg_2s": 14.610998504860405,
+        "fell_accuracy": 0.9789533560864618,
+        "fell_precision": 0.9232673267326733,
+        "fell_recall": 0.9383647798742139,
+        "mean_penetration_m": 0.00038826181194805934,
+        "mean_penetration_capped_50mm_m": 0.00038311512761991784,
+        "frac_frames_penetrating_over_5mm": 0.009312191884717482,
+        "rest_drift_mps": 0.006031922695990685,
         "diverged_episodes": 0
       },
       "gentle": {
         "n_episodes": 1273,
         "pos_err_m": {
-          "0.5s": 0.001661702419428448,
-          "1s": 0.0020366955268676574,
-          "2s": 0.0023984447715642157
+          "0.5s": 0.0016684864885014867,
+          "1s": 0.00217308422254188,
+          "2s": 0.0028404239472843078
         },
-        "pos_err_active_2s_m": 0.012167470260801701,
+        "pos_err_active_2s_m": 0.011655386851786865,
         "out_of_bounds_episodes": 0,
-        "ori_err_deg_2s": 0.5871111988540326,
-        "fell_accuracy": 0.9998054096127651,
+        "ori_err_deg_2s": 0.6767454777387016,
+        "fell_accuracy": 0.9996108192255303,
         "fell_precision": 0.0,
         "fell_recall": null,
-        "mean_penetration_m": 0.00024930223913035215,
-        "mean_penetration_capped_50mm_m": 0.0002456570202788329,
-        "frac_frames_penetrating_over_5mm": 0.0013986184082506324,
-        "rest_drift_mps": 0.0006082903615178257,
+        "mean_penetration_m": 0.00024308453131321846,
+        "mean_penetration_capped_50mm_m": 0.0002390425856814984,
+        "frac_frames_penetrating_over_5mm": 0.0015153726405915547,
+        "rest_drift_mps": 0.0007300849387145479,
         "diverged_episodes": 0
       },
       "chaotic": {
         "n_episodes": 1195,
         "pos_err_m": {
-          "0.5s": 0.04516307485862187,
-          "1s": 0.0834030966507925,
-          "2s": 0.11406329197065247
+          "0.5s": 0.045277134553037335,
+          "1s": 0.08257534531243743,
+          "2s": 0.11450710104156901
         },
-        "pos_err_active_2s_m": 0.19428653151856645,
+        "pos_err_active_2s_m": 0.19543804656117683,
         "out_of_bounds_episodes": 0,
-        "ori_err_deg_2s": 27.39919833892914,
-        "fell_accuracy": 0.9587724163431318,
-        "fell_precision": 0.9247980111870727,
-        "fell_recall": 0.9358490566037736,
-        "mean_penetration_m": 0.000527017013775178,
-        "mean_penetration_capped_50mm_m": 0.0005211373444494407,
-        "frac_frames_penetrating_over_5mm": 0.017015622111295987,
-        "rest_drift_mps": 0.011282447383958004,
+        "ori_err_deg_2s": 27.849698136285518,
+        "fell_accuracy": 0.9593270475134036,
+        "fell_precision": 0.9244114002478315,
+        "fell_recall": 0.9383647798742139,
+        "mean_penetration_m": 0.0005261923065279165,
+        "mean_penetration_capped_50mm_m": 0.0005199960285297972,
+        "frac_frames_penetrating_over_5mm": 0.01671981882048438,
+        "rest_drift_mps": 0.011792766687783564,
         "diverged_episodes": 0
       },
-      "latency_ms_per_step_cpu": 4.561886750161648
+      "latency_ms_per_step_cpu": 370.63307110220194
     },
     "new_projected": {
       "all": {
         "n_episodes": 2468,
         "pos_err_m": {
-          "0.5s": 0.025014170712744768,
-          "1s": 0.0466799538077301,
-          "2s": 0.06335941256110643
+          "0.5s": 0.025233526894635566,
+          "1s": 0.04692232450915465,
+          "2s": 0.06369461251048879
         },
-        "pos_err_active_2s_m": 0.17252035290771306,
+        "pos_err_active_2s_m": 0.17279872612214534,
         "out_of_bounds_episodes": 0,
-        "ori_err_deg_2s": 14.86979599187825,
-        "fell_accuracy": 0.978194918467956,
-        "fell_precision": 0.9156479217603912,
-        "fell_recall": 0.9421383647798742,
-        "mean_penetration_m": 5.593320860617964e-05,
-        "mean_penetration_capped_50mm_m": 5.240799892593198e-05,
-        "frac_frames_penetrating_over_5mm": 0.0011423966628744786,
-        "rest_drift_mps": 0.005478187731830977,
+        "ori_err_deg_2s": 14.99710542581516,
+        "fell_accuracy": 0.9783845278725825,
+        "fell_precision": 0.9162591687041565,
+        "fell_recall": 0.9427672955974843,
+        "mean_penetration_m": 5.4294811326218074e-05,
+        "mean_penetration_capped_50mm_m": 5.0623140731258007e-05,
+        "frac_frames_penetrating_over_5mm": 0.0007892491467576791,
+        "rest_drift_mps": 0.0055428061856948665,
         "diverged_episodes": 0
       },
       "gentle": {
         "n_episodes": 1273,
         "pos_err_m": {
-          "0.5s": 0.0018283718813923674,
-          "1s": 0.0025237303287617783,
-          "2s": 0.002769187230533322
+          "0.5s": 0.0018728479859377754,
+          "1s": 0.002333633707016627,
+          "2s": 0.002691333405965406
         },
-        "pos_err_active_2s_m": 0.015150718745269897,
+        "pos_err_active_2s_m": 0.013757960347427444,
         "out_of_bounds_episodes": 0,
-        "ori_err_deg_2s": 0.5078808123185494,
+        "ori_err_deg_2s": 0.5040342075837545,
         "fell_accuracy": 0.9994162288382954,
         "fell_precision": 0.0,
         "fell_recall": null,
-        "mean_penetration_m": 3.1596355792793516e-05,
-        "mean_penetration_capped_50mm_m": 2.8137191672117602e-05,
-        "frac_frames_penetrating_over_5mm": 0.0006129597197898424,
-        "rest_drift_mps": 0.0002987055813725505,
+        "mean_penetration_m": 3.446237273386601e-05,
+        "mean_penetration_capped_50mm_m": 3.0622700310910654e-05,
+        "frac_frames_penetrating_over_5mm": 0.0006348511383537654,
+        "rest_drift_mps": 0.0002818208466307583,
         "diverged_episodes": 0
       },
       "chaotic": {
         "n_episodes": 1195,
         "pos_err_m": {
-          "0.5s": 0.04704260853754048,
-          "1s": 0.08863203967543544,
-          "2s": 0.1209251674092882
+          "0.5s": 0.04742811534200069,
+          "1s": 0.08928529031284985,
+          "2s": 0.12165280280779801
         },
-        "pos_err_active_2s_m": 0.2062712027440885,
+        "pos_err_active_2s_m": 0.20690798126589086,
         "out_of_bounds_episodes": 0,
-        "ori_err_deg_2s": 28.51481024733348,
-        "fell_accuracy": 0.9580329081161028,
-        "fell_precision": 0.9173300673606859,
-        "fell_recall": 0.9421383647798742,
-        "mean_penetration_m": 7.905524347546995e-05,
-        "mean_penetration_capped_50mm_m": 7.546728501899021e-05,
-        "frac_frames_penetrating_over_5mm": 0.0016454058051395821,
-        "rest_drift_mps": 0.011106083188669043,
+        "ori_err_deg_2s": 28.766728829492585,
+        "fell_accuracy": 0.9584026622296173,
+        "fell_precision": 0.9179424372320881,
+        "fell_recall": 0.9427672955974843,
+        "mean_penetration_m": 7.31372779422464e-05,
+        "mean_penetration_capped_50mm_m": 6.962522306073942e-05,
+        "frac_frames_penetrating_over_5mm": 0.0009359400998336107,
+        "rest_drift_mps": 0.011259260964014741,
         "diverged_episodes": 0
       },
-      "latency_ms_per_step_cpu": 10.768307993809382
+      "latency_ms_per_step_cpu": 632.2126485407352
     },
     "physics_reference": {
       "all": {
@@ -365,7 +365,7 @@
         "rest_drift_mps": 0.20042928707034666,
         "diverged_episodes": 0
       },
-      "latency_ms_per_step_cpu": 8.224430121481419
+      "latency_ms_per_step_cpu": 123.7600153312087
     },
     "ship_decision": {
       "subset": "live_physics",
@@ -386,11 +386,11 @@
           "includes_non_learned_projection": true,
           "chaotic_pos_err_2s_m": {
             "old": 0.4027905321918393,
-            "new": 0.1209251674092882,
-            "delta": -0.2818653647825511,
+            "new": 0.12165280280779801,
+            "delta": -0.2811377293840413,
             "ci95": [
-              -0.3093573091600623,
-              -0.2577650850351617
+              -0.3084663015126593,
+              -0.2574675796927944
             ],
             "n_episodes": 1195,
             "improves": true,
@@ -398,11 +398,11 @@
           },
           "mean_penetration_m": {
             "old": 0.047815085042626417,
-            "new": 5.593320860617964e-05,
-            "delta": -0.047759151834020235,
+            "new": 5.4294811326218074e-05,
+            "delta": -0.0477607902313002,
             "ci95": [
-              -0.05255328146918337,
-              -0.04297870658435862
+              -0.052555326612018984,
+              -0.04298240649274553
             ],
             "n_episodes": 2468,
             "improves": true,
@@ -410,11 +410,11 @@
           },
           "gentle_pos_err_2s_m": {
             "old": 0.1433671076235786,
-            "new": 0.002769187230533322,
-            "delta": -0.14059792039304528,
+            "new": 0.002691333405965406,
+            "delta": -0.14067577421761318,
             "ci95": [
-              -0.15133739440363908,
-              -0.1298126723752174
+              -0.1513354823392884,
+              -0.12979884145386794
             ],
             "n_episodes": 1273,
             "limit": 0.14623444977605018,
@@ -423,11 +423,11 @@
           },
           "mean_penetration_capped_50mm_m": {
             "old": 0.0201198586490095,
-            "new": 5.240799892593198e-05,
-            "delta": -0.020067450650083567,
+            "new": 5.0623140731258007e-05,
+            "delta": -0.02006923550827824,
             "ci95": [
-              -0.020445389865735148,
-              -0.019664278467532118
+              -0.020445987575101954,
+              -0.019661693365239565
             ],
             "n_episodes": 2468,
             "improves": true,
@@ -436,11 +436,11 @@
           },
           "chaotic_active_pos_err_2s_m": {
             "old": 0.588862980978722,
-            "new": 0.2062712027440885,
-            "delta": -0.38259177823463353,
+            "new": 0.20690798126589086,
+            "delta": -0.3819549997128312,
             "ci95": [
-              -0.4230403405757402,
-              -0.3425962861652792
+              -0.4234462643690744,
+              -0.3415061237972706
             ],
             "n_episodes": 1195,
             "improves": true,
@@ -452,11 +452,11 @@
           "vs_old_projected": {
             "chaotic_pos_err_2s_m": {
               "old": 0.43677184778675554,
-              "new": 0.1209251674092882,
-              "delta": -0.3158466803774673,
+              "new": 0.12165280280779801,
+              "delta": -0.31511904497895754,
               "ci95": [
-                -0.36070022498848053,
-                -0.2736675104134948
+                -0.3591620512089171,
+                -0.27314526124364774
               ],
               "n_episodes": 1195,
               "improves": true,
@@ -464,22 +464,22 @@
             },
             "mean_penetration_m": {
               "old": 0.00021735961835512324,
-              "new": 5.593320860617964e-05,
-              "delta": -0.0001614264097489436,
+              "new": 5.4294811326218074e-05,
+              "delta": -0.00016306480702890517,
               "ci95": [
-                -0.00020188770920067926,
-                -0.00012507547126013271
+                -0.0002036029226823427,
+                -0.0001272689084497867
               ],
               "n_episodes": 2468,
               "significant": true
             },
             "gentle_pos_err_2s_m": {
               "old": 0.10422484134296871,
-              "new": 0.002769187230533322,
-              "delta": -0.10145565411243539,
+              "new": 0.002691333405965406,
+              "delta": -0.1015335079370033,
               "ci95": [
-                -0.11134165461437617,
-                -0.09166754581106008
+                -0.11184813306366657,
+                -0.09182969333145444
               ],
               "n_episodes": 1273,
               "limit": 0.10630933816982809,
@@ -488,11 +488,11 @@
             },
             "mean_penetration_capped_50mm_m": {
               "old": 0.00020593950864872184,
-              "new": 5.240799892593198e-05,
-              "delta": -0.00015353150972278985,
+              "new": 5.0623140731258007e-05,
+              "delta": -0.00015531636791746382,
               "ci95": [
-                -0.00018918606154177877,
-                -0.00012079800453851754
+                -0.00019030163421842182,
+                -0.00012312826219703106
               ],
               "n_episodes": 2468,
               "limit": 0.001205939508648722,
@@ -501,11 +501,11 @@
             },
             "chaotic_active_pos_err_2s_m": {
               "old": 0.6727830125200062,
-              "new": 0.2062712027440885,
-              "delta": -0.46651180977591766,
+              "new": 0.20690798126589086,
+              "delta": -0.46587503125411533,
               "ci95": [
-                -0.5370887722929042,
-                -0.39780103881345363
+                -0.5377404399153878,
+                -0.39774799119128135
               ],
               "n_episodes": 1195,
               "significant": true
@@ -518,11 +518,11 @@
           "includes_non_learned_projection": false,
           "chaotic_pos_err_2s_m": {
             "old": 0.4027905321918393,
-            "new": 0.11406329197065247,
-            "delta": -0.28872724022118684,
+            "new": 0.11450710104156901,
+            "delta": -0.2882834311502703,
             "ci95": [
-              -0.3172611271195846,
-              -0.2646897128698543
+              -0.3160460484525261,
+              -0.26444490114316854
             ],
             "n_episodes": 1195,
             "improves": true,
@@ -530,11 +530,11 @@
           },
           "mean_penetration_m": {
             "old": 0.047815085042626417,
-            "new": 0.0003917139964354207,
-            "delta": -0.047423371046190994,
+            "new": 0.00038826181194805934,
+            "delta": -0.04742682323067836,
             "ci95": [
-              -0.052225959799482344,
-              -0.042649870341069526
+              -0.05222752341954766,
+              -0.04265972335948413
             ],
             "n_episodes": 2468,
             "improves": true,
@@ -542,11 +542,11 @@
           },
           "gentle_pos_err_2s_m": {
             "old": 0.1433671076235786,
-            "new": 0.0023984447715642157,
-            "delta": -0.14096866285201437,
+            "new": 0.0028404239472843078,
+            "delta": -0.14052668367629428,
             "ci95": [
-              -0.15147376724696854,
-              -0.13021534862309742
+              -0.151376997049836,
+              -0.12971566674955426
             ],
             "n_episodes": 1273,
             "limit": 0.14623444977605018,
@@ -555,11 +555,11 @@
           },
           "mean_penetration_capped_50mm_m": {
             "old": 0.0201198586490095,
-            "new": 0.00038692295443116685,
-            "delta": -0.019732935694578332,
+            "new": 0.00038311512761991784,
+            "delta": -0.019736743521389582,
             "ci95": [
-              -0.02010991312166837,
-              -0.019333924767978797
+              -0.02011366732427458,
+              -0.01933456937651049
             ],
             "n_episodes": 2468,
             "improves": true,
@@ -568,11 +568,11 @@
           },
           "chaotic_active_pos_err_2s_m": {
             "old": 0.588862980978722,
-            "new": 0.19428653151856645,
-            "delta": -0.3945764494601556,
+            "new": 0.19543804656117683,
+            "delta": -0.3934249344175452,
             "ci95": [
-              -0.4379817286562541,
-              -0.3549137387037127
+              -0.4364002884576853,
+              -0.3542156915903517
             ],
             "n_episodes": 1195,
             "improves": true,
@@ -584,11 +584,11 @@
           "vs_old_projected": {
             "chaotic_pos_err_2s_m": {
               "old": 0.43677184778675554,
-              "new": 0.11406329197065247,
-              "delta": -0.3227085558161031,
+              "new": 0.11450710104156901,
+              "delta": -0.3222647467451865,
               "ci95": [
-                -0.3696112982311287,
-                -0.2814532846193698
+                -0.3683171519494435,
+                -0.28015192000912836
               ],
               "n_episodes": 1195,
               "improves": true,
@@ -596,22 +596,22 @@
             },
             "mean_penetration_m": {
               "old": 0.00021735961835512324,
-              "new": 0.0003917139964354207,
-              "delta": 0.00017435437808029745,
+              "new": 0.00038826181194805934,
+              "delta": 0.0001709021935929361,
               "ci95": [
-                0.0001324826516867177,
-                0.0002162610793735172
+                0.00012877062440083448,
+                0.00021408529818462083
               ],
               "n_episodes": 2468,
               "significant": false
             },
             "gentle_pos_err_2s_m": {
               "old": 0.10422484134296871,
-              "new": 0.0023984447715642157,
-              "delta": -0.10182639657140449,
+              "new": 0.0028404239472843078,
+              "delta": -0.1013844173956844,
               "ci95": [
-                -0.11211337754729998,
-                -0.09201715007538548
+                -0.11160377829381328,
+                -0.09151843350707142
               ],
               "n_episodes": 1273,
               "limit": 0.10630933816982809,
@@ -620,11 +620,11 @@
             },
             "mean_penetration_capped_50mm_m": {
               "old": 0.00020593950864872184,
-              "new": 0.00038692295443116685,
-              "delta": 0.00018098344578244501,
+              "new": 0.00038311512761991784,
+              "delta": 0.000177175618971196,
               "ci95": [
-                0.0001418005967338132,
-                0.00021951680385003846
+                0.000138425352950908,
+                0.00021641215106939828
               ],
               "n_episodes": 2468,
               "limit": 0.001205939508648722,
@@ -633,11 +633,11 @@
             },
             "chaotic_active_pos_err_2s_m": {
               "old": 0.6727830125200062,
-              "new": 0.19428653151856645,
-              "delta": -0.4784964810014397,
+              "new": 0.19543804656117683,
+              "delta": -0.47734496595882936,
               "ci95": [
-                -0.5523809667936651,
-                -0.40798617299479384
+                -0.5511027008551038,
+                -0.4073389411741991
               ],
               "n_episodes": 1195,
               "significant": true
@@ -679,19 +679,27 @@
     ],
     "shipped": true,
     "checkpoint": {
-      "file": "models/contact_gnn.pt (also models/world_model.pt = default)",
-      "sha256_12": "e67e88715283",
+      "file": "models/contact_gnn.pt (also models/world_model.pt = default; identical to models/contact_gnn_video.pt)",
+      "sha256_12": "0e46bfec9319",
       "kind": "contact_gnn",
       "parameters": 711692,
-      "training": "90 min on 7 GPUs (data/v2), then 137 min on 4 GPUs with motion-onset loss weighting on data/v3 (data/v2 + 11,969 hard-case episodes); fp16 mixed precision (no native bf16 on Quadro RTX 6000)"
+      "training": "Stage 1: 90 min on 7 GPUs (simulation, data/v2). Stage 2: 137 min on 4 GPUs with motion-onset loss weighting (simulation, data/v3). Stage 3: 34 min on 1 GPU fine-tune in which 25% of each batch are windows of trajectories extracted from video (rendered Kubric MOVi-A and CLEVRER clips plus one team desk clip; position-only loss, weight 0.2). fp16 mixed precision."
+    },
+    "video_training": {
+      "what": "25% of fine-tune batches were video-derived trajectories: 1,109 clips tracked from pixels (median position noise about 2.7 cm).",
+      "sources": "Kubric MOVi-A (rendered, synthetic), CLEVRER (rendered, synthetic), one team-recorded desk clip (real; contributes objects-at-rest only). No real-world video of moving objects was used.",
+      "effect": "Simulation metrics unchanged within noise versus the simulation-only checkpoint (models/contact_gnn_sim_only.pt). Rest-position error improved on CLEVRER ground truth (0.676 -> 0.524 m) and held-out Kubric (0.786 -> 0.742 m); slightly worse on real I.AM. box tosses in slab mode (0.515 -> 0.541 m), unchanged in floor mode; ContactNets real cube tosses 0.082 -> 0.079 m.",
+      "details": "docs/video-training.md, models/runs/video_ft_report_with_last.md"
     },
     "full_eval": "models/contact_eval.json",
     "previous_default": "models/mlp_multistep.pt",
+    "simulation_only_checkpoint": "models/contact_gnn_sim_only.pt (eval: models/contact_eval_sim_only.json)",
     "notes_extra": [
       "Held-out synthetic PyBullet box scenes only (4,998 test episodes; headline subset = 2,468 at the live simulator defaults).",
       "new_projected = learned model + NON-LEARNED contact projection (what ships); new_raw = learned model alone.",
       "One projection constant (vel_slop 0.001 -> 0.003) was chosen using this test set; effect on chaotic error is 0.003 m.",
-      "External/real-world checks (approximate) are in models/external_eval.json and docs/part-c-external-data.md."
+      "The default checkpoint was fine-tuned with video-derived trajectories (see video_training); the videos are rendered clips plus one static team clip, not real-world footage of moving objects.",
+      "External/real-world checks (approximate) are in models/external_eval.json, docs/part-c-external-data.md and docs/video-training.md."
     ]
   }
 }

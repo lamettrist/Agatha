@@ -76,20 +76,26 @@ Held-out **synthetic PyBullet box scenes**: 4,998 test episodes, 4 s autoregress
 | Metric | Old MLP | New, model only | New + projection |
 |---|---|---|---|
 | Gentle position error at 0.5 s | 0.031 m | 0.002 m | 0.002 m |
-| Gentle position error at 1 s | 0.072 m | 0.002 m | 0.003 m |
-| Gentle position error at 2 s | 0.143 m | 0.002 m | 0.003 m |
+| Gentle position error at 1 s | 0.072 m | 0.002 m | 0.002 m |
+| Gentle position error at 2 s | 0.143 m | 0.003 m | 0.003 m |
 | Chaotic position error at 0.5 s | 0.145 m | 0.045 m | 0.047 m |
 | Chaotic position error at 1 s | 0.263 m | 0.083 m | 0.089 m |
-| Chaotic position error at 2 s | 0.403 m | 0.114 m | 0.121 m |
-| Orientation error at 2 s (all) | 34.9° | 14.3° | 14.9° |
+| Chaotic position error at 2 s | 0.403 m | 0.115 m | 0.122 m |
+| Orientation error at 2 s (all) | 34.9° | 14.6° | 15.0° |
 | Fell / didn't-fall accuracy | 0.853 | 0.979 | 0.978 |
-| Fall precision | 0.508 | 0.924 | 0.916 |
-| Fall recall | 0.797 | 0.936 | 0.942 |
-| Mean penetration depth | 47.82 mm | 0.39 mm | 0.06 mm |
-| Rest drift, all scenes | 121.4 mm/s | 5.7 mm/s | 5.5 mm/s |
-| Rest drift, gentle scenes | 77.7 mm/s | 0.6 mm/s | 0.3 mm/s |
+| Fall precision | 0.508 | 0.923 | 0.916 |
+| Fall recall | 0.797 | 0.938 | 0.943 |
+| Mean penetration depth | 47.82 mm | 0.39 mm | 0.05 mm |
+| Rest drift, all scenes | 121.4 mm/s | 6.0 mm/s | 5.5 mm/s |
+| Rest drift, gentle scenes | 77.7 mm/s | 0.7 mm/s | 0.3 mm/s |
 
 Ship rule (all met): chaotic error and penetration improve and gentle error is not worse, both against the old model and against the old model with the same projection added. PyBullet itself scores 0.12 mm penetration and 0.26 mm/s rest drift on these metrics.
+
+### Video-derived training
+
+The default checkpoint's last training stage is a 34-minute fine-tune in which **25% of each batch are trajectories extracted from video** (position-only loss, weight 0.2): 1,109 clips tracked from pixels, from rendered Kubric MOVi-A and CLEVRER videos plus one team-recorded desk clip. Median tracking noise is about 2.7 cm. Stated plainly: these are **rendered (synthetic) videos**; the one real clip is a static desk and contributes only objects at rest. No real-world video of moving objects was used.
+
+Measured effect against the simulation-only checkpoint (`models/contact_gnn_sim_only.pt`, a matched no-video control is in the report): simulation metrics are unchanged within noise; rest-position error improves on CLEVRER ground truth (0.676 to 0.524 m) and held-out Kubric (0.786 to 0.742 m); on real motion-capture box tosses it is slightly worse for I.AM. in table mode (0.515 to 0.541 m), unchanged in floor mode, and slightly better for ContactNets (0.082 to 0.079 m). Pipeline, licences, commands and full tables: [docs/video-training.md](docs/video-training.md).
 
 ### What improved, what did not, known limits
 
@@ -99,7 +105,7 @@ Ship rule (all met): chaotic error and penetration improve and gentle error is n
 - **Still wrong in places:** orientation in chaotic scenes (about 28° at 2 s), pushing the base of a stack, objects larger than 0.5 m, gravity above 15 m/s², and scenes far from the training range. Non-box shapes are approximated by their bounding box.
 - **Latency:** about 0.9 s for a 3 s rollout of the demo desk on CPU with projection (the MLP took 0.14 s).
 - **Hardware note:** training used fp16 mixed precision; the Quadro RTX 6000 cards have no native bf16.
-- **External checks (approximate):** on two real motion-capture box-toss datasets the model matches PyBullet's rest-position error and is well ahead of the old MLP; results depend strongly on the assumed friction. See [docs/part-c-external-data.md](docs/part-c-external-data.md) and [DATA_LICENSES.md](DATA_LICENSES.md). No external data was used to train this model.
+- **External checks (approximate):** on two real motion-capture box-toss datasets the simulation-only checkpoint matches PyBullet's rest-position error and is well ahead of the old MLP; results depend strongly on the assumed friction. See [docs/part-c-external-data.md](docs/part-c-external-data.md) and [DATA_LICENSES.md](DATA_LICENSES.md). The only external data used in training are the video-derived trajectories described above.
 
 ### Reproduce
 
@@ -120,6 +126,13 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 .venv-train/bin/torchrun --nproc_per_node=4 scripts
   --data data/v3 --init models/runs/main_a/best.pt --start-horizon 8 --horizon 8 --epochs 2000 --lr 5e-4 \
   --w-move 3 --w-impulse 3 --w-speed 1 --event-frac 0.3 --score-fall-weight 0.3 --val-rollout-episodes 1000 \
   --batch 4096 --max-minutes 165 --out models/runs/final_pen1
+
+# 3b. Stage 3, 1 GPU, 34 minutes: fine-tune with 25% video-derived windows (build them first: scripts/video_to_trajectories.py, see docs/video-training.md)
+CUDA_VISIBLE_DEVICES=0 .venv-train/bin/python scripts/train_contact_ddp.py --data data/v3 --init models/contact_gnn_sim_only.pt \\
+  --start-horizon 8 --horizon 8 --lr 1e-4 --w-move 3 --w-impulse 3 --w-speed 1 --event-frac 0.3 --score-fall-weight 0.3 \\
+  --val-rollout-episodes 1000 --batch 1536 --windows-per-epoch 600000 --epochs 30 --max-minutes 34 \\
+  --video-data data/video_v1/kubric_movi_a data/video_v1/clevrer data/video_v1/team_deskspace --video-frac 0.25 --video-weight 0.2 \\
+  --out models/runs/video_ft_video25   # shipped checkpoint = epoch_011.pt (last epoch)
 
 # 4. Evaluate old versus new, with and without projection
 CUDA_VISIBLE_DEVICES=0 .venv-train/bin/python scripts/eval_contact.py --data data/v2 --split test \
