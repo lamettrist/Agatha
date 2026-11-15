@@ -13,14 +13,34 @@ reference is [api.md](api.md); real recorded exchanges are in [api-examples.json
 - `GET /api/health` tells you what the server supports (`demo_scenarios`, `learned_architectures`,
   `experimental_features`, `loaded_models`, `cuda_available`).
 
-## Nothing changes for existing calls
+## What an existing client will notice
 
-Existing requests keep working and existing response fields keep their meaning; joints, soft bodies and the
-routing fields are additions. The measured compatibility check is in
-[api-compat-report.md](api-compat-report.md) (produced separately; see that file for the numbers).
+The measured comparison is in [api-compat-report.md](api-compat-report.md) (156 identical calls replayed against
+three builds). In short:
 
-The one behaviour change to be aware of: `learned_architecture: "default"` now runs the contact graph network
-(`model_architecture: "contact_gnn"`) instead of the earlier MLP.
+**Against the previous build of this branch (commit 1350cd7):** no status code changed, no key was removed, no
+type changed, and physics and learned frames are bit-identical for the same request. Joints, soft bodies,
+`learned.routing`, `learned.joints`, `learned.soft_meshes`, `scene.joints`, `scene.soft_bodies` and the new
+`/api/health` fields are additions.
+
+**Against `origin/master`** (older than the previous README spec) a client does see differences:
+
+- **The default learned model changed** from the MLP to the contact graph network. For the same request the
+  `learned` frames differ in every compared call (up to 3.7 m on `tilt_support`), `learned.events.fell` / `tipped`
+  can differ, and `learned.disclaimer` has a new text. `physics` frames are identical.
+- `POST /api/scenes/demo?scenario=<unknown>` is now 422 (master silently returned the desk).
+- `POST /api/scenes` with no file: still 422, but `detail` is now a string, not the validation array.
+- Photo upload: `report.disclaimer` and `report.support_plane` are gone, object ids are `object_000` (were
+  `obj_0`), the same test photo now yields 19 bodies (was 8) and takes about 25 s (was 1.4 s). The report has
+  `quality_status` (`needs_review` on both test fixtures) and many more keys.
+- Scene objects carry about a dozen new keys, and `shape` can now be `cylinder`, `compound` or `convex_hull`
+  on uploads (see "You can ignore" below). Simulating such a scene adds the warning
+  `"Learned dynamics uses bounding-box dimensions; it was not trained on these collision shapes."` to `warnings`.
+- Uploaded scenes contain **static** objects: walls on photos (`wall_0`, `wall_1`) and furniture on videos (the
+  three chairs of the test video). They have `is_static: true`, appear in every frame, and ignore pushes.
+
+Not covered by that comparison: video and scan uploads (beyond their input errors), and the assistant with a
+real OpenAI key.
 
 ## Helpers
 
@@ -102,6 +122,11 @@ try {
   else showError(error.message);
 }
 ```
+
+On a video scene, furniture comes back fixed in place: in the test video 3 of the 5 bodies (the chairs) have
+`is_static: true` and only 2 are movable (`report.dynamic_body_count`). The server accepts a push on a static
+object and nothing moves, so disable push for `scene.objects[i].is_static`. Photo scenes contain static walls
+(`wall_0`, `wall_1`) the same way.
 
 Never show an HTTP error or a timeout as "0 objects detected". `object.visual_mesh_url` and
 `report.debug_url + '/masks_overlay.png'` are server-relative: prefix them with `API`. `report.debug_url` alone
@@ -276,10 +301,11 @@ if (learned) {
     'joint_gnn+soft_gnn': 'Joint + soft-body networks (experimental)',
   }[learned.model_architecture] ?? learned.model_architecture;
   showModelLabel(label);
-  showTooltip(learned.routing.reasons.join(' '));
+  showTooltip(learned.routing.reasons.join(' '));             // describes the default routing; with an explicit
+                                                              // mlp_multistep / graph_impulse trust model_architecture
   const experimental = learned.routing.rigid === 'joint_gnn' || learned.routing.soft;
   showDisclaimer(learned.disclaimer, { experimental });       // always show the server's disclaimer text
-  (learned.approximations ?? []).forEach(showNote);           // absent for mlp_multistep
+  (learned.approximations ?? []).forEach(showNote);           // can be absent for mlp_multistep / graph_impulse
 }
 ```
 
@@ -325,8 +351,9 @@ else { showAnswer(reply.answer); (reply.warnings ?? []).forEach(showWarning); }
 // reply.simulation_results: summaries (no frames). To animate, re-run reply.actions_ran[i].actions via /api/simulate.
 ```
 
-On a jointed or soft scene the assistant reports that no PyBullet reference exists and gives the learned
-result only.
+On a jointed or soft scene the assistant gives the learned result only: `simulation_results` has one entry and
+`answer` starts with the "PyBullet reference is not wired ..." sentence. That sentence is in `answer`, not in
+`reply.warnings` (which stays `[]`), and `status` is `"ok"`.
 
 ## Editing an object
 
@@ -334,7 +361,11 @@ result only.
 const edited = await call(`/api/scenes/${scene_id}/objects/${objectId}`, { method: 'POST',
   json: { mass_kg: 0.4 /*, shape: 'cylinder', size: [0.09, 0.1, 0.09] */ } });
 sceneId = edited.scene_id;   // a NEW scene; switch to it
+showScene(edited.scene);     // redraw everything: on box scenes the edit re-settles the scene
 ```
+
+On a box scene other objects can move too (observed on the `desk` demo: a mass-only edit of `mug` shifted
+`book1` and `book2` by 7-8 cm, because the re-settle separates the stacked books).
 
 For scenes with joints or soft bodies only `mass_kg` is accepted; `shape` / `size` return 422. Disable those
 inputs when `scene.joints.length || scene.soft_bodies.length`.

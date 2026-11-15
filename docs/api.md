@@ -121,7 +121,8 @@ in the object's local frame. `box` needs `size`, `cylinder` needs `radius` and `
 | `thickness` | number >0, <=0.5 m | 0.08 | |
 | `collisions_enabled` | bool | true | false = objects pass through the table |
 
-The demo scenes also contain a static object `desk` that duplicates the slab.
+The `desk`, `laptop` and `soft` demo scenes also contain a static object `desk` that duplicates the slab; the
+`bottle` demo contains only the object `bottle`.
 
 ### Joint (EXPERIMENTAL)
 
@@ -222,7 +223,7 @@ Response: the scene record. 404 `"Scene not found"` for an unknown or malformed 
 If the file is a video (`video/*` content type or `.mp4 .mov .m4v .webm .avi .mkv`) the request is handled as
 route 4; `.ply .obj .usdz` as route 5.
 
-Response: scene record with the upload report. Errors: 422 string (no file, not an image, bad reference),
+Response: scene record with the upload report. Errors: 422 string (no file; `"Upload a valid JPEG/PNG/WebP image"`; bad reference),
 413 string (too large). Needs the vision models (GPU server, `.venv-reconstruction`).
 
 Caching: identical input and settings return the cached reconstruction (`report.cache_hit: true`) under a new
@@ -234,18 +235,26 @@ Caching: identical input and settings return the cached reconstruction (`report.
 
 Response: scene record. A 200 always has at least one object. Errors:
 
-- 422 string: unreadable video or a pipeline error. **(from source, not exercised)**
+- 422 string: unreadable video (observed `"Video has no decodable frames"` for a non-video file named `.mp4`) or
+  a pipeline error **(pipeline error: from source, not exercised)**.
 - 422 object `{message, report}`: no bodies reconstructed. 503 with the same object when the detector is
   unavailable. **(from source, not exercised)**
 - 413 string: over 100 MB. **(from source, not exercised)**
 
-Caching: completed runs with valid tracks are cached by content and pipeline configuration. Furniture is
-returned `is_static: true` (stated in `report.warnings`).
+Caching: completed runs with valid tracks are cached by content and pipeline configuration.
+
+**Furniture is returned `is_static: true`.** Observed on `tests/images/deskspace.mp4`: 5 bodies, of which the 3
+chairs are static (`supported_by: "floor"`) and only the 2 bottles are movable (`report.dynamic_body_count: 2`).
+The report says so in `warnings`: `"Furniture is fixed in place (object_002, object_003, object_004): pushing it
+has no effect. Set RECON_VIDEO_STATIC_FURNITURE=0 to make it movable."` A push on such an object is accepted with
+200 and moves nothing, so disable the push control for `is_static` objects. Photo uploads return detected walls
+as static objects (`wall_0`, `wall_1`, `supported_by: null`) in the same way.
 
 ## 5. POST /api/scenes/scan
 
-**(from source, not exercised.)** `multipart/form-data` field `file`: `.ply`, `.obj` or `.usdz`, at most
-100 MB. Response: scene record. 422 string for another extension or a parse failure, 413 over 100 MB.
+**(Successful upload: from source, not exercised.)** `multipart/form-data` field `file`: `.ply`, `.obj` or
+`.usdz`, at most 100 MB. Response: scene record. 422 string for another extension (observed
+`"Upload PLY, OBJ or USDZ"`) or a parse failure, 413 over 100 MB.
 
 ## 6. POST /api/scenes/{scene_id}/objects/{object_id}
 
@@ -260,8 +269,12 @@ JSON body, all optional:
 Response: a **new** scene record (new `scene_id`); the original is unchanged. `report.edited_from` is the
 original id, `report.acceptance_pass` is false and a warning is appended.
 
-- Box-only scenes: the scene is re-settled in PyBullet after the edit, so poses change by small amounts
-  (observed: sub-millimetre for untouched objects) and `report.metrics` is replaced.
+- Box-only scenes: the scene is re-settled in PyBullet after the edit and `report.metrics` is replaced. **Other
+  objects can move.** Observed on the `desk` demo with a mass-only edit of `mug`: `book1` moved 6.6 cm and `book2`
+  8.2 cm (the settle step separates the two stacked books; see `report.metrics.contacts_after_settle.horizontal_corrections_m`),
+  every other object moved less than 0.1 mm. Redraw the whole scene from the response, not only the edited object.
+  The appended warning is `"Manually edited scene; original image metrics no longer apply."` (also on demo scenes).
+  An empty body `{}` is accepted and still returns a new, re-settled scene.
 - **Scenes with joints or soft bodies:** only `mass_kg` may be edited. The scene is **not** re-settled; every
   pose, the joints and the soft bodies are kept exactly. A request containing `shape` or `size` is rejected
   with 422 `"Shape/size edits are not supported for scenes with joints or soft bodies; only mass_kg can be edited"`.
@@ -329,7 +342,8 @@ With an explicit rigid model the soft pass still runs when the scene has soft bo
 | Learned checkpoint missing, `engine: learned` **(from source, not exercised)** | | | | 503 string instead of a response |
 
 Other warnings: `"Learned dynamics uses bounding-box dimensions; it was not trained on these collision shapes."`
-when the learned model runs on a scene with a non-box object **(from source, not exercised)**.
+when the learned model runs on a scene with a non-box object (observed on the photo and video upload scenes and
+after a cylinder edit). Expect it on almost every uploaded scene.
 
 No chaos score is recorded for the leaderboard when `physics` is null.
 
@@ -366,10 +380,10 @@ flat, 4 decimals, `3 * soft_meshes[id].vertex_count` numbers.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `model_architecture` | string | What ran: `contact_gnn`, `joint_gnn`, `contact_gnn+soft_gnn`, `joint_gnn+soft_gnn`, or `mlp_multistep` / `graph_impulse` (optionally `+soft_gnn`) when requested |
+| `model_architecture` | string | What ran: `contact_gnn`, `joint_gnn`, `contact_gnn+soft_gnn`, or `mlp_multistep` / `graph_impulse` (optionally `+soft_gnn`) when requested. `joint_gnn+soft_gnn` (a scene with both joints and soft bodies) is **from source, not exercised**: no demo has both |
 | `contacts_available` | false | The learned models do not report contacts |
-| `projection_applied` | bool | A non-learned correction ran after each step (contact push-out; for joints also anchors / axes / limits). **Absent** for `mlp_multistep` |
-| `approximations` | string[] | Everything outside the training range or not learned, e.g. `"joints are ignored by the selected rigid model"`, `"first 0.05 s of airborne soft bodies (ball, cloth) is a non-learned ballistic step that seeds the model"`. **Absent** for `mlp_multistep` |
+| `projection_applied` | bool | A non-learned correction ran after each step (contact push-out; for joints also anchors / axes / limits). **Absent** for `mlp_multistep` and `graph_impulse` |
+| `approximations` | string[] | Everything outside the training range or not learned, e.g. `"joints are ignored by the selected rigid model"`, `"first 0.05 s of airborne soft bodies (ball, cloth) is a non-learned ballistic step that seeds the model"`. `[]` when there is nothing to report. For `mlp_multistep` and `graph_impulse` the key is **absent** on a box scene and present only when there is something to report (joints ignored, soft pass) |
 | `routing.rigid` | string | Rigid model that ran |
 | `routing.soft` | bool | Whether the soft pass ran |
 | `routing.reasons` | string[] | Why, in plain words |
@@ -413,11 +427,20 @@ Response:
 | `tool_trace` | `[{tool, arguments, result}]` | |
 | `warnings` | string[] | **Absent** in the no-key response |
 
-Only the no-key response (`status: "unavailable"`, empty arrays) was observed on the running server; the keyed
-path is covered by `tests/test_assistant.py` and `tests/test_api_gaps.py` with a stubbed OpenAI client.
-The assistant's simulations go through the same router as route 7: on a scene with joints or soft bodies its
-`simulate` tool reports the "PyBullet reference is not wired" message as a tool error (no physics outcome is
-claimed) and its learned rollout uses `joint_gnn` / `soft_gnn`. Rollouts are fixed at 3 s.
+Observed on a running server: the no-key response (`status: "unavailable"`, empty arrays, no `warnings` key), and
+the keyed path with the OpenAI endpoint replaced by a local stub that scripts the tool calls `get_scene`,
+`simulate`, `world_model_rollout` (so the response shape and the routing are observed; the wording a real model
+produces is not). The keyed path is also covered by `tests/test_assistant.py` and `tests/test_api_gaps.py`.
+
+The assistant's simulations go through the same router as route 7; rollouts are fixed at 3 s at 30 fps, and each
+summary's `final_state` / `chaos_score` equals what `POST /api/simulate` returns for the same actions (observed).
+
+- Box scene (`desk`): two entries in `simulation_results` and `actions_ran` (`physics`, then `learned`).
+- Scene with joints or soft bodies: **one** entry (`learned`, `model_architecture` `joint_gnn` or
+  `contact_gnn+soft_gnn`). The `simulate` tool result in `tool_trace` is
+  `{error: "PyBullet reference is not wired ..."}` and the same sentence opens `answer` (prefixed `simulate: `).
+  `status` is still `"ok"` and `warnings` is `[]`: the missing physics is reported in `answer`, not in `warnings`.
+  On a soft scene `final_state` also carries `soft_bodies` (vertex arrays), which makes the response large.
 With a key, a query makes up to 8 OpenAI calls with a 25 s timeout each **(from source)**.
 
 ## 9. GET /api/leaderboard
@@ -473,7 +496,7 @@ Files observed in photo and video runs: `original.jpg`, `masks_overlay.png`, `de
 | `media_types` | string[] | `photo, video, ply, obj, usdz` |
 | `photo_endpoint`, `video_endpoint`, `scan_endpoint`, `demo_endpoint` | string | Paths |
 | `objects_field` | string | `scene.objects` |
-| `loaded_models` | string[] | Vision models in memory (`depth, detector, sam, clip` on the GPU server; `[]` on a CPU-only server) |
+| `loaded_models` | string[] | Vision models in memory. `depth, detector, sam, clip` after the default startup preload (observed on the GPU server and also on a server started without a GPU, where `cuda_available` is false); `[]` when the server was started with `VISION_OFFLINE=1` or `RECON_PRELOAD=0`. Use `cuda_available`, not this list, to decide whether uploads are practical |
 | `model_load_failures` | object | name -> error |
 | `cuda_available` | bool | false means uploads will be slow or unavailable |
 | `demo_scenarios` | string[] | `desk, bottle, laptop, soft` |
@@ -527,7 +550,19 @@ OpenAI key was not timed.
 - `engine: "physics"` on a jointed / soft scene is a 200 with every result null and only a warning.
 - `report.debug_url` is a prefix, not a fetchable URL.
 - The no-key assistant response has no `warnings` key; the other statuses do.
-- `mlp_multistep` results lack `projection_applied` and `approximations`.
+- `mlp_multistep` and `graph_impulse` results lack `projection_applied`, and lack `approximations` unless there is
+  something to report.
+- `routing.reasons[0]` always describes what the default routing would do. With an explicit `mlp_multistep` or
+  `graph_impulse` on a box scene it still reads `"no joints: rigid bodies go through the default box model
+  (contact_gnn)"` although `routing.rigid` and `model_architecture` name the model that really ran. Label the model
+  from `model_architecture`, not from `reasons`.
+- A `push` on a static object (`desk`, walls, video furniture) is accepted with 200 and has no effect.
+- When `duration * fps` is not an integer the last frame can lie slightly after `duration` (observed: 1.25 s at
+  30 fps gives 39 frames, last `t` = 1.267).
+- An unparsable `distance_reference` on a photo upload answers 422 with the raw JSON parser message
+  (observed `"Expecting value: line 1 column 1 (char 0)"`).
+- Video report: `report.estimated` says `"support height .75 m"` while `scene.support.height` was 1.02 in the same
+  response. Use `scene.support.height`.
 - `default` and `auto` are two names for the same routing.
 - `POST /api/scenes/demo` takes `scenario` as a query parameter and ignores its body.
 - A soft body has no drawable geometry until a simulation has run.

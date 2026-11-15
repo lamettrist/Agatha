@@ -230,7 +230,7 @@ A scene is `{objects[], support, joints[], soft_bodies[]}`. Units are metres/kg/
 | joints (`laptop`) — experimental | `joint_gnn` | no: `physics` and `error` are `null`, `warnings` explains |
 | soft bodies (`soft`) — experimental | `contact_gnn+soft_gnn` (one-way rigid → soft coupling) | no: same |
 
-Unknown scene is 404; invalid inputs are 422 (`detail` is a string or a validation array); a learned-only request with a missing checkpoint is 503. Joints, soft bodies and video-upload accuracy are experimental.
+Unknown scene is 404; invalid inputs are 422 (`detail` is a string, a validation array, or `{message, report}` for an empty video reconstruction); a learned-only request with a missing checkpoint is 503. Joints, soft bodies and video-upload accuracy are experimental.
 
 ```javascript
 const API = 'https://YOUR-API-HOST';

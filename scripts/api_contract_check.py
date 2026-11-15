@@ -24,6 +24,8 @@ from urllib import error, request
 ORIGIN = 'https://precognition.base44.app'
 VOLATILE = {'scene_id', 'edited_from', 'run_id', 'elapsed_s', 'timings', 'seconds'}  # values never compared
 TOL = 1e-9
+# answers that depend on server history or on a non-repeatable reconstruction: structure is compared, values are not
+STRUCTURE_ONLY = ('GET /api/leaderboard', 'POST /api/scenes (photo)')
 
 
 def call(base, method, path, body=None, multipart=None, headers=None, timeout=600):
@@ -253,7 +255,7 @@ def diff_case(old, new):
     removed, added = [p for p in removed if not p.endswith('[]')], [p for p in added if not p.endswith('[]')]
     d.update(keys_removed=removed, keys_added=added,
              type_changes=[dict(path=p, old=sorted(so[p]), new=sorted(sn[p])) for p in changed])
-    lo, ln = leaves(old['body']), leaves(new['body'])
+    lo, ln = (leaves(old['body']), leaves(new['body'])) if new['group'] not in STRUCTURE_ONLY else ({}, {})
     diffs = []
     for p in lo:
         if p not in ln: continue
@@ -333,8 +335,16 @@ def markdown(report):
             rows = cmp['aggregated'][severity]
             L += [f'### {title}', '']
             if not rows: L += ['None observed.', '']; continue
-            L += ['| Endpoint | Difference | Calls | Example call |', '| --- | --- | --- | --- |']
-            for r in rows: L.append(f"| `{r['group']}` | {r['text']} | {r['count']} | `{r['example']}` |")
+            if severity == 'additive':  # one row per endpoint for added keys
+                L += ['| Endpoint | Difference | Calls |', '| --- | --- | --- |']
+                keys = {}
+                for r in rows:
+                    if r['text'].startswith('key added: '): keys.setdefault(r['group'], []).append(r['text'][len('key added: $.'):])
+                    else: L.append(f"| `{r['group']}` | {r['text']}; e.g. `{r['example']}` | {r['count']} |")
+                for group, added in keys.items(): L.append(f"| `{group}` | keys added: " + ', '.join(f'`{k}`' for k in added) + ' | |')
+            else:
+                L += ['| Endpoint | Difference | Calls | Example call |', '| --- | --- | --- | --- |']
+                for r in rows: L.append(f"| `{r['group']}` | {r['text']} | {r['count']} | `{r['example']}` |")
             L.append('')
         n = cmp['numeric']
         L += ['### Frame numbers for identical /api/simulate requests', '',
@@ -345,6 +355,9 @@ def markdown(report):
         if n['by_architecture']:
             L += ['', '| learned_architecture sent | Calls | Learned frames identical | Largest abs difference |', '| --- | --- | --- | --- |']
             for arch, e in n['by_architecture'].items(): L.append(f"| {arch} | {e['compared']} | {e['identical']} | {e['max_abs_diff']:.6g} |")
+        if cmp.get('added_key_samples'):
+            L += ['', f'### Values of added keys as answered by {cand}', '', '| Call | Key | Value |', '| --- | --- | --- |']
+            for e in cmp['added_key_samples']: L.append(f"| `{e['case']}` | `{e['path']}` | `{short(e['value'], 260)}` |")
         if cmp['value_examples']:
             L += ['', '### Examples of changed values', '', '| Call | Path | ' + base + ' | ' + cand + ' |', '| --- | --- | --- | --- |']
             for e in cmp['value_examples']: L.append(f"| `{e['case']}` | `{e['path']}` | `{short(e['old'])}` | `{short(e['new'])}` |")
@@ -418,7 +431,7 @@ def compare(old, new, numeric_must_match):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('servers', nargs='+', help='name=base_url; the last one is the candidate')
+    ap.add_argument('servers', nargs='*', help='name=base_url; the last one is the candidate')
     ap.add_argument('--describe', action='append', default=[], help='name=free text shown in the report')
     ap.add_argument('--numeric-baseline', action='append', default=[], help='baseline whose frame numbers must equal the candidate (differences are breaking)')
     ap.add_argument('--upload-image', help='also POST this photo to /api/scenes on every server (needs the vision models)')
@@ -427,7 +440,12 @@ def main():
     ap.add_argument('--notes', default='', help='free text appended to the markdown')
     ap.add_argument('--out-md', default='docs/api-compat-report.md')
     ap.add_argument('--out-json', default='docs/api-compat-report.json')
+    ap.add_argument('--render-only', action='store_true', help='rebuild the markdown from an existing --out-json without sending any request')
     args = ap.parse_args()
+    if args.render_only:
+        Path(args.out_md).write_text(markdown(json.loads(Path(args.out_json).read_text())))
+        return 0
+    if len(args.servers) < 2: ap.error('give at least two name=base_url servers')
     servers = [dict(name=s.split('=', 1)[0], url=s.split('=', 1)[1]) for s in args.servers]
     descriptions = dict(x.split('=', 1) for x in args.describe)
     for s in servers: s['description'] = descriptions.get(s['name'])
@@ -475,6 +493,20 @@ def main():
                     body['error']['per_frame'] = [body['error']['per_frame'][0], body['error']['per_frame'][-1]]
                 samples.setdefault(case, {})[name] = dict(status=res[case]['status'], body=body)
     report['samples_excerpted'] = samples
+    def resolve(body, path):
+        for part in path[2:].split('.'):
+            body = body[part]
+        return body
+    for cmp in report['comparisons']:
+        rows, seen = [], set()
+        for case in samples:
+            d = cmp['cases'].get(case)
+            if not d or candidate not in samples[case] or d['status_changed']: continue
+            for path in d['keys_added']:
+                if '[]' in path or path in seen or path.startswith(('$.scene.objects', '$.report.stages', '$.report.metrics')): continue
+                try: rows.append(dict(case=case, path=path, value=resolve(samples[case][candidate]['body'], path))); seen.add(path)
+                except (KeyError, TypeError): pass
+        cmp['added_key_samples'] = rows[:40]
     Path(args.out_json).write_text(json.dumps(report, indent=1, allow_nan=False, default=str))
     Path(args.out_md).write_text(markdown(report))
     for cmp in report['comparisons']:
