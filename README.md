@@ -26,16 +26,6 @@ bash scripts/demo.sh
 
 It calls the running API, loads the desk, pushes the mug by **0.55 Ns toward +X**, runs both engines, and prints actual fall/tip events, scores and errors. Override the port/host with `API_BASE=http://127.0.0.1:8017 bash scripts/demo.sh`.
 
-## Three-minute demo
-
-1. Load the offline desk. Explain that these are approximate boxes with estimated masses.
-2. Click the mug, or press **Run both engines**. Both predict the mug falling. Scrub/replay, show side-by-side frames and position error. The learned model really predicts each next state without running physics.
-3. Upload a prepared desk photo with a table width reference. Show real YOLO detections and the reconstruction report. Depth unavailable is visibly labeled as flat-table fallback.
-4. With API keys configured, ask: **“What if I push the mug? Look up its mass and compare both engines.”** Show the representative product mass, Exa URL, actual actions, and tool outcomes. Published specs are representative: a single photo does not establish product identity.
-5. Submit a physics chaos score if time permits.
-
-The UI bundles three.js and OrbitControls locally, including their license. No CDN is used. Use WebGL-capable Chrome/Firefox. Photo models should be downloaded/warmed before presenting; only the desk and trained world model are shipped for offline use.
-
 ## What runs
 
 - Deterministic PyBullet DIRECT simulation, fixed **240 Hz**, sampled at 10/20/30 fps, up to 5 seconds. One isolated client per simulation. Actions execute **once at t=0 in list order**; every run starts from the saved scene.
